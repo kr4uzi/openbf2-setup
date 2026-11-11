@@ -1,0 +1,12 @@
+# [CHOSEN, not recovered] No runtime interpreter or CLI dependency.
+[package]
+name = "openbf2-rtp-bridge"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+rtptool = { path = "../../third_party/rtptool", default-features = false }

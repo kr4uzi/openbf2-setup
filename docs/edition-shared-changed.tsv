@@ -1,0 +1,190 @@
+index	cabinet_path	cabinet_group	bf2_size	deluxe_size	bf2_md5	deluxe_md5
+9	setup.inx	<Support>Script	249796	253721	b383888dec566dde36d1e39c7c366a9c	e8443e32000630d120351cfc13f559ce
+18	_ISUser.dll	<Support>English OS Independent Files	454656	454656	7b992040ee8c93950c3deb8f9fb3dd5d	e89a74df60be72831f501045037914f9
+21	_ISUser.dll	<Support>Dutch OS Independent Files	454656	454656	f257459629ce3abdd0b71e2c8feecd20	7ba81ebbf1d8eaef0ef63fb853458f45
+25	_ISUser.dll	<Support>French (Standard) OS Independent Files	454656	454656	7c5e110f65565accf4884841e70faab5	a5097a1e748872c9b52c4dee500b547a
+28	_ISUser.dll	<Support>German OS Independent Files	454656	454656	7a11484215ba055c8fd6fa0ecbde5950	fb62cf592f5dddf9ff7f724bc0a892b0
+31	_ISUser.dll	<Support>Italian OS Independent Files	454656	454656	d4b57809b4bdd76d43f468003b004b72	c2c2b0f56cd691d1ff08b894366892d7
+34	_ISUser.dll	<Support>Polish OS Independent Files	454656	454656	683bf4f675b8a84f2924b69ebd7ea088	4c87a3c52d158774cfcaded3eb0fef98
+37	_ISUser.dll	<Support>Spanish OS Independent Files	454656	454656	7ac507bb7d0d446862be4a7ebaf7dace	c0e6ba0e0507c539163284270f63233d
+40	_ISUser.dll	<Support>Swedish OS Independent Files	454656	454656	a516c3e7d197d7d06c50fac8e6c4957a	21967efbb82759ef55edaaac3a5335ce
+42	_ISUser.dll	<Support>Chinese (Traditional) OS Independent Files	450560	450560	7fe6c3410a0c4a5402e0fff427e05bfb	dedfdb45322c8c286b936c00594ea0dd
+44	_ISUser.dll	<Support>Korean OS Independent Files	450560	450560	e5be3f2037195d289f81a5c8da79fe60	2d24cb9f2e40f0d65ad526f0349eabf1
+47	StringTable-0009-English.ips	<Support>English String Tables	25346	27387	801238883616cb33e66484fb8f30ecd0	7df7db60273662bc072a92abcd1833fb
+48	StringTable-0013-Dutch.ips	<Support>Dutch String Tables	26879	29220	81e148cc1258e792e741cd39b5c42cbe	735b549828fb333fa7e432dd74e85836
+49	StringTable-040c-French (Standard).ips	<Support>French (Standard) String Tables	27556	29797	3976d9efb315b5666b447efefabdb143	dd5fa7d3074a6da71a7571ee83ca2375
+50	StringTable-0012-Korean.ips	<Support>Korean String Tables	24402	26571	a4dd0386a648166e723da04a27159b27	bfa476ebcebbee01f2358df338ff4594
+51	StringTable-0010-Italian.ips	<Support>Italian String Tables	26906	29030	01d0468a56c08219a66639f1d0482459	36f0d12390e803247d3d37112a56e92d
+52	StringTable-0015-Polish.ips	<Support>Polish String Tables	26512	28819	0debfc73576346fc0ecc8bb575a8771e	0b055c65029781a39b628ac86b1f79dd
+53	StringTable-000a-Spanish.ips	<Support>Spanish String Tables	27327	29454	fde83b8c9626efd018e8a93e473ab97c	a796b13c37f7c5faed56872834b8d0f8
+54	StringTable-001d-Swedish.ips	<Support>Swedish String Tables	25739	27951	fa03d91d6de68c4bb086a6ad6b3bfb1b	97f48887ce88ea10278a52c11c2f515c
+55	StringTable-0404-Chinese (Traditional).ips	<Support>Chinese (Traditional) String Tables	21987	23796	4fb7807794c125dde58a64bc47c0ea31	d91bafba0c9ef2b9a4a109765b608782
+56	StringTable-0007-German.ips	<Support>German String Tables	27947	30026	4481f2c2d3fa4c9a3fa23f3c1570545d	4fd0382b6661292d8e39c5682f467905
+73	setup.inx	<Disk1>Disk1 Files(3)	249796	253721	b383888dec566dde36d1e39c7c366a9c	e8443e32000630d120351cfc13f559ce
+74	setup.ini	<Disk1>Disk1 Files(4)	621	605	2d2fdc18c8705de453fbc99f5854ea7f	e02fff6c8678ee8239e5d3debb744040
+1167	EasyReqs.xml	eReg	1036	1052	c7681b6a6312b74f30b194602cea55c7	6486b97a6fb9c9d680e13606e6903ca9
+1168	ereg-dict-de.xml	eReg	8006	8009	9fcc8fb56492c8a5095d51a2cf776179	59c6bf9ef866179368a4de5f43fe28b1
+1169	ereg-dict-en_US.xml	eReg	7607	7610	55d0ef2d5f0a4048b88611de6b2c6154	8070d2f21ab7f384325fb4de57741add
+1170	ereg-dict-es.xml	eReg	7545	7548	544f5d9884187009ebdd1648cc1ba411	c8a4769cb0e1274f71f414c6a1b06f76
+1171	ereg-dict-fr_FR.xml	eReg	7868	7871	f0bffcdd649ca957131ef3443c8fcbd3	c226360eebfb9945e691940d069a956a
+1172	ereg-dict-it.xml	eReg	7953	7956	d9028ac6c90ceeb722afaca17882a4a3	f8c828cf4dcf345500bd851cf687946c
+1174	ereg-dict-ko.xml	eReg	8054	8057	a0d9f30c062357ea3c007f094101bb79	20bedaeb391698dcf6c49dd018a6e2f4
+1175	ereg-dict-nl.xml	eReg	7880	7883	3b5a82f757d52cab4a9b58f23c41b3f9	59ab0dce7ba52bb2a387c0972b0efc07
+1176	ereg-dict-pl.xml	eReg	7821	7824	8f8048b10a48293d59d37733e146ce4e	ac2d70df82faa0c75261efc02b808970
+1177	ereg-dict-sv.xml	eReg	7706	7709	959cc9cf0f88db73f3e06d0fc50f0ae9	2fba3764fa723dc3179e8a925e079fa4
+1179	ereg-dict-zh_tw.xml	eReg	7388	7391	5ea24810c1d0346a7d5485c08cff7fa5	55dbefe6fc8c78facbddbf9d5e18749d
+1182	Localization.ini	eReg	1522	1522	760c930b945db4b40f638a7d37191bae	30ab77813722a02019607cde381a04e8
+2253	readme.txt	Support - Chinese	36352	41624	7d785b8ab57f6f3689598038cb10d507	a82cd31ee36e0099487ab580f685f61e
+2254	readme.txt	Support - Dutch	37762	49527	669173636e5ce6d90158d57b8bb9c98d	74f9bbd81af20d076a7b9c2bf4bfe2e6
+2255	readme.txt	Support - English	31904	44079	ee1928788b4526bbf485ee16bacdb415	2f2b71003f093a1537e00327d492b884
+2256	readme.txt	Support - French	40585	50220	97082f89cdddb67760952918b86b68dc	8d1b11dd6bbc12f71409d0892b9945a0
+2257	LisezMoi.txt	Support - French	40585	50220	97082f89cdddb67760952918b86b68dc	8d1b11dd6bbc12f71409d0892b9945a0
+2258	readme.txt	Support - German	39016	54558	bd6cc8fe505879945cc31572de057b1e	2ce90a1c0dcc9f664fc688f05684a061
+2259	readme.txt	Support - Italian	36742	49787	5595df7f8e5de7f10dadc80f852d93e0	6c33f447145ba1462da5804cfa039a9e
+2260	readme.txt	Support - Korean	27565	48943	f1cacb8b3b1f399734d3101cb9412d04	90a485e7ba504fe979fd63bd9d9bd580
+2261	readme.txt	Support - Polish	39624	49061	5007fd0c87fbc46d4e2d21b4e6cda164	2be61c98c01220917dc053f1a2da3b8b
+2262	readme.txt	Support - Spanish	30051	49531	78e99f2a694d952fc3cafe648c5ccdda	8fb495491e9cb9e9e988ad0786ff42f5
+2263	readme.txt	Support - Swedish	31395	44094	4ebb980448a6f7f22c371bd469eefd36	74ff925bc6518a7a30b85926cc99d0e8
+2264	default.py	Admin	11834	11838	c0fd3c5da22dc56389104feacb32a7b1	3abc68f5d914db78e9d6170d9ed8a6d6
+2266	standard_admin/autobalance.py	Admin	2586	2694	2f24fbd763faa114b0ce0a8cc7b95a03	40996a4845137946931fcb76b82eb986
+2267	standard_admin/tk_punish.py	Admin	4979	4208	a1fe88f8bce2fe1f1a19a874521adcf2	0a7604a3ea9590c32de1f7df6e7de3bd
+2269	BF2VoipServer.dll	BF2 executable	203776	204800	aab57827041a30fb80396073c17c8f37	aeb672f931223b8ab14a0a6255383cb8
+2271	AIDLL.dll	Main	1470464	1478656	c4fb1d28d4eabbf7827ff9a29706f0f3	8a1ed040a99fc0be0543b442be852c17
+2272	BF2Audio.dll	Main	307200	307200	88019484e4f567042173352189cf46d0	2a46e1fa31ee59f2c06bf7bb12648ab9
+2274	BF2VoipServer.dll	Main	203776	204800	aab57827041a30fb80396073c17c8f37	aeb672f931223b8ab14a0a6255383cb8
+2277	Memory.dll	Main	40960	40960	e7d999ea448b799dfa06912f2d2528dc	e2cfea1da15e037093f972850cbdf885
+2278	PCRegExp.dll	Main	77824	77824	b01b446bb3438a5cc350716b60277215	89aecf7290d75ca5451d2b009c00e6df
+2279	ReadmeServer.txt	Main	13702	60940	6b468577328f0ba3dc1cc1102c630906	7de8149655f72eb9d39a0b68d47432c0
+2280	SwiffPlayer.dll	Main	905216	925696	a0933280b15a699f737f12f5b1eb4964	26ad855dd3e9ae5ca2098df1cfb13eff
+2281	TextureAtlasBuilder.dll	Main	270336	270336	0c2faf0ecb28869a888e0f48b68ccec7	57d4fb90cdae9e129924b61f991c48f1
+2283	dbghelp.dll	Main	894464	719360	df5d05d4322a2442c4f58d244555c77a	9ccbfa69ac67aed98e1c8a11ffa2a630
+2284	dice_py.dll	Main	1568768	1581056	b08585b401cbd824f8c15d0a7f729869	a9a3e14f8547e6a7904fbd0df0c924d9
+2285	generate_md5.py	Main	2218	6103	15a5a56b0d6a061d6c12bbbee645d325	c81d52b3e1d6c1b089d8ba2faffe1025
+2298	ClientArchives.con	Mods - bf2	259	306	10ac03a6c091830046c22f36a391cd34	71165b25706e8ba57da2b5d39659be23
+2299	Common_server.zip	Mods - bf2	77282	79968	f90b23d03ce4b050a784c9adcebab7fd	646feb883a08f79448bab091e8ee9f78
+2301	GameLogicInit.con	Mods - bf2	320	324	905bdf3d426f1affa2408729adb4a262	129d5b271ed4eba996abde1e66504f7c
+2308	Menu_server.zip	Mods - bf2	461385	470402	e309814fa8314b0c27c36d166ee08a44	1f26303d258178ae686ac06eba9c9554
+2309	Mod.desc	Mods - bf2	497	311	b707c03eb9514724075e9970736bdc4e	5b1a5cb063a83b1a7ad760d17c773f3d
+2312	Objects_server.zip	Mods - bf2	46354826	51177718	eb85a20cea6eac552d404128b9141fbb	b0f443f61e82230c351e5879b6db6889
+2313	ServerArchives.con	Mods - bf2	155	208	bda9703f6693db5243ebdd8b9545e90d	ab7471ad734c2466fc68ce750d365fbb
+2314	std_archive.md5	Mods - bf2	360	360	4d9e774c1d1260d92c4dd971914acb5a	d3e0f2c2a789f0a730015f54819baa1c
+2316	Common_client.zip	Mods - bf2 # client	130458067	148320895	9b37a7b368180fd5bb0949a6b49fddb8	662a3bd2764e315ee9f6e4a188c264fc
+2317	Fonts_client.zip	Mods - bf2 # client	11472812	12257225	756f35bd654d95f8ccc67252b61fb38d	4c96da357f5f96abf27427df142c53fc
+2318	Menu_client.zip	Mods - bf2 # client	40336842	42247056	e59848e3b9499b02849753ffa00e4776	74d6f9fba52c365f0e4b2053069cec86
+2319	Shaders_client.zip	Mods - bf2 # client	637218	224371	dee162022d2b179ce6b043bb87c88f31	206b94866845e9ed5667518ce947987a
+2320	AIBehaviours.ai	Mods - bf2 - AI	49999	50890	0829364525d33b5a520baf839d986a84	d955fb0d18508fcb94fa66f98d4e4493
+2326	BotNames.ai	Mods - bf2 - AI	3519	4934	a11113c9110da4a1655be38114e20069	639ce8ac3514698b01b339ebf84b7646
+2331	Controls.con	Mods - bf2 - Settings	18849	18441	fdbe0eb58bbcf1e9c9f6072b4f6d1106	3fcc254d411cff903f5297d966809045
+2337	ServerSettings.con	Mods - bf2 - Settings	1441	1532	5034f005082a030d7c497c54ebdc6b97	01f80641b5d65440680ae880ecbdf89a
+2338	ServerSettingsDesc.dat	Mods - bf2 - Settings	18212	20772	58c8dc0b0faf2ab923e6d0a6366a535a	756b95aa6f4bdb52148f3b6f6e36c2e3
+2340	Sound.con	Mods - bf2 - Settings	2593	2590	6b8a3d3f8b4a6dedfb5e7270f94e796c	1d50b7b1f028f1a354a4813af2fe3515
+2382	Dalian_plant/server.zip	Mods - bf2 - levels	6841199	6848692	8c37226ab14dfc94118b67a4b69eaecb	cdd34628cc5039b4a11178ea157ff73d
+2384	Daqing_oilfields/server.zip	Mods - bf2 - levels	6175702	6185352	f771460a4e39846492b74cee6d5c8f06	071df889c012cea9d55c3d53cc00c665
+2386	Dragon_Valley/server.zip	Mods - bf2 - levels	8707227	8715330	aa8163c421ec650df1e07dbcfa7443cb	382fd3ff82e685d0e41754b3df206d11
+2388	FuShe_Pass/server.zip	Mods - bf2 - levels	5532323	5537724	e553712fe922cdcde430908210f896c0	34ab81ace01baeba26a2ec5fb543c63d
+2390	Gulf_of_Oman/server.zip	Mods - bf2 - levels	3106785	3112210	e119d8ea0413852a07c2c444fb54b64b	6d4a97b41bfe71527309be6c3183a48c
+2392	kubra_dam/server.zip	Mods - bf2 - levels	2543936	2544275	9f5f74a363129d264293ff9fb04f45c6	780c56417dd5e86df53ac800f69d79de
+2394	Mashtuur_City/server.zip	Mods - bf2 - levels	7130820	7130875	42d0034616f1d9c9d05957bce116fdf7	634f07d9eace43f213da74690f783ddc
+2396	Operation_Clean_Sweep/server.zip	Mods - bf2 - levels	10821116	10832613	2f7185408310eeb02f78b37c23025b4a	25775856ea5e5adaa906e7b89ed6c755
+2398	Sharqi_Peninsula/server.zip	Mods - bf2 - levels	4884701	4890893	ecf2943d43c3ce16c11f11db02f40bbd	f6c7881c106b08ac513a910f25fa1808
+2400	Songhua_Stalemate/server.zip	Mods - bf2 - levels	9084591	9091627	471d9eebafc4cd82054357548101cb2e	6c593bef7e8a506c0369a9ca7c408ac0
+2402	Strike_at_Karkand/server.zip	Mods - bf2 - levels	2741542	2747845	63d462d1f57f9ab6425fa45f69137c6a	6ae17ec2f5937a9bff2e641993c6ad95
+2406	Zatar_Wetlands/server.zip	Mods - bf2 - levels	8153263	8159632	265b5ffc0f8bdc66bdef773dea2bc7e3	d973a8c14946128a760ca6af955eaf5d
+2408	Dalian_plant/Info/Dalian_plant.desc	Mods - bf2 - levels	715	909	7719ff18a2efbb97d8abc7359ba33f1a	2cab874fb72ebe20e5f987a5dfa827ee
+2410	Daqing_oilfields/Info/Daqing_oilfields.desc	Mods - bf2 - levels	723	917	c6e5810ee2470fb2f580afc785be6a6c	8990d5c4f9bc30f3336f3b43726d628b
+2411	Dragon_Valley/Info/Dragon_Valley.desc	Mods - bf2 - levels	719	916	11d1b8ed8e84426df05c214ab5945548	fb108e618b4073bd54e0149ef4d238b9
+2412	FuShe_Pass/Info/FuShe_Pass.desc	Mods - bf2 - levels	713	910	e0f79c003a710f9442485f8fc2f1b658	69bd0165dfbb37bf194017cce11483cd
+2414	Gulf_of_Oman/Info/Gulf_of_Oman.desc	Mods - bf2 - levels	713	907	ff8867eabc453974b14abd9fbb5fb327	0a048ce489d9e2bf81bbae460d97d8a5
+2417	Operation_Clean_Sweep/Info/Operation_Clean_Sweep.desc	Mods - bf2 - levels	723	905	9469f7530e6b44a834c072e44dd68ad6	c61c94a1e4f93e524d66f232bafbb6d3
+2418	Sharqi_Peninsula/Info/Sharqi_Peninsula.desc	Mods - bf2 - levels	714	899	bfe1377d658ff13b00b5b1ef637d4b62	c6bcdff05cb0fbb2fbb850a20cef20e0
+2419	Songhua_Stalemate/Info/Songhua_Stalemate.desc	Mods - bf2 - levels	739	936	970c571ede987289707ec1a35066438e	bc897d82fe610438116eebbe1c690cba
+2420	Strike_at_Karkand/Info/Strike_at_Karkand.desc	Mods - bf2 - levels	715	900	f1351303425fb1c26154e3c9f8e1a958	1d6bcb2c3d77c1c9ae87e740327d97d7
+2422	Zatar_Wetlands/Info/Zatar_Wetlands.desc	Mods - bf2 - levels	718	915	85f005bfdb134cc66392d698fa60dc53	6425a0d567b023a8e6352e98438f93bb
+2423	chinese.utxt	Mods - bf2 - localization Chinese	320948	320894	6670600daf4e6d1c3e7be8741bd44d98	d65e318327bf69d116c501e3483fd2de
+2424	Chinese_autorun.utxt	Mods - bf2 - localization Chinese	50814	53268	f59ca7d4e1205b04bb2f8f22a88af354	23db5be5c830aa785f5978822dfb1807
+2428	dutch.utxt	Mods - bf2 - localization Dutch	466290	466370	936325e887a3954cda696e4651004bb9	aea4d58124e13f1d609f91c4f1a864f5
+2429	dutch_autorun.utxt	Mods - bf2 - localization Dutch	67090	71094	ad4fb14b65636593906947ae703e7fa1	eb77262eb2f1340c1386d1144d402f7e
+2433	English.utxt	Mods - bf2 - localization English	449032	449060	b5de8812a974b7c75830d186382610af	97a92325a55a178ea7e43768a5b47ca0
+2434	English_autorun.utxt	Mods - bf2 - localization English	64146	67876	42a12b7b44daf4e3c7d480263b04c362	43331039137c1ee452a9bcad3775262a
+2438	french.utxt	Mods - bf2 - localization French	474424	474528	29aa45ff348c953fbc983ceab3995c13	257c6d59c349472ad61e9b45c8b98114
+2439	french_autorun.utxt	Mods - bf2 - localization French	68532	72364	ae915cb7b837fc985ef998863e4eee48	0884de38bf923d357d6692728bad3d42
+2443	german.utxt	Mods - bf2 - localization German	478660	478938	ac298eb65c2dded94cd7f5abc3b47085	cbe244a1a355b97042040d9bf42975f5
+2444	German_autorun.utxt	Mods - bf2 - localization German	69358	72950	831f06b46335ee7da6dd953ca958aaec	4cd10065bb7d4a838429ae3662fd5e99
+2448	italian.utxt	Mods - bf2 - localization Italian	483276	483508	980adff61355688e2bacd51420a4494f	b3c234978b5526e874a0edc81af50b80
+2449	italian_autorun.utxt	Mods - bf2 - localization Italian	67246	70834	1a39bb6837645421c316c4f00e416154	3d600b32d3980e63f7947abb29087270
+2453	korean.utxt	Mods - bf2 - localization Korean	353696	353922	399b696785714bdbaadc5398bcdac6dc	7fe65ceed5bb6dc573d8fc5feb2e1255
+2454	korean_autorun.utxt	Mods - bf2 - localization Korean	54296	57188	26955b25e66613d107574b1739ae5935	bd3f64325fefe2336bffe7736c2ad0e0
+2458	polish.utxt	Mods - bf2 - localization Polish	473842	474104	dbcfac886312ca1b85d862eba78b5af6	25d8573e5a4f0ef7d0484e1d7b74a4e3
+2459	polish_autorun.utxt	Mods - bf2 - localization Polish	66532	70542	80f223f5cba309fd952ffb9fb2b5dfb4	658f6e7fca4a97b9da94069d31d9f40f
+2463	spanish.utxt	Mods - bf2 - localization Spanish	490082	490380	e187015404203df86dfbdb75f83f80ed	ee86b9a1c8211cfcfe14e5f28a04becc
+2464	spanish_autorun.utxt	Mods - bf2 - localization Spanish	68046	71592	08550cd2f31d6ccc5e22c4f0aa3872bf	0600cb808756406d179f67f85a827c93
+2468	swedish.utxt	Mods - bf2 - localization Swedish	442808	443076	a9c111d3733ff930dec37a67eb3b1a1f	931eec91897aba1327ee5495179b1ec2
+2469	swedish_autorun.utxt	Mods - bf2 - localization Swedish	66110	70008	5327d52a8cac5a6d39a45ffb42e9534f	81c15e1b481c74a443ced6404a9505bd
+2473	game/scoringCommon.py	Mods - bf2 - python	8280	9345	0f258f9c6749830cc5b426b85e76f2b5	d80987a549e81a0cbc356115b33cd364
+2476	game/gamemodes/gpm_cq.py	Mods - bf2 - python	17561	17139	5715c79f6edca7b8fb66b9ae08a1e760	2f5f632a635fce1d02957a0712aeb665
+2500	RendDX9.dll	RendDX9	2115072	2544640	2d533e1654920b95942e3018da17ab41	c59428100a1c5b23f12011436060af9d
+2501	00000000.256	SafeDisc	1279256	1279256	d6505718020f6ad8e7251f558982bbae	81cb0ab1a862f3560e6236d07817eacc
+2502	BF2.exe	SafeDisc	7401174	7558590	9087ae719643d0be48ebab06fa86a9bb	7a52cc222e531f2137f0ec692cfcf604
+2503	CoreDLL.dll	SafeDisc	1487063	1191346	7e29efb5070d8ca477ea8b2ec0853504	b6fee1d3bdcd4c4afe2edcde74f751d1
+2505	SD0404.dll	SafeDisc	3072	3584	0db52597ce44bb1277827170155bd28c	c7536fcbbef6bdcbc4739dc50139ec5b
+2506	SD0405.dll	SafeDisc	4608	4608	2cccaf4b2d70cf7d85248bf0a30a9a2e	074ea8d3c464ea366de60a4483b096c4
+2507	SD0406.dll	SafeDisc	4608	4608	184ff00b0b815fc05736835496dd1a4b	9dae4362b06b60c8c088aded0297801c
+2508	SD0407.dll	SafeDisc	5120	5120	670224330a0ab969855032a39e500e95	0a6963680514e979717bc843000c6e9b
+2509	SD0409.dll	SafeDisc	4608	4608	1ed52ce1821f4685c4808dba0a823070	91d04fb1a8dbfe32bac0369736fab62d
+2510	SD040b.dll	SafeDisc	4608	4608	0789f4dbf08ad534479ced9f1d0b0a54	f61f93ce5b91bb470eda64b675ae8f5e
+2511	SD040c.dll	SafeDisc	5120	5120	a31f77fe2d953b88c766c67222042cd3	d9f234ae65d6fe8d3d30af0a7d7bb1e8
+2512	SD040e.dll	SafeDisc	4608	4608	c26eba8592f0c005cab4c04c3e065efe	999f24ad4b44834377381a34b7bd3e75
+2513	SD0410.dll	SafeDisc	4608	5120	9a437a56a6e9137d6e95a2b2a9ffdda4	5e2993bcecf027c8ed2a3bf7e72bdc0a
+2514	SD0411.dll	SafeDisc	3584	4096	155b4566c3f529181eba89b7f9ceddb2	d29f786758a8b1e3ca3758fd0b46ebf6
+2515	SD0412.dll	SafeDisc	3584	3584	e383aef908c4cdabcbc96c6720a10f68	11b76a30a3345cff821e2a312c63c7f1
+2516	SD0413.dll	SafeDisc	4608	5120	225761fee6f67d2bd61f26a10c8ead73	14b0518dd056877c20c7e31fd87a2123
+2517	SD0414.dll	SafeDisc	4608	4608	b646200a2ac124df4f07b4f415de7121	b4970d3714b1c15dabb01f082147ed66
+2518	SD0415.dll	SafeDisc	4608	5120	586b1c086848b93b5e258f4c8a132cf4	dee546955aeb01951e830429a4816004
+2519	SD0416.dll	SafeDisc	4608	4608	7038e50ac41cafe317798f2765c984b6	3ae40aae8b9ac61e4c002d61c3cd2843
+2520	SD041d.dll	SafeDisc	4096	5120	a6172e91d5c0d36c95d5b6abbdec47f5	e1079bc930b768b27e0e02b4c62f1ffc
+2521	SD041e.dll	SafeDisc	4608	5120	6eb704e488fcb2bc0ea59d17d16d7352	d9e68fc94ec7d41223e75ecceaaca76a
+2522	SD0804.dll	SafeDisc	3072	3584	2e0dd34f0b2eaf3d6e3cfaaabc5dc667	21edd3354b7299fcc421f97c056ff8ba
+2523	SD0809.dll	SafeDisc	4608	4608	7ab0df1c88444da4b3fa7e61dac98e6c	c95eae8daa07f443c6aca29aeff58a73
+2524	SD0816.dll	SafeDisc	4608	4608	39aa404e2b16ed616cbe1cc5ff5509c6	4521b66ef2ec621d376ea9c33fd75158
+2525	SD0c0a.dll	SafeDisc	4608	5120	6a2e0f32c2366a79f7af546f89dcf9dd	d098f3dfdd8abfd128c7f29332b1d4e8
+2703	pbags.dll	PunkBuster	57344	61440	73f32533494d4f24415257f1c3e1d218	300e7bb201f720ec8162613a85a66503
+2705	pbcls.dll	PunkBuster	479232	495616	44a61be3a9d3fdaa71c89ddc6e07ab46	d1c6c98eeaa2a01cc4d37c1fffadedef
+2706	pbsv.dll	PunkBuster	294912	299008	7b591930de6911e6ba849319087aaedc	e99bdb930820649a0bd0fd9b0133603e
+2856	BF2VoipServer.dll	Voip files	203776	204800	aab57827041a30fb80396073c17c8f37	aeb672f931223b8ab14a0a6255383cb8
+2857	BF2VoipServer.exe	Voip files	196608	196608	5370dfea024a3b39292b1f2cf28fc549	9b653734a243fa3efae0f425e6487864
+2858	BF2VoipServer_w32ded.dll	Voip files	655360	655360	f92ab47cebff8f6ab9e49f9aaac965cb	5e3f58663d5d389209968fd917539d94
+2859	BF2VoipServer_w32ded.exe	Voip files	618496	618496	56ccf8d0924bd000a9ed6bae02a89ef3	27151ffe071b35106760511900ad6ffe
+2861	Memory.dll	Voip files	40960	40960	e7d999ea448b799dfa06912f2d2528dc	e2cfea1da15e037093f972850cbdf885
+2871	BF2VoipServer.dll	BF2 executable - standalone server	203776	204800	aab57827041a30fb80396073c17c8f37	aeb672f931223b8ab14a0a6255383cb8
+2873	BF2ServerLauncher.exe	MainServer	774144	913408	0c7ac7b3760c864383a4cf9a9a4e6c23	110b0f7b554b76836e62e31121d4bc7e
+2875	BF2VoipServer_w32ded.dll	MainServer	655360	655360	f92ab47cebff8f6ab9e49f9aaac965cb	5e3f58663d5d389209968fd917539d94
+2876	BF2VoipServer_w32ded.exe	MainServer	618496	618496	56ccf8d0924bd000a9ed6bae02a89ef3	27151ffe071b35106760511900ad6ffe
+2878	Bf2_w32ded.exe	MainServer	4640768	4964352	ef969624108066ec6a4571daf26e7acf	252e1810e7a7ab857ed6cf1ef8b47b70
+2879	Memory.dll	MainServer	40960	40960	e7d999ea448b799dfa06912f2d2528dc	e2cfea1da15e037093f972850cbdf885
+2880	Memory_w32ded.dll	MainServer	40960	40960	8ef52c42f2d1a59cf7ff639d587d8b58	be4f8c2e8a0f58af3f136c9baa2c46b5
+2881	ReadmeServer.txt	MainServer	13702	60940	6b468577328f0ba3dc1cc1102c630906	7de8149655f72eb9d39a0b68d47432c0
+2882	dbghelp.dll	MainServer	894464	719360	df5d05d4322a2442c4f58d244555c77a	9ccbfa69ac67aed98e1c8a11ffa2a630
+2883	dice_py.dll	MainServer	1568768	1581056	b08585b401cbd824f8c15d0a7f729869	a9a3e14f8547e6a7904fbd0df0c924d9
+2898	Dalian_plant/client.zip	Mods - bf2 - levels # client	54301969	53933522	5af4b875369618a0221a602fc1964070	c4fd485d438f6f88bf501536289dcf49
+2899	Daqing_oilfields/client.zip	Mods - bf2 - levels # client	61405808	61422988	c30943e8c0ed382088fd1db446e9f01d	675c837b692d8d636294919195121e3e
+2900	Dragon_Valley/client.zip	Mods - bf2 - levels # client	63615816	63615816	3bf69e3f66190d97fea00195f7f9e6f3	038f61a7608672022fb017775d962877
+2901	FuShe_Pass/client.zip	Mods - bf2 - levels # client	70290566	70283778	eaf38d331d5e67844ce97ca4bd287fd2	4f264c2799f5037859f484f4eb771fd6
+2902	Gulf_of_Oman/client.zip	Mods - bf2 - levels # client	49541018	48486379	5abf839b3a5b60f3570f1c07e2464c7c	7cc43d5971a899b9d2af540b571405a2
+2903	kubra_dam/client.zip	Mods - bf2 - levels # client	60333257	60333257	05bd77dba1f9bdc56bdc1b37d1b24435	4d9fcb41cfed7aa29da79e2aaf823bdf
+2904	Mashtuur_City/client.zip	Mods - bf2 - levels # client	63991704	63991704	f96cd38fb152f8f3cc2c600370fdb866	3ae59088bd623537d6de68aa88d6f2b1
+2905	Operation_Clean_Sweep/client.zip	Mods - bf2 - levels # client	59921180	59238431	94564fc6164aa8b53e34a1c449942793	2c69650219d6b5aa787a019a4a5873b7
+2906	Sharqi_Peninsula/client.zip	Mods - bf2 - levels # client	51680043	51680043	709966d289aa83d51aaca1008a86efc7	89ec1565ca9f29efb923395853cafc72
+2907	Songhua_Stalemate/client.zip	Mods - bf2 - levels # client	68225164	68225164	734d9f7781b3245adb2959b0df4a3afc	9fa3fb78a2adaacb4b8f15081bb58b36
+2908	Strike_at_Karkand/client.zip	Mods - bf2 - levels # client	36100851	36100851	6fac04142d615aa63a0e90c7be92d283	774ae8f0076256187273645ca584be9f
+2910	Zatar_Wetlands/client.zip	Mods - bf2 - levels # client	64975608	64975608	ff115dd214d5f3571851dc6cb2932c1b	de7bf4052883acc2a7d5ddb567962b08
+2918	Dalian_plant/Info/Dalian_plant.desc	Mods - bf2 - levels # client	715	909	7719ff18a2efbb97d8abc7359ba33f1a	2cab874fb72ebe20e5f987a5dfa827ee
+2927	Daqing_oilfields/Info/Daqing_oilfields.desc	Mods - bf2 - levels # client	723	917	c6e5810ee2470fb2f580afc785be6a6c	8990d5c4f9bc30f3336f3b43726d628b
+2935	Dragon_Valley/Info/Dragon_Valley.desc	Mods - bf2 - levels # client	719	916	11d1b8ed8e84426df05c214ab5945548	fb108e618b4073bd54e0149ef4d238b9
+2943	FuShe_Pass/Info/FuShe_Pass.desc	Mods - bf2 - levels # client	713	910	e0f79c003a710f9442485f8fc2f1b658	69bd0165dfbb37bf194017cce11483cd
+2952	Gulf_of_Oman/Info/Gulf_of_Oman.desc	Mods - bf2 - levels # client	713	907	ff8867eabc453974b14abd9fbb5fb327	0a048ce489d9e2bf81bbae460d97d8a5
+2972	Operation_Clean_Sweep/Info/Operation_Clean_Sweep.desc	Mods - bf2 - levels # client	723	905	9469f7530e6b44a834c072e44dd68ad6	c61c94a1e4f93e524d66f232bafbb6d3
+2980	Sharqi_Peninsula/Info/Sharqi_Peninsula.desc	Mods - bf2 - levels # client	714	899	bfe1377d658ff13b00b5b1ef637d4b62	c6bcdff05cb0fbb2fbb850a20cef20e0
+2988	Songhua_Stalemate/Info/Songhua_Stalemate.desc	Mods - bf2 - levels # client	739	936	970c571ede987289707ec1a35066438e	bc897d82fe610438116eebbe1c690cba
+2997	Strike_at_Karkand/Info/Strike_at_Karkand.desc	Mods - bf2 - levels # client	715	900	f1351303425fb1c26154e3c9f8e1a958	1d6bcb2c3d77c1c9ae87e740327d97d7
+3011	Zatar_Wetlands/Info/Zatar_Wetlands.desc	Mods - bf2 - levels # client	718	915	85f005bfdb134cc66392d698fa60dc53	6425a0d567b023a8e6352e98438f93bb
+3012	Objects_client.zip	Mods - bf2 # objects_client	536057696	639605425	658de99cea456c5c19a774aad9e1aa0b	ae36d0525c45c78629ca87e1083f8fb1

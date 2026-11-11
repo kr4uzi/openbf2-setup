@@ -1,0 +1,14 @@
+/build*/
+/out/
+/target/
+.DS_Store
+*.dmg
+*.app/
+*.iso
+*.exe
+*.zip
+*.cab
+*.rtp
+*.openbf2-part
+/notes/
+*.sparseimage
