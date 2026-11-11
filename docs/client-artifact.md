@@ -98,8 +98,10 @@ bash macos/embed-client.sh client-universal /tmp/embed-check && rm -r /tmp/embed
 macos/build-release.sh client-universal /path/to/Battlefield-2.dmg [build-dir]
 ```
 
-Configures a universal Release build with `SETUP_CLIENT_ARTIFACT` and the thin
-override off, builds, runs `ctest` with the opt-in owner/media tests cleared
+Relative `OUTPUT.dmg` / `build-dir` arguments are resolved against the current
+directory before anything is configured (CMake and `TMPDIR` only ever see
+absolute paths). Configures a universal Release build with
+`SETUP_CLIENT_ARTIFACT` and the thin override off, builds, runs `ctest` with the opt-in owner/media tests cleared
 from the environment, runs `build-dmg.sh` (ad-hoc signing unless
 `SETUP_SIGN_IDENTITY` is set), verifies the image and writes `<dmg>.sha256`.
 Build prerequisites on the runner: Xcode Command Line Tools, CMake 3.24+, and

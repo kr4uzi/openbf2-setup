@@ -33,6 +33,7 @@ if(BUILD_TESTING)
   target_link_libraries(bf2_setup_session_checks PRIVATE bf2_setup_session)
   add_test(NAME session_checks COMMAND bf2_setup_session_checks "${SETUP_SCRATCH}")
   add_test(NAME client_packaging_checks COMMAND /bin/bash "${CMAKE_SOURCE_DIR}/tests/client_packaging.sh" "${SETUP_SCRATCH}" "${CMAKE_CURRENT_SOURCE_DIR}")
+  add_test(NAME release_path_checks COMMAND /bin/bash "${CMAKE_SOURCE_DIR}/tests/release_paths.sh" "${SETUP_SCRATCH}" "${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
 
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/licences")

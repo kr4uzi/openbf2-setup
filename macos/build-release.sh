@@ -7,7 +7,8 @@
 # CLIENT_DIR must satisfy docs/client-artifact.md (bf2_client, libdice_py.dylib,
 # libaidll.dylib; each arm64 + x86_64). OUTPUT.dmg must not exist. BUILD_DIR
 # defaults to openbf2-setup-build beside OUTPUT.dmg and may be reused between
-# runs. SETUP_SIGN_IDENTITY selects a codesign identity; unset means ad-hoc.
+# runs; relative OUTPUT.dmg and BUILD_DIR are resolved against the current
+# directory. SETUP_SIGN_IDENTITY selects a codesign identity; unset means ad-hoc.
 # Opt-in owner/media tests stay off: their environment variables are cleared.
 set -euo pipefail
 if [[ $# != 2 && $# != 3 ]]; then
@@ -15,12 +16,23 @@ if [[ $# != 2 && $# != 3 ]]; then
   exit 2
 fi
 repo=$(cd "$(dirname "$0")/.." && pwd -P)
-client=$(cd "$1" && pwd -P)
+fail() { echo "build-release: $*" >&2; exit 1; }
+client=$(cd "$1" && pwd -P) || fail "client directory not found: $1"
 output=$2
 mkdir -p "$(dirname "$output")"
 output="$(cd "$(dirname "$output")" && pwd -P)/$(basename "$output")"
+# Every path handed to cmake and TMPDIR must be absolute: CMake's try_compile
+# and the compiler run in other directories, so a relative BUILD_DIR (relative
+# to this shell's cwd) would leave them with a TMPDIR that does not exist there.
 build=${3:-$(dirname "$output")/openbf2-setup-build}
-fail() { echo "build-release: $*" >&2; exit 1; }
+mkdir -p "$build"
+build=$(cd "$build" && pwd -P)
+scratch="$build/scratch"
+if [[ -n "${SETUP_RELEASE_PRINT_PATHS:-}" ]]; then
+  # Test hook: show the resolved paths and stop before any validation or build.
+  printf 'client=%s\noutput=%s\nbuild=%s\nscratch=%s\n' "$client" "$output" "$build" "$scratch"
+  exit 0
+fi
 [[ ! -e "$output" ]] || fail "output already exists: $output"
 for item in bf2_client libdice_py.dylib libaidll.dylib; do
   [[ -f "$client/$item" ]] || fail "missing client artifact: $client/$item"
@@ -29,8 +41,7 @@ done
 command -v cmake >/dev/null || fail 'cmake not found'
 command -v cargo >/dev/null || fail 'cargo not found (both Apple Rust targets must be installed)'
 jobs=$(/usr/sbin/sysctl -n hw.ncpu)
-scratch="$build/scratch"
-mkdir -p "$build" "$scratch"
+mkdir -p "$scratch"
 export TMPDIR="$scratch"
 echo "== configure ($build)"
 cmake -S "$repo" -B "$build" -DCMAKE_BUILD_TYPE=Release \
