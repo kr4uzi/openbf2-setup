@@ -87,6 +87,12 @@ bash macos/embed-client.sh client-universal /tmp/embed-check && rm -r /tmp/embed
   the generation, but every manifest file must still be byte-identical, and a
   fresh installation is verified strictly. Keep client writes to new files;
   modifying installed content makes the installation unverifiable.
+- Voice chat: the setup app writes
+  `Profiles/BattleCommoDefaultUserSettings.con` (four plain lines; see
+  [voice-setup.md](voice-setup.md)) and requests microphone access itself. The
+  client is a child process of the app bundle, so macOS attributes the
+  microphone permission to "Battlefield 2" and the game does not prompt
+  mid-match. The bundle's Info.plist carries `NSMicrophoneUsageDescription`.
 - The setup app holds `Setup/Install.lock` while the client runs, refuses a
   second Play and refuses to quit until the client exits, and shows a dialog
   if the client exits with a non-zero status. A clean quit must therefore exit

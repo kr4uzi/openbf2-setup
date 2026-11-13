@@ -1,4 +1,5 @@
 #import <AppKit/AppKit.h>
+#import <AVFoundation/AVFoundation.h>
 #include "Installer.h"
 #include "SetupSession.h"
 #include <atomic>
@@ -12,6 +13,7 @@
 static NSString* smokeDirectory=nil;
 static NSString* testHome=nil;
 static BOOL discActionTest=NO;
+static BOOL captureAllowed=YES; // tests never touch the microphone or its permission prompt
 static void Debug(NSString* format,...) NS_FORMAT_FUNCTION(1,2);
 static void Debug(NSString* format,...) {
     const char* enabled=std::getenv("SETUP_DEBUG");if(!enabled||std::strcmp(enabled,"1"))return;
@@ -61,6 +63,32 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
 }
 @end
 
+// A 0-1 peak meter with the activation threshold drawn as a marker, the same
+// scale retail's BF2VoiceSetup shows against its threshold.
+@interface LevelMeter : NSView
+@property(nonatomic) double level;
+@property(nonatomic) double threshold;
+@end
+@implementation LevelMeter
+- (void)setLevel:(double)level {_level=fmin(1.0,fmax(0.0,level));self.needsDisplay=YES;}
+- (void)setThreshold:(double)threshold {_threshold=fmin(1.0,fmax(0.0,threshold));self.needsDisplay=YES;}
+- (BOOL)isAccessibilityElement {return YES;}
+- (NSAccessibilityRole)accessibilityRole {return NSAccessibilityLevelIndicatorRole;}
+- (id)accessibilityValue {return [NSString stringWithFormat:@"%.0f%%",self.level*100];}
+- (void)drawRect:(NSRect)dirty {
+    NSRect bounds=NSInsetRect(self.bounds,0.5,0.5);
+    NSBezierPath* frame=[NSBezierPath bezierPathWithRoundedRect:bounds xRadius:4 yRadius:4];
+    [NSColor.quaternaryLabelColor setFill];[frame fill];
+    NSRect fill=bounds;fill.size.width=bounds.size.width*self.level;
+    [(self.level>=self.threshold&&self.level>0?NSColor.systemGreenColor:NSColor.systemGrayColor) setFill];
+    [[NSBezierPath bezierPathWithRoundedRect:fill xRadius:4 yRadius:4] fill];
+    CGFloat x=bounds.origin.x+bounds.size.width*self.threshold;
+    [NSColor.labelColor setStroke];NSBezierPath* marker=[NSBezierPath bezierPath];marker.lineWidth=2;
+    [marker moveToPoint:NSMakePoint(x,bounds.origin.y)];[marker lineToPoint:NSMakePoint(x,NSMaxY(bounds))];[marker stroke];
+    [NSColor.separatorColor setStroke];[frame stroke];
+}
+@end
+
 @class Assistant;
 @interface KeyField : NSTextField
 @property(weak) Assistant* assistant;
@@ -83,6 +111,13 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
 @property BOOL deluxe;
 @property(copy) NSString* gameRoot;
 @property(strong) NSTask* client;
+@property(strong) NSSlider* captureVolume;
+@property(strong) NSSlider* captureThreshold;
+@property(strong) NSButton* boost;
+@property(strong) LevelMeter* meter;
+@property(strong) NSTextField* micStatus;
+@property(strong) NSButton* micButton;
+@property(strong) AVAudioEngine* engine;
 - (void)pasteKey:(NSString*)value;
 - (void)pasteKey:(NSString*)value row:(NSInteger)row;
 - (void)runDiscActionTest;
@@ -95,6 +130,7 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
     std::atomic<bool> _cancelled;
     std::unique_ptr<setup::Lock> _clientLock;
     std::shared_ptr<std::atomic<bool>> _checking141,_checking150;
+    setup::assistant::VoiceSettings _voice; // playback volume is carried through unchanged (retail has no slider)
 }
 @synthesize step=_step,working=_working;
 - (void)setStep:(NSInteger)step {Debug(@"state step %ld -> %ld working=%d",(long)_step,(long)step,_working);_step=step;}
@@ -115,6 +151,10 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
     self.patch150.changed=^{[weakSelf checkPatch:weakSelf.patch150 slot:setup::PatchSlot::Patch150];};
     NSMutableArray* keys=[NSMutableArray array];
     for(NSInteger i=0;i<10;++i){KeyField* f=[[KeyField alloc] initWithFrame:NSMakeRect(20+(i%5)*106,i<5?154:64,92,32)];f.assistant=self;f.index=i;f.delegate=self;f.font=[NSFont monospacedSystemFontOfSize:20 weight:NSFontWeightRegular];f.accessibilityLabel=[NSString stringWithFormat:@"%@ CD key group %ld of 5",i<5?@"Battlefield 2":@"Special Forces",(long)(i%5)+1];[keys addObject:f];}self.keys=keys;
+    self.captureVolume=[NSSlider sliderWithValue:1 minValue:0 maxValue:1 target:self action:@selector(voiceChanged:)];self.captureVolume.frame=NSMakeRect(170,118,320,24);self.captureVolume.continuous=YES;self.captureVolume.accessibilityLabel=@"Capture volume";
+    self.captureThreshold=[NSSlider sliderWithValue:0.1 minValue:0 maxValue:1 target:self action:@selector(voiceChanged:)];self.captureThreshold.frame=NSMakeRect(170,82,320,24);self.captureThreshold.continuous=YES;self.captureThreshold.accessibilityLabel=@"Activation threshold";
+    self.boost=[NSButton checkboxWithTitle:@"Microphone boost" target:self action:@selector(voiceChanged:)];self.boost.frame=NSMakeRect(20,46,300,22);
+    self.meter=[[LevelMeter alloc] initWithFrame:NSMakeRect(20,158,560,20)];self.meter.threshold=0.1;self.meter.accessibilityLabel=@"Microphone level";
     self.next=[NSButton buttonWithTitle:@"Continue" target:self action:@selector(next:)];self.next.frame=NSMakeRect(510,22,115,34);self.next.keyEquivalent=@"\r";
     self.back=[NSButton buttonWithTitle:@"Back" target:self action:@selector(back:)];self.back.frame=NSMakeRect(34,22,90,34);
     [self.window.contentView addSubview:self.next];[self.window.contentView addSubview:self.back];
@@ -131,7 +171,7 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
     } else if(smokeDirectory) {
         dispatch_async(dispatch_get_main_queue(),^{
             try { @try {
-                for(NSInteger step=0;step<6;++step){self.step=step;[self show];[self.window display];
+                for(NSInteger step=0;step<7;++step){self.step=step;[self show];if(step==5)[self meterPeak:0.35];[self.window display];
                     NSView* view=self.window.contentView;NSBitmapImageRep* rep=[view bitmapImageRepForCachingDisplayInRect:view.bounds];[view cacheDisplayInRect:view.bounds toBitmapImageRep:rep];
                     NSString* file=[smokeDirectory stringByAppendingPathComponent:[NSString stringWithFormat:@"wizard-%ld.png",(long)step]];
                     NSData* png=[rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];if(![png writeToFile:file atomically:YES])throw std::runtime_error("UI snapshot write failed");
@@ -149,7 +189,11 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
                 NSData* png=[rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
                 if(![png writeToFile:[smokeDirectory stringByAppendingPathComponent:@"wizard-deluxe-3.png"] atomically:YES])throw std::runtime_error("Deluxe UI snapshot write failed");
                 for(KeyField* field in self.keys)field.stringValue=@"";
-                std::cout<<"Six wizard screens plus Deluxe key screen rendered; grouped paste, live invalid/incomplete status and Install gating passed\n";[NSApp terminate:nil];
+                self.step=5;[self show];[self meterPeak:0.5];if(self.meter.level<0.49||self.meter.level>0.51||self.meter.threshold!=0.1)throw std::runtime_error("Voice meter level/threshold not rendered from defaults");
+                self.captureVolume.doubleValue=0.5;[self voiceChanged:self.captureVolume];[self meterPeak:0.5];if(self.meter.level<0.24||self.meter.level>0.26)throw std::runtime_error("Capture volume not applied to the meter");
+                if(setup::assistant::voiceSettingsText([self voiceSettings])!="1\n0.5\n0.1\n0\n")throw std::runtime_error("Voice settings text from the controls is wrong");
+                self.captureVolume.doubleValue=1;[self voiceChanged:self.captureVolume];
+                std::cout<<"Seven wizard screens plus Deluxe key screen rendered; grouped paste, live invalid/incomplete status, Install gating and the voice meter/settings passed\n";[NSApp terminate:nil];
             } @catch(NSException* exception){throw std::runtime_error("AppKit exception in UI smoke test");}
             }catch(const std::exception& e){std::cerr<<e.what()<<'\n';std::exit(1);}
         });
@@ -196,9 +240,10 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
 }
 - (void)show {
     [self.body removeFromSuperview];self.body=[[NSView alloc] initWithFrame:NSMakeRect(30,76,600,370)];[self.window.contentView addSubview:self.body];
+    if(self.step!=5)[self stopMeter];
     self.back.hidden=self.step==0||self.step>=4||(self.step==3&&self.gameRoot);self.next.enabled=!self.working&&(self.step!=2||(self.patch141.verified&&self.patch150.verified));self.back.enabled=!self.working;
-    self.next.title=self.step==3?@"Install":self.step==4?@"Cancel":self.step==5?@"Play":@"Continue";
-    NSArray* titles=@[@"Welcome to Battlefield 2",@"Choose your disc",@"Choose the two patches",@"Enter your CD key",@"Installing Battlefield 2",@"Ready to play"];
+    self.next.title=self.step==3?@"Install":self.step==4?@"Cancel":self.step==5?@"Save":self.step==6?@"Play":@"Continue";
+    NSArray* titles=@[@"Welcome to Battlefield 2",@"Choose your disc",@"Choose the two patches",@"Enter your CD key",@"Installing Battlefield 2",@"Set up voice chat",@"Ready to play"];
     [self label:titles[self.step] y:280 size:27];
     if(self.step==0)[self label:@"Install from your Battlefield 2 DVD or ISO and the official 1.41 and 1.50 patches. Game data, your key and profiles are stored in your Library’s Application Support/OpenBF2 folder." y:155 size:16];
     if(self.step==1){self.disc.frame=NSMakeRect(20,150,560,92);[self.body addSubview:self.disc];[self label:@"Choose an English BF2 or BF2 Deluxe DVD or ISO. Deluxe includes Special Forces. Your original files are read only." y:50 size:14];}
@@ -213,9 +258,11 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
         self.progress=[[NSProgressIndicator alloc] initWithFrame:NSMakeRect(20,187,560,18)];self.progress.indeterminate=NO;self.progress.minValue=0;self.progress.maxValue=1;[self.body addSubview:self.progress];
         self.status=[self label:@"Checking your media…" y:85 size:14];self.status.frame=NSMakeRect(20,40,560,130);
     }
-    if(self.step==5){
+    if(self.step==5)[self showVoiceSetup];
+    if(self.step==6){
         BOOL client=setup::assistant::clientPresent(Contents());
         [self label:client?@"Installation verified. Your game data is ready.":@"Installation verified. The game client has not been included in this build." y:165 size:16];self.next.enabled=client&&!self.client;
+        NSButton* voice=[NSButton buttonWithTitle:@"Voice Setup…" target:self action:@selector(voiceSetup:)];voice.frame=NSMakeRect(20,40,140,32);voice.enabled=!self.client;[self.body addSubview:voice];
     }
     [self trace:@"show"];
 }
@@ -269,7 +316,8 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
     [self trace:@"action next"];
     if(self.working&&self.step!=4){Debug(@"next ignored: working");return;}
     if(self.step==4){_cancelled.store(true);Debug(@"state cancellation requested by Cancel");self.next.enabled=NO;self.status.stringValue=@"Cancelling after the current patch record…";return;}
-    if(self.step==5){[self play];return;}
+    if(self.step==5){[self saveVoice];return;}
+    if(self.step==6){[self play];return;}
     try {
         if(self.step==1||self.step==2){
             if(self.step==1&&!self.disc.path.length)throw std::runtime_error("Choose your DVD or ISO first.");
@@ -278,7 +326,7 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
             if(!self.patch141.verified||!self.patch150.verified)throw std::runtime_error("Wait for both patch checks to finish, then choose matching files.");
             ++self.step;[self show];return;
         }
-        if(self.step==3){if(self.deluxe&&!setup::validateKey(setup::KeyEdition::SpecialForces,std::string([self keyForRow:1].UTF8String)))throw std::runtime_error("Special Forces: invalid CD key.");if(!setup::validateKey(setup::KeyEdition::BF2,std::string(self.key.UTF8String)))throw std::runtime_error("Battlefield 2: invalid CD key.");if(self.gameRoot){[self saveKey];for(KeyField* field in self.keys)field.stringValue=@"";self.step=5;[self show];return;}self.step=4;[self show];[self install];return;}
+        if(self.step==3){if(self.deluxe&&!setup::validateKey(setup::KeyEdition::SpecialForces,std::string([self keyForRow:1].UTF8String)))throw std::runtime_error("Special Forces: invalid CD key.");if(!setup::validateKey(setup::KeyEdition::BF2,std::string(self.key.UTF8String)))throw std::runtime_error("Battlefield 2: invalid CD key.");if(self.gameRoot){[self saveKey];for(KeyField* field in self.keys)field.stringValue=@"";self.step=6;[self show];return;}self.step=4;[self show];[self install];return;}
         ++self.step;[self show];
     }catch(const std::exception& e){[self message:@"Check your setup files" detail:Text(e.what())];}
 }
@@ -374,8 +422,84 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
             setup::Control control;control.cancelled=&self->_cancelled;deluxe=setup::assistant::currentEdition(Path(Support()))==setup::DiscEdition::Deluxe;setup::verifyManifest(root,Path(Manifest(deluxe)),control,true); // the client writes settings/logs beside the data
             hasStoredKey=setup::assistant::storedKey(Path(Support()))&&(!deluxe||setup::assistant::storedKey(Path(Support()),true));game=Text(root.string());
         }catch(const std::exception& e){error=Text(e.what());}
-        dispatch_async(dispatch_get_main_queue(),^{self.working=NO;if(game){self.deluxe=deluxe;self.gameRoot=game;self.step=hasStoredKey?5:3;}[self show];if(error)[self message:@"Existing installation could not be verified" detail:error];});
+        dispatch_async(dispatch_get_main_queue(),^{self.working=NO;if(game){self.deluxe=deluxe;self.gameRoot=game;self.step=hasStoredKey?6:3;}[self show];if(error)[self message:@"Existing installation could not be verified" detail:error];});
     }}).detach();
+}
+- (void)showVoiceSetup {
+    // Modelled on retail's BF2VoiceSetup ("BF2 BattleCommo"): level meter, capture volume, threshold, boost.
+    try {_voice=setup::assistant::loadVoiceSettings(Path(Support()));}catch(const std::exception& e){Debug(@"voice-load failed: %s",e.what());_voice={};}
+    self.captureVolume.doubleValue=_voice.captureVolume;self.captureThreshold.doubleValue=_voice.captureThreshold;self.boost.state=_voice.boost?NSControlStateValueOn:NSControlStateValueOff;
+    [self label:@"Battlefield 2 voice chat uses your microphone. Speak to see your level; voice is sent while the level is above the threshold marker." y:214 size:14];
+    self.micStatus=[self label:@"" y:184 size:13];self.micStatus.frame=NSMakeRect(20,184,420,22);
+    self.micButton=[NSButton buttonWithTitle:@"" target:self action:@selector(micButton:)];self.micButton.frame=NSMakeRect(440,179,140,32);self.micButton.hidden=YES;[self.body addSubview:self.micButton];
+    self.meter.level=0;[self.body addSubview:self.meter];
+    NSTextField* volume=[self label:@"Capture volume" y:120 size:14];volume.frame=NSMakeRect(20,120,150,22);[self.body addSubview:self.captureVolume];
+    NSTextField* threshold=[self label:@"Activation threshold" y:84 size:14];threshold.frame=NSMakeRect(20,84,150,22);[self.body addSubview:self.captureThreshold];
+    [self.body addSubview:self.boost];
+    BOOL seedOnly=NO;try{seedOnly=setup::assistant::profilesExist(Path(Support()));}catch(const std::exception&){}
+    NSTextField* note=[self label:seedOnly?@"Saved as the default for new profiles. Profiles that already exist keep the voice settings from the game’s audio options.":@"Saved as the voice default for your first profile. You can change it later in the game’s audio options." y:4 size:12];note.frame=NSMakeRect(20,4,560,36);note.textColor=NSColor.secondaryLabelColor;
+    [self voiceChanged:nil];[self refreshMicrophone];
+}
+- (setup::assistant::VoiceSettings)voiceSettings {
+    setup::assistant::VoiceSettings v=_voice;
+    v.captureVolume=self.captureVolume.doubleValue;v.captureThreshold=self.captureThreshold.doubleValue;v.boost=self.boost.state==NSControlStateValueOn;return v;
+}
+- (void)voiceChanged:(id)sender {
+    self.meter.threshold=self.captureThreshold.doubleValue;
+    self.captureVolume.toolTip=[NSString stringWithFormat:@"%.0f%%",self.captureVolume.doubleValue*100];self.captureThreshold.toolTip=[NSString stringWithFormat:@"%.0f%%",self.captureThreshold.doubleValue*100];
+    if(sender)Debug(@"action voice-changed capture=%.2f threshold=%.2f boost=%d",self.captureVolume.doubleValue,self.captureThreshold.doubleValue,self.boost.state==NSControlStateValueOn);
+}
+- (void)voiceSetup:(id)sender {[self trace:@"action voice-setup"];if(self.client||self.working)return;self.step=5;[self show];}
+- (void)saveVoice {
+    Debug(@"action save-voice");
+    try {auto platform=setup::nativePlatform();setup::assistant::saveVoiceSettings(Path(Support()),[self voiceSettings],*platform);self.step=6;[self show];}
+    catch(const std::exception& e){[self message:@"Voice settings could not be saved" detail:Text(e.what())];}
+}
+- (void)refreshMicrophone {
+    if(self.step!=5)return;
+    if(!captureAllowed){self.micStatus.stringValue=@"Microphone check skipped in test mode";self.micButton.hidden=YES;return;}
+    AVAuthorizationStatus status=[AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
+    Debug(@"state microphone authorization=%ld",(long)status);
+    self.micButton.hidden=NO;
+    if(status==AVAuthorizationStatusAuthorized){self.micButton.hidden=YES;[self startMeter];return;}
+    if(status==AVAuthorizationStatusNotDetermined){self.micStatus.stringValue=@"Allow microphone access so the game never has to ask mid-match.";self.micButton.title=@"Allow Microphone";return;}
+    self.micStatus.stringValue=@"Microphone access is off. Allow Battlefield 2 in System Settings › Privacy & Security › Microphone.";self.micButton.title=@"Open System Settings";
+}
+- (void)micButton:(id)sender {
+    AVAuthorizationStatus status=[AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio];
+    Debug(@"action mic-button authorization=%ld",(long)status);
+    if(status==AVAuthorizationStatusNotDetermined){
+        self.micButton.enabled=NO;
+        [AVCaptureDevice requestAccessForMediaType:AVMediaTypeAudio completionHandler:^(BOOL granted){dispatch_async(dispatch_get_main_queue(),^{Debug(@"state microphone granted=%d",granted);self.micButton.enabled=YES;[self refreshMicrophone];});}];
+        return;
+    }
+    [NSWorkspace.sharedWorkspace openURL:[NSURL URLWithString:@"x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"]];
+}
+- (void)meterPeak:(double)peak {
+    // The client applies the capture volume itself; preview the same scaling here.
+    if(self.step==5)self.meter.level=peak*self.captureVolume.doubleValue;
+}
+- (void)startMeter {
+    if(self.engine)return;
+    @try {
+        AVAudioEngine* engine=[AVAudioEngine new];AVAudioInputNode* input=engine.inputNode;AVAudioFormat* format=[input outputFormatForBus:0];
+        if(format.sampleRate<=0||format.channelCount==0)throw [NSException exceptionWithName:@"NoInput" reason:@"no input device" userInfo:nil];
+        __weak Assistant* weakSelf=self;
+        [input installTapOnBus:0 bufferSize:2048 format:format block:^(AVAudioPCMBuffer* buffer,AVAudioTime* when){
+            float peak=0;AVAudioFrameCount frames=buffer.frameLength;
+            if(buffer.floatChannelData)for(AVAudioChannelCount c=0;c<buffer.format.channelCount;++c){const float* samples=buffer.floatChannelData[c];for(AVAudioFrameCount i=0;i<frames;++i)peak=fmaxf(peak,fabsf(samples[i]));}
+            dispatch_async(dispatch_get_main_queue(),^{[weakSelf meterPeak:peak];});
+        }];
+        NSError* error=nil;if(![engine startAndReturnError:&error])throw [NSException exceptionWithName:@"NoStart" reason:error.localizedDescription ?: @"audio engine did not start" userInfo:nil];
+        self.engine=engine;self.micStatus.stringValue=@"Microphone ready. Speak to test your level.";Debug(@"state meter started rate=%.0f channels=%u",format.sampleRate,format.channelCount);
+    } @catch(NSException* exception){
+        Debug(@"state meter unavailable: %@",exception.reason);
+        self.micStatus.stringValue=@"No microphone was found. You can still save your settings.";
+    }
+}
+- (void)stopMeter {
+    if(!self.engine)return;
+    Debug(@"state meter stopped");[self.engine.inputNode removeTapOnBus:0];[self.engine stop];self.engine=nil;self.meter.level=0;
 }
 - (void)play {
     [self trace:@"action play"];
@@ -394,7 +518,7 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
         self.client=task;self.next.enabled=NO;Debug(@"state client started");
     }catch(const std::exception& e){_clientLock.reset();[self message:@"Could not start Battlefield 2" detail:Text(e.what())];}
 }
-- (BOOL)windowShouldClose:(NSWindow*)sender {[self trace:@"action close"];if(self.client){[self message:@"Battlefield 2 is running" detail:@"Quit the game before closing this window."];return NO;}if(self.working){_cancelled=true;Debug(@"state cancellation requested by close");return NO;}[NSApp terminate:nil];return YES;}
+- (BOOL)windowShouldClose:(NSWindow*)sender {[self trace:@"action close"];[self stopMeter];if(self.client){[self message:@"Battlefield 2 is running" detail:@"Quit the game before closing this window."];return NO;}if(self.working){_cancelled=true;Debug(@"state cancellation requested by close");return NO;}[NSApp terminate:nil];return YES;}
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)sender {[self trace:@"action quit"];if(self.client)return NSTerminateCancel;if(self.working){_cancelled=true;Debug(@"state cancellation requested by quit");return NSTerminateCancel;}return NSTerminateNow;}
 @end
 int main(int argc,const char** argv) {
@@ -403,6 +527,7 @@ int main(int argc,const char** argv) {
         if(!iso||!*iso){std::cout<<"SKIP: set SETUP_TEST_ISO to the owner's DVD ISO path\n";return 77;}
         discActionTest=YES;
     }
+    if(discActionTest||(argc==3&&std::string(argv[1])=="--smoke-test"))captureAllowed=NO;
     if(!discActionTest&&argc!=1&&!(argc==3&&(std::string(argv[1])=="--smoke-test"||std::string(argv[1])=="--test-home")))return 2;
     if(argc==3&&std::string(argv[1])=="--test-home") {
         auto path=setup::fs::absolute(argv[2]).lexically_normal();auto allowed=setup::fs::canonical(setup::fs::path(SETUP_UI_TEST_ROOT));

@@ -26,6 +26,23 @@ void noLinks(const fs::path& path) {
 std::string read(const fs::path& path) {
     auto bytes=View(path).all();return {bytes.begin(),bytes.end()};
 }
+// Exclusive creation with 0600 avoids a plaintext window or stale-file clobber;
+// the file is complete and flushed before it replaces the destination.
+void writePrivately(const fs::path& pending,const fs::path& file,const std::string& text,Platform& platform,const char* what) {
+    int fd=::open(pending.c_str(),O_CREAT|O_EXCL|O_WRONLY|O_CLOEXEC|O_NOFOLLOW,0600);
+    require(fd>=0,(std::string("Cannot create private ")+pending.filename().string()+"; check permissions or a stale pending file.").c_str());
+    try {
+        size_t offset=0;
+        while(offset<text.size()){
+            auto count=::write(fd,text.data()+offset,text.size()-offset);
+            if(count<0&&errno==EINTR)continue;
+            require(count>0,(std::string("Cannot save the ")+what).c_str());offset+=size_t(count);
+        }
+        require(::fsync(fd)==0,(std::string("Cannot flush the ")+what).c_str());
+        int result=::close(fd);fd=-1;require(result==0,(std::string("Cannot close the ")+what+" file").c_str());
+        platform.replace(pending,file);
+    } catch(...) {if(fd>=0)::close(fd);std::error_code ignored;fs::remove(pending,ignored);throw;}
+}
 }
 std::string normalizedKey(const std::string& input) {
     auto key=trim(input);require(keyFormat(key),"Enter five groups of four letters or numbers.");
@@ -65,21 +82,44 @@ void saveKeys(const fs::path& support,const std::string& key,const std::string& 
     auto file=support/"Registry.con";
     auto updated=registryWithKey(fs::exists(file)?read(file):"",normalized);
     if(!sfNormalized.empty())updated=registryWithKey(updated,sfNormalized,true);
-    auto pending=support/"Registry.pending";
-    // Exclusive creation with 0600 avoids a plaintext window or stale-file clobber.
-    int fd=::open(pending.c_str(),O_CREAT|O_EXCL|O_WRONLY|O_CLOEXEC|O_NOFOLLOW,0600);
-    require(fd>=0,"Cannot create private Registry.pending; check permissions or a stale pending file.");
-    try {
-        size_t offset=0;
-        while(offset<updated.size()){
-            auto count=::write(fd,updated.data()+offset,updated.size()-offset);
-            if(count<0&&errno==EINTR)continue;
-            require(count>0,"Cannot save the key");offset+=size_t(count);
-        }
-        require(::fsync(fd)==0,"Cannot flush the key");
-        int result=::close(fd);fd=-1;require(result==0,"Cannot close the key file");
-        platform.replace(pending,file);
-    } catch(...) {if(fd>=0)::close(fd);std::error_code ignored;fs::remove(pending,ignored);throw;}
+    writePrivately(support/"Registry.pending",file,updated,platform,"key");
+}
+std::string voiceSettingsText(const VoiceSettings& v) {
+    for(double value:{v.playbackVolume,v.captureVolume,v.captureThreshold})
+        require(value>=0.0&&value<=1.0,"Voice settings must be between 0 and 1.");
+    std::ostringstream out; // default precision 6, like the client's writer
+    out<<v.playbackVolume<<'\n'<<v.captureVolume<<'\n'<<v.captureThreshold<<'\n'<<(v.boost?1:0)<<'\n';
+    return out.str();
+}
+VoiceSettings parseVoiceSettings(const std::string& text) {
+    VoiceSettings v;std::istringstream in(text.substr(0,512));
+    auto number=[&](double& target){double value=0;if(in>>value){if(value>=0.0&&value<=1.0)target=value;return true;}return false;};
+    if(!number(v.playbackVolume))return v;
+    if(!number(v.captureVolume))return v;
+    if(!number(v.captureThreshold))return v;
+    int boost=0;if(in>>boost&&(boost==0||boost==1))v.boost=boost==1;
+    return v;
+}
+VoiceSettings loadVoiceSettings(const fs::path& support) {
+    auto file=support/"Profiles/BattleCommoDefaultUserSettings.con";noLinks(file);
+    if(!fs::is_regular_file(file))return {};
+    try {return parseVoiceSettings(read(file));}catch(const std::exception&){return {};}
+}
+void saveVoiceSettings(const fs::path& support,const VoiceSettings& settings,Platform& platform) {
+    auto text=voiceSettingsText(settings);
+    noLinks(support/"Setup");noLinks(support/"Profiles");
+    auto lock=platform.lock(support/"Setup/Install.lock");
+    fs::create_directories(support/"Profiles");fs::permissions(support/"Profiles",fs::perms::owner_all);
+    writePrivately(support/"Profiles/BattleCommoDefaultUserSettings.pending",support/"Profiles/BattleCommoDefaultUserSettings.con",text,platform,"voice settings");
+}
+bool profilesExist(const fs::path& support) {
+    noLinks(support/"Profiles");
+    if(!fs::is_directory(support/"Profiles"))return false;
+    // Retail numbers profile directories (0001); the native client names its
+    // first one "default". Any directory under Profiles/ is a profile.
+    for(const auto& entry:fs::directory_iterator(support/"Profiles"))
+        if(entry.is_directory()&&!entry.is_symlink())return true;
+    return false;
 }
 fs::path currentGeneration(const fs::path& support) {
     noLinks(support/"Setup/Current.txt");

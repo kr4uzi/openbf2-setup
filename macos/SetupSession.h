@@ -20,4 +20,19 @@ struct Launch {
     std::vector<std::string> arguments;
 };
 Launch clientLaunch(const fs::path& contents, const fs::path& support);
+// Voice chat defaults, the one file retail's BF2VoiceSetup writes
+// (Profiles/BattleCommoDefaultUserSettings.con). The client reads it only
+// when it creates its first profile; existing profiles keep their Audio.con.
+struct VoiceSettings {
+    double playbackVolume = 1.0, captureVolume = 1.0, captureThreshold = 0.1;
+    bool boost = false;
+};
+// Four plain lines in std::ostream default formatting, e.g. "1\n1\n0.1\n0\n".
+std::string voiceSettingsText(const VoiceSettings&);
+// Lenient like the client: a missing or partial file keeps the defaults.
+VoiceSettings parseVoiceSettings(const std::string&);
+VoiceSettings loadVoiceSettings(const fs::path& support);
+void saveVoiceSettings(const fs::path& support, const VoiceSettings&, Platform&);
+// True once the client has created a profile directory under Profiles/.
+bool profilesExist(const fs::path& support);
 }

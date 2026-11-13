@@ -10,5 +10,6 @@
 <key>CFBundleVersion</key><string>1</string>
 <key>LSMinimumSystemVersion</key><string>11.0</string>
 <key>NSHighResolutionCapable</key><true/>
+<key>NSMicrophoneUsageDescription</key><string>Battlefield 2 uses the microphone for in-game voice chat. Setup uses it only to show your microphone level while you adjust the voice settings.</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict></plist>

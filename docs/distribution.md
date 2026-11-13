@@ -103,7 +103,12 @@ it did not retry hdiutil or GUI startup.
    retry/cancellation, fresh profiles, data locking and launch errors.
 3. Sign nested code with the chosen identity and reviewed entitlements; sign the
    outer app with hardened runtime and timestamp. Review the actual client's
-   requirements; do not add permissive entitlements speculatively.
+   requirements; do not add permissive entitlements speculatively. The one
+   entitlement the assistant itself needs under the hardened runtime is
+   `com.apple.security.device.audio-input` (microphone level meter and the
+   permission request in the voice step; the bundle's Info.plist carries
+   `NSMicrophoneUsageDescription`). The ad-hoc script sets no runtime option,
+   so no entitlement file is needed for local builds.
 4. Verify with `codesign --verify --strict --verbose=2`. Create/sign the DMG.
 5. Submit the release artifact with `xcrun notarytool submit ... --wait` using
    owner-managed credentials. Staple using `xcrun stapler staple`, validate the
@@ -132,8 +137,9 @@ No notarization command, upload, signing-account change or Gatekeeper bypass
 was run. Earlier native assistant GUI startup in this managed tool environment aborted
 inside macOS `_RegisterApplication`, before user UI code ran. Compilation and
 universal linkage pass; interactive UI behavior still needs a normal desktop
-session. The optional `--smoke-test` mode exists for that session and writes six
-window snapshots under the configured scratch root without saving a key.
+session. The optional `--smoke-test` mode exists for that session and writes seven
+window snapshots under the configured scratch root without saving a key or
+touching the microphone.
 The desktop click-through, scratch Application Support installation/reference
 verification, low-space GUI and DMG checks are kept in the maintainers' internal
 checklist, outside this repository.
