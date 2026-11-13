@@ -35,4 +35,23 @@ VoiceSettings loadVoiceSettings(const fs::path& support);
 void saveVoiceSettings(const fs::path& support, const VoiceSettings&, Platform&);
 // True once the client has created a profile directory under Profiles/.
 bool profilesExist(const fs::path& support);
+// Shader warm-up: the native client's "+warmupLevel" switch hosts a level
+// locally, builds every shader into the FxNative cache and exits. One run per
+// shader set: a day map (bf2) and, with Special Forces content, a night map.
+struct WarmupRun {
+    std::string title, level, mod;
+};
+std::vector<WarmupRun> warmupRuns(const fs::path& support);
+// GlobalSettings.setDefaultUser from Profiles/global.con, or "" (defaults).
+std::string defaultProfileName(const fs::path& support);
+std::vector<std::string> warmupArguments(const WarmupRun&, const std::string& profile);
+Launch warmupLaunch(const fs::path& contents, const fs::path& support, const WarmupRun&);
+struct WarmupProgress {
+    unsigned finished = 0, started = 0;
+    std::string stage; // last stage word(s): start, profile, level loaded, player joined, join game, world frame, done, failed start, timeout
+};
+// True when the line is a "warmup:" stdout line (progress updated).
+bool parseWarmupLine(const std::string& line, WarmupProgress&);
+// "" for success; otherwise a short user-facing outcome for the exit status.
+std::string warmupOutcome(int status);
 }

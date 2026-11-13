@@ -137,7 +137,7 @@ No notarization command, upload, signing-account change or Gatekeeper bypass
 was run. Earlier native assistant GUI startup in this managed tool environment aborted
 inside macOS `_RegisterApplication`, before user UI code ran. Compilation and
 universal linkage pass; interactive UI behavior still needs a normal desktop
-session. The optional `--smoke-test` mode exists for that session and writes seven
+session. The optional `--smoke-test` mode exists for that session and writes eight
 window snapshots under the configured scratch root without saving a key or
 touching the microphone.
 The desktop click-through, scratch Application Support installation/reference

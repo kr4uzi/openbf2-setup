@@ -9,7 +9,7 @@ or ISO (regular BF2 or BF2 Deluxe with Special Forces) and the official
 
 The app is `Battlefield 2.app`, intended for drag-and-drop into Applications.
 First launch walks through Welcome → DVD/ISO → patches → CD key → installation
-→ voice setup → Play. Deluxe shows a second Special Forces key row. Both use the independently
+→ voice setup → shader preparation → Play. Deluxe shows a second Special Forces key row. Both use the independently
 reconstructed [retail local CD-key check](docs/cdkey-check.md); Install requires
 all required keys to validate. This does not establish online entitlement.
 Each patch selector verifies the pinned size/SHA-256 in the background with progress. Data, keys and profiles live under
@@ -17,6 +17,9 @@ Each patch selector verifies the pinned size/SHA-256 in the background with prog
 After installation a voice-chat step, modelled on retail's BF2VoiceSetup
 ("BF2 BattleCommo"), asks for microphone access, shows a level meter and saves
 capture volume, activation threshold and boost; see [voice setup](docs/voice-setup.md).
+An optional shader step then runs the native client once per map set with its
+`+warmupLevel` switch so the first real map load compiles nothing; see
+[shader warm-up](docs/shader-warmup.md).
 Play requires a separately supplied native client artifact.
 
 ## Build offline
@@ -127,9 +130,9 @@ See [distribution and client contract](docs/distribution.md) before release.
 Use `--check-only` as the third script argument to stage/sign/verify without
 creating a disk image. This path is tested with synthetic client code.
 
-A developer UI smoke mode renders the seven screens and checks key paste and the
-voice controls without reading an installation, touching the microphone or
-saving anything:
+A developer UI smoke mode renders the eight screens and checks key paste and the
+voice controls without reading an installation, touching the microphone,
+launching anything or saving anything:
 
 ```sh
 "$scratch/build/macos/Battlefield 2.app/Contents/MacOS/Battlefield 2" \

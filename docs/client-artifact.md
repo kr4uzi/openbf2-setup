@@ -93,6 +93,11 @@ bash macos/embed-client.sh client-universal /tmp/embed-check && rm -r /tmp/embed
   client is a child process of the app bundle, so macOS attributes the
   microphone permission to "Battlefield 2" and the game does not prompt
   mid-match. The bundle's Info.plist carries `NSMicrophoneUsageDescription`.
+- Shader warm-up: the setup app runs `bf2_client +modPath <mod> +warmupLevel
+  <level> [+playerName <default user>]` once per shader set (see
+  [shader-warmup.md](shader-warmup.md)), reads the `warmup:` stdout lines for
+  progress and maps the exit status (0 done, 2 start failed, 3 timeout, 4
+  effect build failures). The client fills its `FxNative` cache itself.
 - The setup app holds `Setup/Install.lock` while the client runs, refuses a
   second Play and refuses to quit until the client exits, and shows a dialog
   if the client exits with a non-zero status. A clean quit must therefore exit

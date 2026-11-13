@@ -163,4 +163,66 @@ Launch clientLaunch(const fs::path& contents,const fs::path& support) {
     if(currentEdition(support)==DiscEdition::Deluxe)require(storedKey(support,true),"Enter your Special Forces CD key before playing.");
     return {contents/"MacOS/bf2_client",currentGeneration(support),support,{"+modPath","mods/bf2"}};
 }
+std::vector<WarmupRun> warmupRuns(const fs::path& support) {
+    // strike_at_karkand covers the bf2 and xpack day shader set; devils_perch the night set (xpack content).
+    std::vector<WarmupRun> runs{{"Battlefield 2 maps","strike_at_karkand","mods/bf2"}};
+    if(currentEdition(support)==DiscEdition::Deluxe)runs.push_back({"Special Forces night maps","devils_perch","mods/xpack"});
+    return runs;
+}
+std::string defaultProfileName(const fs::path& support) {
+    auto file=support/"Profiles/global.con";noLinks(file);
+    if(!fs::is_regular_file(file))return {};
+    std::istringstream in(read(file));std::string row;
+    while(std::getline(in,row)){
+        const std::string command="GlobalSettings.setDefaultUser";
+        if(row.rfind(command,0)!=0)continue;
+        auto value=trim(row.substr(command.size()));
+        if(value.size()>=2&&value.front()=='"'&&value.back()=='"')value=value.substr(1,value.size()-2);
+        if(value.find_first_of("\r\n\"")!=std::string::npos)return {};
+        return value;
+    }
+    return {};
+}
+std::vector<std::string> warmupArguments(const WarmupRun& run,const std::string& profile) {
+    require(!run.level.empty()&&run.level.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_")==std::string::npos,"Invalid warm-up level");
+    std::vector<std::string> arguments{"+modPath",run.mod,"+warmupLevel",run.level};
+    if(!profile.empty()){arguments.push_back("+playerName");arguments.push_back(profile);}
+    return arguments;
+}
+Launch warmupLaunch(const fs::path& contents,const fs::path& support,const WarmupRun& run) {
+    auto launch=clientLaunch(contents,support);
+    if(run.mod=="mods/xpack")require(fs::is_directory(launch.directory/"mods/xpack"),"Special Forces content is not installed.");
+    launch.arguments=warmupArguments(run,defaultProfileName(support));
+    return launch;
+}
+bool parseWarmupLine(const std::string& line,WarmupProgress& progress) {
+    const std::string prefix="warmup: ";
+    if(line.rfind(prefix,0)!=0)return false;
+    auto rest=line.substr(prefix.size());
+    if(rest.rfind("effects ",0)==0){
+        unsigned finished=0,started=0;char slash=0;std::istringstream in(rest.substr(8));
+        if(in>>finished>>slash>>started&&slash=='/'&&finished<=started){progress.finished=finished;progress.started=started;}
+        return true;
+    }
+    if(rest.rfind("done ",0)==0||rest=="done"){
+        unsigned finished=0,started=0;char slash=0;std::string word;std::istringstream in(rest);
+        if(in>>word>>word>>finished>>slash>>started&&slash=='/'&&finished<=started){progress.finished=finished;progress.started=started;}
+        progress.stage="done";return true;
+    }
+    // Stage words only: "level loaded 61.2 s" -> "level loaded", "start strike_at_karkand" -> "start".
+    std::istringstream in(rest);std::string first,second;in>>first;
+    static const char* twoWord[]={"level","player","join","world","failed"};
+    for(auto word:twoWord)if(first==word&&in>>second){first+=" "+second;break;}
+    progress.stage=first;
+    return true;
+}
+std::string warmupOutcome(int status) {
+    switch(status){
+        case 0:return "";
+        case 2:return "The game could not start the level.";
+        case 3:return "Timed out before all shaders were built.";
+        case 4:return "Finished, but some effects could not be built.";
+        default:return "The game stopped with status "+std::to_string(status)+".";
+    }
+}
 }
