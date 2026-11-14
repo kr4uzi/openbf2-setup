@@ -1,9 +1,11 @@
 # Standalone setup design
 
+*For:* Maintainers. *Covers:* the source layout, the boundaries between the portable core, the application and the macOS side, and the known limits.
+
 This document supersedes the prototype's proposed architecture. Current edition
 and selector additions are described in [disc-editions.md](disc-editions.md)
 and [patch-verification.md](patch-verification.md). The historical
-[prototype design](prototype-design.md) and [prototype results](prototype-report.md)
+[prototype design](research/prototype-design.md) and [prototype results](research/prototype-report.md)
 are preserved; their original repository links are historical paths.
 
 ## Boundaries
@@ -22,7 +24,8 @@ are preserved; their original repository links are historical paths.
 - `src/setup`: the assistant as one coroutine class (page order, Back, Cancel, failures), free of
   AppKit and tested against `tests/fake.cpp`. `src/installer` and `src/store` are its portable
   services over the core; `src/session` holds Registry.con persistence, the current installation,
-  the voice settings file and the launch arguments as plain functions.
+  the voice settings file and the launch arguments as plain functions; `src/launch` the start-up
+  options, their file and the command line they become, without any I/O.
 - `src/window.mm`, `src/client.mm`, `src/microphone.mm`, `src/main.mm`: the macOS side. AppKit
   window with five-field key rows (BF2 plus SF for Deluxe), NSTask client launch, AVFoundation
   microphone permission and meter, Application Support resolution.
@@ -97,7 +100,7 @@ not a prediction of APFS physical allocation.
 Only the supplied English retail base-game corpus is accepted. Unexpected
 required patch failures abort. Historical unselected paths, superseded records,
 retired checksummed manifests and reference-local differences are explicit policy
-in [correctness.md](correctness.md), not checksum bypasses in rtptool.
+in [correctness.md](research/correctness.md), not checksum bypasses in rtptool.
 
 Symlinks, traversal, ambiguous case aliases, reserved Windows device names and
 nonregular files are rejected. Private staging and atomic file replacement are

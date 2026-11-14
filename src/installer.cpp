@@ -11,6 +11,32 @@ namespace {
 	{
 		return manifests / (std::string{ assistant::manifestName(edition) } + ".tsv");
 	}
+
+	// the record of the last full verification of a generation, Setup/Verified-<generation>.tsv
+	std::filesystem::path stamp(const std::filesystem::path& support, const std::filesystem::path& game)
+	{
+		return support / "Setup" / ("Verified-" + game.filename().string() + ".tsv");
+	}
+
+	// a stamp which cannot be written costs the next start a full verification, nothing more
+	void recordVerification(const std::filesystem::path& support, const std::filesystem::path& game, const std::filesystem::path& manifest, Platform& platform)
+	{
+		try {
+			writeTextFile(::stamp(support, game), verificationStamp(game, manifest), platform);
+		}
+		catch (const std::exception&) {
+		}
+	}
+
+	bool recentlyVerified(const std::filesystem::path& support, const std::filesystem::path& game, const std::filesystem::path& manifest)
+	{
+		auto file = ::stamp(support, game);
+		if (std::filesystem::is_symlink(std::filesystem::symlink_status(file)) || !std::filesystem::is_regular_file(file))
+			return false;
+
+		auto bytes = View{ file }.all();
+		return stampMatches(game, manifest, std::string{ bytes.begin(), bytes.end() });
+	}
 }
 
 Installer::Installer(Worker& worker, std::filesystem::path support, std::filesystem::path manifests)
@@ -57,10 +83,36 @@ task<Installation> Installer::Install(Media media, bool specialForces, std::func
 
 	auto game = co_await m_Worker.Run([&] {
 		auto platform = nativePlatform();
-		return install(options, *platform);
+		auto installed = install(options, *platform);
+		// the installation verified every file before it published them: the first start need not again
+		::recordVerification(m_Support, installed, options.manifest, *platform);
+		return installed;
 	});
 
 	co_return Installation{ game, edition };
+}
+
+Installation Installer::Current() const
+{
+	return { assistant::currentGeneration(m_Support), assistant::currentEdition(m_Support) };
+}
+
+task<std::optional<Installation>> Installer::QuickCheck()
+{
+	co_return co_await m_Worker.Run([&]() -> std::optional<Installation> {
+		try {
+			auto platform = nativePlatform();
+			auto lock = platform->lock(m_Support / "Setup/Install.lock");
+			auto installation = Installation{ assistant::currentGeneration(m_Support), assistant::currentEdition(m_Support) };
+			if (::recentlyVerified(m_Support, installation.game, ::manifest(m_Manifests, installation.edition)))
+				return installation;
+		}
+		catch (const std::exception&) {
+			// whatever is wrong, the full verification reports it
+		}
+
+		return std::nullopt;
+	});
 }
 
 task<Installation> Installer::Verify()
@@ -71,11 +123,13 @@ task<Installation> Installer::Verify()
 		auto platform = nativePlatform();
 		auto lock = platform->lock(m_Support / "Setup/Install.lock");
 		auto installation = Installation{ assistant::currentGeneration(m_Support), assistant::currentEdition(m_Support) };
+		auto manifest = ::manifest(m_Manifests, installation.edition);
 
 		auto control = Control{};
 		control.cancelled = &m_Cancelled;
 		// the client writes settings and logs beside the data
-		verifyManifest(installation.game, ::manifest(m_Manifests, installation.edition), control, true);
+		verifyManifest(installation.game, manifest, control, true);
+		::recordVerification(m_Support, installation.game, manifest, *platform);
 		return installation;
 	});
 }

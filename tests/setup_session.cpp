@@ -130,11 +130,31 @@ int main(int argc,char** argv){
             fs::remove(game/"mods/elsewhere");
             check(setup::localized(utf16("A  one\r\nAB  two\r\n"),"AB")=="two"&&setup::localized(utf16("A  one\r\n"),"B").empty(),"localization key lookup");
             // The launcher's own options file.
-            check(session::launchMod(support).empty(),"mod choice before any was made");
-            session::saveLaunchMod(support,"xpack",*platform);check(session::launchMod(support)=="xpack"&&read(support/"Setup/Launch.txt")=="mod=xpack\n","mod choice not saved");
-            session::saveLaunchMod(support,"Community",*platform);check(session::launchMod(support)=="Community","mod choice not replaced");
-            rejects([&]{session::saveLaunchMod(support,"../evil",*platform);},"mod name with a path accepted");
-            rejects([&]{session::saveLaunchMod(support,"a\nb",*platform);},"mod name with a line break accepted");
+            check(session::loadLaunch(support)==setup::LaunchOptions{},"launch options before any were saved");
+            {
+                setup::LaunchOptions options;options.mod="xpack";options.fullscreen=false;options.width=1280;options.height=800;options.server="10.0.0.2";options.port=16568;options.password="secret 42";options.player="Name With Space";
+                session::saveLaunch(support,options,*platform);check(session::loadLaunch(support)==options,"launch options not saved");
+                check(read(support/"Setup/Launch.txt").rfind("mod=xpack\n",0)==0,"Launch.txt does not start with the mod line");
+                options.mod="Community";session::saveLaunch(support,options,*platform);check(session::loadLaunch(support).mod=="Community","launch options not replaced");
+                auto arguments=setup::launch_arguments(options);
+                check(setup::command_line(arguments)=="+modPath mods/Community +restart 1 +fullscreen 0 +szx 1280 +szy 800 +joinServer 10.0.0.2 +port 16568 +password \"secret 42\" +playerName \"Name With Space\"","launch arguments");
+                {auto noServer=options;noServer.server="";check(setup::command_line(setup::launch_arguments(noServer)).find("+password")==std::string::npos,"a password was passed without a server");}
+                {auto noPassword=options;noPassword.password="\"";check(setup::command_line(setup::launch_arguments(noPassword)).find("+password")==std::string::npos,"an empty password was passed");}
+                {auto quoted=options;quoted.password="se\"cret";check(setup::command_line(setup::launch_arguments(quoted)).find("+password secret ")!=std::string::npos,"a double quote in the password was passed");}
+                check(setup::split_command_line(setup::command_line(arguments))==arguments,"command line round trip");
+                check(setup::split_command_line("  a  \"b c\" \"\" \"x \\\"y\\\"\" d ")==std::vector<std::string>{"a","b c","","x \"y\"","d"},"command line split");
+                check(setup::argument_mod(arguments)=="Community"&&setup::argument_mod({"+fullscreen","1"}).empty(),"mod of the arguments");
+                options.fullscreen=true;check(setup::command_line(setup::launch_arguments(options)).find("+szx")==std::string::npos,"a size was passed in fullscreen");
+                options.server="";options.player="";options.skip_movies=true;check(setup::command_line(setup::launch_arguments(options))=="+modPath mods/Community +restart 1","the plain arguments carry no fullscreen switch");
+                options.override="+modPath mods/bf2 +fullscreen 0";check(setup::launch_arguments(options)==std::vector<std::string>{"+modPath","mods/bf2","+fullscreen","0"},"the override was not what is started");
+                session::saveLaunch(support,options,*platform);check(session::loadLaunch(support).override=="+modPath mods/bf2 +fullscreen 0","the override was not saved");
+                check(setup::parse_launch("mod=bf2\nwidth=10\nport=70000\n").width==0&&setup::parse_launch("port=70000\n").port==16567,"values out of range kept");
+                check(setup::parse_launch("mod=xpack\n").mod=="xpack"&&setup::parse_launch("mod=xpack\n").skip_movies&&setup::parse_launch("mod=xpack\n").fullscreen,"an old Launch.txt does not get the defaults");
+                options.always_show=true;check(setup::parse_launch(setup::launch_text(options))==options,"launch text round trip");
+                check(!setup::parse_launch("mod=bf2\n").always_show&&setup::parse_launch("always_show=1\n").always_show,"the pages-at-every-start choice");
+            }
+            {setup::LaunchOptions bad;bad.mod="../evil";rejects([&]{session::saveLaunch(support,bad,*platform);},"mod name with a path accepted");}
+            {setup::LaunchOptions bad;bad.mod="a\nb";rejects([&]{session::saveLaunch(support,bad,*platform);},"mod name with a line break accepted");}
         }
         check(!session::storedKey(support),"legacy format-only registry accepted");
         for(auto invalidKey:{key,std::string("bad")}) {

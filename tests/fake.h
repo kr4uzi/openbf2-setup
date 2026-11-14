@@ -30,6 +30,8 @@ namespace setup {
 			KeyEntry keys;
 			// what the user waits for on top of that, e.g. a certain page
 			std::function<bool(const FakeMachine&)> when;
+			// for options_edited: what the options page holds afterwards
+			LaunchOptions options;
 		};
 
 		// what the machine looks like
@@ -38,16 +40,18 @@ namespace setup {
 		std::string patch150 = "patch150.exe";
 		std::set<std::string> valid_keys{ "AAAAAAAAAAAAAAAAAAAA" };
 		std::set<std::string> valid_special_forces_keys{ "SSSSSSSSSSSSSSSSSSSS" };
-		// an installation from an earlier run
+		// an installation from an earlier run, and whether the record of its last full verification matches
 		std::optional<Installation> installed;
+		bool quick_record = true;
 		bool keys_stored = false;
 		bool profiles_exist = false;
 		std::vector<Mod> mods{ { "bf2", "Battlefield 2" } };
 		// what the user puts into the mod library while its folder is open
 		std::vector<Mod> dropped_mods;
-		// what the user picks in the list of mods before clicking Play, nothing: what the window preselected
-		std::string chosen_mod;
-		std::string stored_mod;
+		// the options of an earlier run, in Setup/Launch.txt
+		LaunchOptions stored_launch;
+		// most scripts want the pages; the plain start into the game is described with false
+		bool option_key_held = true;
 		bool client_present = true;
 		int client_status = 0;
 		bool microphone_allowed = true;
@@ -68,7 +72,7 @@ namespace setup {
 		std::optional<KeyEntry> saved_keys;
 		std::optional<assistant::VoiceSettings> saved_voice;
 		int client_runs = 0;
-		std::string client_mod;
+		LaunchOptions client_options;
 		std::vector<std::filesystem::path> revealed;
 		int mod_lookups = 0;
 		bool client_running = false;
@@ -81,8 +85,14 @@ namespace setup {
 		bool back = false;
 		bool deluxe_keys = false;
 		bool next_enabled = false;
+		// the launcher page: its list of mods, the options it started with, what the user edited and the
+		// command line at its bottom
 		std::vector<Mod> shown_mods;
-		std::string selected_mod;
+		LaunchOptions shown_options;
+		std::optional<LaunchOptions> edited_options;
+		std::string command_line;
+		// the warning line of the launcher page, empty without one
+		std::string launcher_note;
 		KeyEntry keys;
 		std::map<PatchSlot, PatchStatus> patches;
 		std::map<KeyEdition, KeyStatus> key_status;
@@ -92,6 +102,9 @@ namespace setup {
 		std::vector<double> levels;
 		std::vector<std::string> messages;
 		bool closed = false;
+		// how often a wait for the user ran dry (the script had nothing deliverable for a long time). a run
+		// must never need that: it means the application waited for an event which cannot come
+		int stuck = 0;
 	};
 
 	extern FakeMachine g_Machine;

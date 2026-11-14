@@ -1,5 +1,6 @@
 #pragma once
 #include "edition.h"
+#include "launch.h"
 #include "mods.h"
 #include "platform.h"
 
@@ -35,10 +36,12 @@ struct Launch {
     fs::path executable, directory, support;
     std::vector<std::string> arguments;
 };
-// mod is the name of a directory below mods/ of the current generation.
+// The mod of the options (or of +modPath in an override) must be a directory below mods/ of the
+// current generation; an override without +modPath leaves the mod to the client.
+Launch clientLaunch(const fs::path& contents, const fs::path& support, const LaunchOptions& options);
 Launch clientLaunch(const fs::path& contents, const fs::path& support, const std::string& mod = "bf2");
-// The launcher's own choices (Setup/Launch.txt, "name=value" lines); the game's files are
-// never written for them. An unreadable or missing file means no choice was made.
-std::string launchMod(const fs::path& support);
-void saveLaunchMod(const fs::path& support, const std::string& mod, Platform&);
+// The launcher's own choices (Setup/Launch.txt, see launch.h); the game's files are never
+// written for them. An unreadable or missing file gives the defaults.
+LaunchOptions loadLaunch(const fs::path& support);
+void saveLaunch(const fs::path& support, const LaunchOptions& options, Platform&);
 }

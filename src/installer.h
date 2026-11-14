@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 
 namespace setup {
 	// the disc and the two patches the user chose. edition is what is on the disc (BF2 or Deluxe)
@@ -48,7 +49,12 @@ namespace setup {
 
 		// resumes a paused installation of the same media. the generation is published before this returns
 		task<Installation> Install(Media media, bool specialForces, std::function<void(const Progress&)> progress);
-		// the current generation, checked file by file against its manifest
+		// the current generation as Setup/Current.txt and the receipt name it, unchecked
+		Installation Current() const;
+		// the current generation against the record of its last full verification: sizes and times, in a
+		// moment. nothing if there is no record or a file differs: then only Verify can say
+		task<std::optional<Installation>> QuickCheck();
+		// the current generation, checked file by file against its manifest; the record is written afterwards
 		task<Installation> Verify();
 
 		// stops Install and Verify at their next file or patch record, they throw then

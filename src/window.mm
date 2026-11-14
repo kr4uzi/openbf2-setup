@@ -39,7 +39,7 @@ namespace {
 		return s.length ? std::filesystem::path{ s.fileSystemRepresentation } : std::filesystem::path{};
 	}
 
-	NSString* const titles[] = { @"Welcome to Battlefield 2", @"Choose your disc", @"Choose the two patches", @"Enter your CD key", @"Installing Battlefield 2", @"Set up voice chat", @"Ready to play" };
+	NSString* const titles[] = { @"Welcome to Battlefield 2", @"Choose your disc", @"Choose the two patches", @"Enter your CD key", @"Installing Battlefield 2", @"Set up voice chat", @"Battlefield 2" };
 	NSString* const next_titles[] = { @"Continue", @"Continue", @"Continue", @"Install", @"Cancel", @"Save", @"Play" };
 }
 
@@ -212,15 +212,35 @@ namespace {
 @interface WindowController : NSObject <NSApplicationDelegate, NSWindowDelegate, NSTextFieldDelegate>
 @property(copy) void (^emit)(Event::Kind kind, NSString* path);
 @property BOOL closing;
+// the checks of the real window render without a screen
+@property BOOL hidden;
 @property Page page;
 @property(strong) NSWindow* window;
 @property(strong) NSView* body;
 @property(strong) NSButton* next;
 @property(strong) NSButton* back;
 @property(strong) NSButton* voiceSetup;
-@property(strong) NSButton* modsFolder;
+@property(strong) NSButton* verifyButton;
+// the launcher page. the lock switches between the controls and a free-form command line; while the
+// verification or the game runs, nothing on it can be changed
+@property BOOL launcherBusy;
+@property(strong) NSButton* alwaysShow;
+@property(strong) NSTextField* optionHint;
+@property(strong) NSButton* skipMovies;
+@property(strong) NSButton* fullscreen;
+@property(strong) NSTextField* sizeLabel;
+@property(strong) NSTextField* widthField;
+@property(strong) NSTextField* sizeTimes;
+@property(strong) NSTextField* heightField;
 @property(strong) NSPopUpButton* mods;
-@property(copy) NSString* selectedMod;
+@property(strong) NSButton* modsFolder;
+@property(strong) NSTextField* server;
+@property(strong) NSTextField* port;
+@property(strong) NSTextField* password;
+@property(strong) NSTextField* player;
+@property(strong) NSButton* lock;
+@property(strong) NSTextField* commandLine;
+@property BOOL unlocked;
 @property(strong) FileWell* disc;
 @property(strong) FileWell* patch141;
 @property(strong) FileWell* patch150;
@@ -229,7 +249,9 @@ namespace {
 // Deluxe media only: install the expansion (default) or the base game alone
 @property(strong) NSButton* specialForces;
 @property BOOL deluxe;
-@property(strong) NSProgressIndicator* progress;
+// the install page: one bar per step, the fraction of the current one and "Done" for the ones before it
+@property(strong) NSArray<NSProgressIndicator*>* bars;
+@property(strong) NSArray<NSTextField*>* barDetails;
 @property(strong) NSTextField* status;
 @property BOOL cancelling;
 @property(strong) NSSlider* captureVolume;
@@ -250,20 +272,13 @@ namespace {
 }
 @end
 
-@implementation WindowController {
-	// the input checks of the installer run side by side and report one item each: a line per item
-	NSMutableArray<NSString*>* _itemNames;
-	NSMutableDictionary<NSString*, NSString*>* _itemLines;
-	NSString* _phase;
-}
+@implementation WindowController
 
 - (instancetype)init
 {
 	if (!(self = [super init]))
 		return nil;
 
-	_itemNames = [NSMutableArray array];
-	_itemLines = [NSMutableDictionary dictionary];
 	_playbackVolume = 1;
 
 	self.window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 660, 480) styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable backing:NSBackingStoreBuffered defer:NO];
@@ -361,9 +376,34 @@ namespace {
 	[self send:Event::Kind::voice_setup path:nil];
 }
 
+- (void)verify:(id)sender
+{
+	[self send:Event::Kind::verify path:nil];
+}
+
 - (void)modsFolder:(id)sender
 {
 	[self send:Event::Kind::mods_folder path:nil];
+}
+
+- (void)optionsChanged:(id)sender
+{
+	[self syncOptions];
+	[self send:Event::Kind::options_edited path:nil];
+}
+
+- (void)toggleLock:(id)sender
+{
+	self.unlocked = !self.unlocked;
+	// locked again: the application writes the line from the controls
+	if (!self.unlocked)
+		self.commandLine.stringValue = @"";
+
+	[self syncOptions];
+	if (self.unlocked)
+		[self.window makeFirstResponder:self.commandLine];
+
+	[self send:Event::Kind::options_edited path:nil];
 }
 
 // the user may have been in the Finder, putting a mod into the library
@@ -403,11 +443,23 @@ namespace {
 	return label;
 }
 
+// the window comes up with the first page which has something to show. a start which goes straight into
+// the game never gets here
+- (void)present
+{
+	if (self.hidden || self.window.visible)
+		return;
+
+	[self.window makeKeyAndOrderFront:nil];
+	[NSApp activateIgnoringOtherApps:YES];
+}
+
 // an empty page with its title and its buttons. the pages add their content below
 - (void)begin:(Page)page back:(BOOL)back nextEnabled:(BOOL)nextEnabled
 {
 	debug(@"page %d", int(page));
 	self.page = page;
+	[self present];
 	[self.body removeFromSuperview];
 	self.body = [[NSView alloc] initWithFrame:NSMakeRect(30, 76, 600, 370)];
 	[self.window.contentView addSubview:self.body];
@@ -417,6 +469,11 @@ namespace {
 	self.next.enabled = nextEnabled;
 	self.back.hidden = !back;
 	self.back.enabled = YES;
+	[self.voiceSetup removeFromSuperview];
+	self.voiceSetup = nil;
+	[self.verifyButton removeFromSuperview];
+	self.verifyButton = nil;
+	self.launcherBusy = NO;
 	for (FileWell* well in @[ self.disc, self.patch141, self.patch150 ])
 		well.enabled = YES;
 
@@ -557,6 +614,9 @@ namespace {
 // the field editor of NSTextField owns the keyboard commands, the delegate routes paste and backspace
 - (BOOL)control:(NSControl*)control textView:(NSTextView*)view doCommandBySelector:(SEL)selector
 {
+	if (![control isKindOfClass:KeyField.class])
+		return NO;
+
 	KeyField* field = (KeyField*)control;
 	if (selector == @selector(paste:)) {
 		NSString* value = [NSPasteboard.generalPasteboard stringForType:NSPasteboardTypeString];
@@ -576,6 +636,12 @@ namespace {
 
 - (void)controlTextDidChange:(NSNotification*)notification
 {
+	if (![notification.object isKindOfClass:KeyField.class]) {
+		// a field of the options page
+		[self send:Event::Kind::options_edited path:nil];
+		return;
+	}
+
 	KeyField* field = notification.object;
 	NSString* value = field.stringValue.uppercaseString;
 	if (value.length >= 20) {
@@ -601,16 +667,34 @@ namespace {
 {
 	[self begin:Page::install back:NO nextEnabled:YES];
 	self.cancelling = NO;
-	_phase = nil;
-	[_itemNames removeAllObjects];
-	[_itemLines removeAllObjects];
+	self.status = [self label:@"Checking your media…" y:236 height:22 size:14];
 
-	self.progress = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(20, 187, 560, 18)];
-	self.progress.indeterminate = NO;
-	self.progress.minValue = 0;
-	self.progress.maxValue = 1;
-	[self.body addSubview:self.progress];
-	self.status = [self label:@"Checking your media…" y:40 height:130 size:14];
+	// no file names: they flash past and tell nothing. one bar per step instead
+	NSArray<NSString*>* steps = @[ @"DVD files", @"Patch 1.0 → 1.41", @"Patch 1.41 → 1.50", @"Verifying game data" ];
+	NSMutableArray<NSProgressIndicator*>* bars = [NSMutableArray array];
+	NSMutableArray<NSTextField*>* details = [NSMutableArray array];
+	for (NSUInteger i = 0; i < steps.count; ++i) {
+		CGFloat y = 190 - CGFloat(i) * 46;
+		[self label:steps[i] y:y height:22 size:14].frame = NSMakeRect(20, y, 170, 22);
+		NSProgressIndicator* bar = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(190, y + 3, 320, 18)];
+		bar.indeterminate = NO;
+		bar.minValue = 0;
+		bar.maxValue = 1;
+		bar.accessibilityLabel = steps[i];
+		[self.body addSubview:bar];
+		[bars addObject:bar];
+
+		NSTextField* detail = [self label:@"" y:y height:22 size:13];
+		detail.frame = NSMakeRect(515, y, 65, 22);
+		detail.alignment = NSTextAlignmentRight;
+		detail.textColor = NSColor.secondaryLabelColor;
+		[details addObject:detail];
+	}
+
+	self.bars = bars;
+	self.barDetails = details;
+	NSTextField* note = [self label:@"Your original files are only read. Nothing is downloaded." y:4 height:22 size:12];
+	note.textColor = NSColor.secondaryLabelColor;
 }
 
 - (void)showProgress:(const Progress&)progress
@@ -618,49 +702,33 @@ namespace {
 	if (self.page != Page::install || self.cancelling)
 		return;
 
-	NSDictionary<NSString*, NSString*>* names = @{
-		@"inputs": @"Checking media",
-		@"disc": @"Installing DVD files",
-		@"preserveRenderer": @"Preparing patch files",
-		@"patch141": @"Applying patch 1.41",
-		@"patch141-xp1": @"Patching Special Forces",
-		@"overlay150": @"Installing patch 1.50",
-		@"verify": @"Verifying game data",
-	};
-	NSString* phase = ::text(progress.phase);
-	NSString* item = ::text(progress.path);
-	if (![_phase isEqualToString:phase]) {
-		_phase = phase;
-		[_itemNames removeAllObjects];
-		[_itemLines removeAllObjects];
+	double fraction = 0;
+	if (progress.totalBytes)
+		fraction = double(progress.completedBytes) / double(progress.totalBytes);
+	else if (progress.totalFiles)
+		fraction = double(progress.completedFiles) / double(progress.totalFiles);
+
+	NSDictionary<NSString*, NSNumber*>* rows = @{ @"disc": @0, @"preserveRenderer": @0, @"patch141": @1, @"patch141-xp1": @1, @"overlay150": @2, @"verify": @3 };
+	NSNumber* row = rows[::text(progress.phase)];
+	if (!row) {
+		// the checks of the chosen files, before anything is written
+		self.status.stringValue = [NSString stringWithFormat:@"Checking your media… %.0f%%", fraction * 100];
+		return;
 	}
 
-	NSMutableString* description = [NSMutableString stringWithString:names[phase] ?: @"Installing"];
-	if (progress.itemTotalBytes) {
-		if (!_itemLines[item])
-			[_itemNames addObject:item];
-
-		_itemLines[item] = [NSString stringWithFormat:@"%@: %.0f%% of %.1f MB", item, 100.0 * double(progress.itemCompletedBytes) / double(progress.itemTotalBytes), progress.itemTotalBytes / 1e6];
-		for (NSString* name in _itemNames)
-			[description appendFormat:@"\n%@", _itemLines[name]];
+	self.status.stringValue = @"Installing into your Library folder…";
+	// a step which is over stays full, whatever its last report said
+	for (NSInteger i = 0; i < row.integerValue; ++i) {
+		self.bars[i].doubleValue = 1;
+		self.barDetails[i].stringValue = @"Done";
 	}
-	else if (item.length)
-		[description appendFormat:@" — %@", item];
 
-	NSMutableArray<NSString*>* counts = [NSMutableArray array];
-	if (progress.totalFiles)
-		[counts addObject:[NSString stringWithFormat:@"%zu of %zu files", progress.completedFiles, progress.totalFiles]];
-	if (progress.totalBytes)
-		[counts addObject:[NSString stringWithFormat:@"%.1f of %.1f MB", progress.completedBytes / 1e6, progress.totalBytes / 1e6]];
-	if (counts.count)
-		[description appendFormat:@"\n%@", [counts componentsJoinedByString:@" · "]];
+	// one small file after the DVD: the bar of the DVD files is not pulled back for it
+	if (progress.phase == "preserveRenderer")
+		return;
 
-	if (progress.totalBytes)
-		self.progress.doubleValue = double(progress.completedBytes) / double(progress.totalBytes);
-	else
-		self.progress.doubleValue = progress.totalFiles ? double(progress.completedFiles) / double(progress.totalFiles) : 0;
-
-	self.status.stringValue = description;
+	self.bars[row.integerValue].doubleValue = fraction;
+	self.barDetails[row.integerValue].stringValue = [NSString stringWithFormat:@"%.0f%%", fraction * 100];
 }
 
 // modelled on retail's BF2VoiceSetup ("BF2 BattleCommo"): level meter, capture volume, threshold, boost
@@ -726,37 +794,159 @@ namespace {
 	}
 }
 
-- (void)showReady:(BOOL)clientPresent mods:(const std::vector<Mod>&)mods selected:(const std::string&)selected
+- (NSTextField*)field:(NSRect)frame label:(NSString*)label placeholder:(NSString*)placeholder
 {
-	[self begin:Page::ready back:NO nextEnabled:clientPresent];
-	[self label:clientPresent ? @"Installation verified. Your game data is ready." : @"Installation verified. The game client has not been included in this build." y:165 height:76 size:16];
+	NSTextField* field = [[NSTextField alloc] initWithFrame:frame];
+	field.delegate = self;
+	field.accessibilityLabel = label;
+	field.placeholderString = placeholder;
+	[self.body addSubview:field];
+	return field;
+}
 
-	self.modsFolder = [NSButton buttonWithTitle:@"Open Mods Folder" target:self action:@selector(modsFolder:)];
-	self.modsFolder.frame = NSMakeRect(170, 40, 170, 32);
-	[self.body addSubview:self.modsFolder];
+// the page of an installed game. what retail's shortcut did with switches: everything goes on the command
+// line of the client
+- (void)showLauncher:(const LaunchOptions&)options mods:(const std::vector<Mod>&)mods clientPresent:(BOOL)clientPresent note:(NSString*)note
+{
+	[self begin:Page::launcher back:NO nextEnabled:clientPresent];
 
-	// with Battlefield 2 alone there is nothing to choose
-	self.selectedMod = ::text(selected);
-	self.mods = nil;
-	if (mods.size() > 1) {
-		[self label:@"Mod" y:126 height:22 size:14].frame = NSMakeRect(20, 126, 50, 22);
-		self.mods = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(70, 122, 360, 26) pullsDown:NO];
-		self.mods.accessibilityLabel = @"Mod";
-		for (const auto& mod : mods) {
-			// two mods may carry the same title, and a menu drops the second of two equal items
-			NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:text(mod.title) action:nil keyEquivalent:@""];
-			item.representedObject = ::text(mod.directory);
-			[self.mods.menu addItem:item];
-			if (mod.directory == selected)
-				[self.mods selectItem:item];
-		}
+	self.alwaysShow = [NSButton checkboxWithTitle:@"Open this screen every time" target:self action:@selector(optionsChanged:)];
+	self.alwaysShow.frame = NSMakeRect(20, 284, 230, 22);
+	self.alwaysShow.state = options.always_show ? NSControlStateValueOn : NSControlStateValueOff;
+	[self.body addSubview:self.alwaysShow];
+	// a wrapping label puts its text at the top of its frame, the checkbox centres its title: the frame sits
+	// lower so both lines read as one
+	self.optionHint = [self label:@"Tip: Hold ⌥ while opening OpenBF2 to get here" y:280 height:22 size:13];
+	self.optionHint.frame = NSMakeRect(250, 280, 330, 22);
+	self.optionHint.textColor = NSColor.secondaryLabelColor;
 
-		[self.body addSubview:self.mods];
+	self.skipMovies = [NSButton checkboxWithTitle:@"Skip the intro movies" target:self action:@selector(optionsChanged:)];
+	self.skipMovies.frame = NSMakeRect(20, 250, 260, 22);
+	self.skipMovies.state = options.skip_movies ? NSControlStateValueOn : NSControlStateValueOff;
+	[self.body addSubview:self.skipMovies];
+	self.fullscreen = [NSButton checkboxWithTitle:@"Fullscreen" target:self action:@selector(optionsChanged:)];
+	self.fullscreen.frame = NSMakeRect(300, 250, 200, 22);
+	self.fullscreen.state = options.fullscreen ? NSControlStateValueOn : NSControlStateValueOff;
+	[self.body addSubview:self.fullscreen];
+
+	self.sizeLabel = [self label:@"Window size" y:218 height:22 size:14];
+	self.sizeLabel.frame = NSMakeRect(300, 218, 90, 22);
+	self.widthField = [self field:NSMakeRect(390, 216, 62, 24) label:@"Window width" placeholder:@"width"];
+	self.widthField.stringValue = options.width ? @(options.width).stringValue : @"";
+	self.sizeTimes = [self label:@"×" y:218 height:22 size:14];
+	self.sizeTimes.frame = NSMakeRect(457, 218, 14, 22);
+	self.heightField = [self field:NSMakeRect(474, 216, 62, 24) label:@"Window height" placeholder:@"height"];
+	self.heightField.stringValue = options.height ? @(options.height).stringValue : @"";
+
+	[self label:@"Mod" y:184 height:22 size:14].frame = NSMakeRect(20, 184, 50, 22);
+	self.mods = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(70, 180, 330, 26) pullsDown:NO];
+	self.mods.accessibilityLabel = @"Mod";
+	self.mods.target = self;
+	self.mods.action = @selector(optionsChanged:);
+	for (const auto& mod : mods) {
+		// two mods may carry the same title, and a menu drops the second of two equal items
+		NSMenuItem* item = [[NSMenuItem alloc] initWithTitle:text(mod.title) action:nil keyEquivalent:@""];
+		item.representedObject = ::text(mod.directory);
+		[self.mods.menu addItem:item];
+		if (mod.directory == options.mod)
+			[self.mods selectItem:item];
 	}
 
+	[self.body addSubview:self.mods];
+	self.modsFolder = [NSButton buttonWithTitle:@"Open Mods Folder" target:self action:@selector(modsFolder:)];
+	self.modsFolder.frame = NSMakeRect(410, 177, 170, 32);
+	[self.body addSubview:self.modsFolder];
+
+	[self label:@"Join server" y:146 height:22 size:14].frame = NSMakeRect(20, 146, 90, 22);
+	self.server = [self field:NSMakeRect(110, 144, 250, 24) label:@"Server address" placeholder:@"address, empty for the menu"];
+	self.server.stringValue = ::text(options.server);
+	[self label:@"Port" y:146 height:22 size:14].frame = NSMakeRect(372, 146, 40, 22);
+	self.port = [self field:NSMakeRect(412, 144, 70, 24) label:@"Server port" placeholder:@"16567"];
+	self.port.stringValue = @(options.port).stringValue;
+	[self label:@"Player name" y:110 height:22 size:14].frame = NSMakeRect(20, 110, 90, 22);
+	self.player = [self field:NSMakeRect(110, 108, 250, 24) label:@"Player name" placeholder:@"the game’s own"];
+	self.player.stringValue = ::text(options.player);
+	[self label:@"Password" y:110 height:22 size:14].frame = NSMakeRect(372, 110, 70, 22);
+	self.password = [self field:NSMakeRect(442, 108, 138, 24) label:@"Server password" placeholder:@"none"];
+	self.password.stringValue = ::text(options.password);
+
+	NSTextField* heading = [self label:@"Arguments to bf2_client" y:72 height:18 size:12];
+	heading.frame = NSMakeRect(20, 72, 250, 18);
+	heading.textColor = NSColor.secondaryLabelColor;
+	if (note.length) {
+		NSTextField* status = [self label:note y:72 height:18 size:12];
+		status.frame = NSMakeRect(230, 72, 350, 18);
+		status.alignment = NSTextAlignmentRight;
+		status.textColor = NSColor.systemOrangeColor;
+	}
+
+	self.lock = [NSButton buttonWithImage:[NSImage imageNamed:NSImageNameLockLockedTemplate] target:self action:@selector(toggleLock:)];
+	self.lock.frame = NSMakeRect(20, 40, 28, 28);
+	self.lock.bordered = NO;
+	self.lock.accessibilityLabel = @"Edit the command line";
+	[self.body addSubview:self.lock];
+	self.commandLine = [self field:NSMakeRect(54, 41, 526, 26) label:@"Command line" placeholder:@""];
+	self.commandLine.font = [NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightRegular];
+	self.commandLine.selectable = YES;
+
 	self.voiceSetup = [NSButton buttonWithTitle:@"Voice Setup…" target:self action:@selector(voiceSetup:)];
-	self.voiceSetup.frame = NSMakeRect(20, 40, 140, 32);
-	[self.body addSubview:self.voiceSetup];
+	self.voiceSetup.frame = NSMakeRect(34, 22, 140, 34);
+	[self.window.contentView addSubview:self.voiceSetup];
+	self.verifyButton = [NSButton buttonWithTitle:@"Verify Game Data…" target:self action:@selector(verify:)];
+	self.verifyButton.frame = NSMakeRect(180, 22, 170, 34);
+	[self.window.contentView addSubview:self.verifyButton];
+
+	self.unlocked = !options.override.empty();
+	if (self.unlocked)
+		self.commandLine.stringValue = ::text(options.override);
+
+	[self syncOptions];
+}
+
+// the controls follow each other: the size only matters windowed, nothing but the line while it is unlocked,
+// nothing at all while the page is busy
+- (void)syncOptions
+{
+	if (self.page != Page::launcher)
+		return;
+
+	BOOL busy = self.launcherBusy;
+	for (NSControl* control in @[ self.skipMovies, self.fullscreen, self.widthField, self.heightField, self.mods, self.server, self.port, self.player, self.password ])
+		control.enabled = !self.unlocked && !busy;
+
+	for (NSControl* control in @[ self.alwaysShow, self.lock, self.modsFolder ])
+		control.enabled = !busy;
+
+	self.optionHint.hidden = self.alwaysShow.state == NSControlStateValueOn;
+	BOOL windowed = self.fullscreen.state == NSControlStateValueOff;
+	for (NSView* view in @[ self.sizeLabel, self.widthField, self.sizeTimes, self.heightField ])
+		view.hidden = !windowed;
+
+	self.lock.image = [NSImage imageNamed:self.unlocked ? NSImageNameLockUnlockedTemplate : NSImageNameLockLockedTemplate];
+	self.lock.toolTip = self.unlocked ? @"Lock: back to the controls" : @"Unlock: write the command line yourself";
+	self.commandLine.editable = self.unlocked && !busy;
+	self.commandLine.textColor = self.unlocked ? NSColor.labelColor : NSColor.secondaryLabelColor;
+}
+
+- (LaunchOptions)options
+{
+	auto options = LaunchOptions{};
+	NSString* mod = self.mods.selectedItem.representedObject;
+	options.mod = mod.UTF8String ?: "bf2";
+	options.skip_movies = self.skipMovies.state == NSControlStateValueOn;
+	options.fullscreen = self.fullscreen.state == NSControlStateValueOn;
+	options.width = unsigned(MIN(MAX(self.widthField.integerValue, 0), 100000));
+	options.height = unsigned(MIN(MAX(self.heightField.integerValue, 0), 100000));
+	options.server = self.server.stringValue.UTF8String ?: "";
+	options.port = self.port.integerValue > 0 ? unsigned(MIN(self.port.integerValue, 100000)) : 16567;
+	options.player = self.player.stringValue.UTF8String ?: "";
+	options.password = self.password.stringValue.UTF8String ?: "";
+	if (self.unlocked)
+		options.override = self.commandLine.stringValue.UTF8String ?: "";
+
+	options.always_show = self.alwaysShow.state == NSControlStateValueOn;
+	// the same ranges as the file has: a width of 10 is no width
+	return parse_launch(launch_text(options));
 }
 
 - (void)setBusy:(NSString*)label
@@ -766,8 +956,9 @@ namespace {
 	self.next.enabled = NO;
 	self.back.enabled = NO;
 	self.voiceSetup.enabled = NO;
-	self.modsFolder.enabled = NO;
-	self.mods.enabled = NO;
+	self.verifyButton.enabled = NO;
+	self.launcherBusy = YES;
+	[self syncOptions];
 	for (FileWell* well in @[ self.disc, self.patch141, self.patch150 ])
 		well.enabled = NO;
 }
@@ -775,6 +966,7 @@ namespace {
 - (void)message:(NSString*)title detail:(NSString*)detail
 {
 	debug(@"message title=%@ detail=%@", title, detail);
+	[self present];
 	NSAlert* alert = [NSAlert new];
 	alert.messageText = title;
 	alert.informativeText = detail;
@@ -800,6 +992,8 @@ struct Window::Impl
 	boost::asio::experimental::channel<void(boost::system::error_code, Event)> events;
 	WindowController* controller = nil;
 	bool hidden = false;
+	// read once, when the application starts: the verification which follows may take a while
+	bool optionHeld = false;
 
 	explicit Impl(boost::asio::io_context& context)
 		: context{ context }, events{ context, 64 }
@@ -821,6 +1015,7 @@ Window::Window(boost::asio::io_context& context)
 	[NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 	m_Impl->controller = [WindowController new];
 	NSApp.delegate = m_Impl->controller;
+	m_Impl->optionHeld = (NSEvent.modifierFlags & NSEventModifierFlagOption) != 0;
 
 	auto impl = m_Impl.get();
 	m_Impl->controller.emit = ^(Event::Kind kind, NSString* chosen) {
@@ -836,11 +1031,6 @@ Window::~Window()
 
 void Window::Run()
 {
-	if (!m_Impl->hidden) {
-		[m_Impl->controller.window makeKeyAndOrderFront:nil];
-		[NSApp activateIgnoringOtherApps:YES];
-	}
-
 	// the coroutines run between the events of AppKit. the common modes keep them running while a sheet,
 	// a menu or a slider tracks the mouse
 	auto impl = m_Impl.get();
@@ -866,6 +1056,11 @@ void Window::Close()
 task<Event> Window::WaitForEvent()
 {
 	co_return co_await m_Impl->events.async_receive(boost::asio::use_awaitable);
+}
+
+bool Window::OptionKeyHeld() const
+{
+	return m_Impl->optionHeld;
 }
 
 void Window::ShowWelcome()
@@ -904,10 +1099,10 @@ void Window::ShowVoice(const assistant::VoiceSettings& settings, bool profilesEx
 	[m_Impl->controller showVoice:settings profilesExist:profilesExist];
 }
 
-void Window::ShowReady(bool clientPresent, const std::vector<Mod>& mods, const std::string& selected)
+void Window::ShowLauncher(const LaunchOptions& options, const std::vector<Mod>& mods, bool clientPresent, const std::string& note)
 {
 	m_Impl->Forget();
-	[m_Impl->controller showReady:clientPresent mods:mods selected:selected];
+	[m_Impl->controller showLauncher:options mods:mods clientPresent:clientPresent note:note.empty() ? @"" : text(note)];
 }
 
 void Window::SetBusy(const std::string& label)
@@ -965,11 +1160,16 @@ void Window::SetStatus(const std::string& text)
 	controller.status.stringValue = ::text(text);
 }
 
-std::string Window::SelectedMod() const
+LaunchOptions Window::Options() const
+{
+	return [m_Impl->controller options];
+}
+
+void Window::SetCommandLine(const std::string& line)
 {
 	WindowController* controller = m_Impl->controller;
-	NSString* chosen = controller.mods.selectedItem.representedObject ?: controller.selectedMod;
-	return chosen.UTF8String ?: "";
+	if (controller.page == Page::launcher && !controller.unlocked)
+		controller.commandLine.stringValue = ::text(line);
 }
 
 assistant::VoiceSettings Window::Voice() const
@@ -1004,6 +1204,7 @@ void Window::Reveal(const std::filesystem::path& directory)
 void Window::StayHidden()
 {
 	m_Impl->hidden = true;
+	m_Impl->controller.hidden = YES;
 	[NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited];
 }
 
@@ -1021,6 +1222,8 @@ void Window::Click(Event::Kind button)
 		[controller.back performClick:nil];
 	else if (button == Event::Kind::voice_setup)
 		[controller.voiceSetup performClick:nil];
+	else if (button == Event::Kind::verify)
+		[controller.verifyButton performClick:nil];
 	else if (button == Event::Kind::microphone)
 		[controller.micButton performClick:nil];
 }

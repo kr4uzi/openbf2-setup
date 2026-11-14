@@ -1,5 +1,6 @@
 #pragma once
 
+#include "launch.h"
 #include "task.h"
 
 #include <filesystem>
@@ -22,9 +23,9 @@ namespace setup {
 		~Client();
 
 		bool Present() const;
-		// starts the game on the given installation with one of its mods (the name of its directory below
-		// mods/) and returns its exit status once it has quit. the installation lock is held meanwhile, so
-		// nothing replaces the game data below a running game
-		task<int> Run(const Installation& installation, std::string mod);
+		// starts the game on the given installation with the command line of the options and returns its
+		// exit status once it has quit. the installation lock is held meanwhile, so nothing replaces the
+		// game data below a running game
+		task<int> Run(const Installation& installation, LaunchOptions options);
 	};
 }

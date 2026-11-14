@@ -2,6 +2,7 @@
 
 #include "edition.h"
 #include "key_check.h"
+#include "launch.h"
 #include "mods.h"
 #include "session.h"
 
@@ -13,7 +14,7 @@ namespace setup {
 	struct Installation;
 
 	// what the setup keeps below the support root (~/Library/Application Support/OpenBF2) apart from the game
-	// data: the CD keys in Registry.con and the voice defaults for the first profile
+	// data: the CD keys in Registry.con, the start-up options and the voice defaults for the first profile
 	class Store
 	{
 		std::filesystem::path m_Support;
@@ -35,9 +36,9 @@ namespace setup {
 		// what Play can start, Battlefield 2 first. the mods of the library are linked into the installation
 		// on the way, which is how the game finds them
 		std::vector<Mod> Mods(const Installation& installation);
-		// the mod the user played last (the name of its directory), empty before the first choice
-		std::string LoadMod() const;
-		void SaveMod(const std::string& mod);
+		// the start-up options (Setup/Launch.txt), the defaults before the first save
+		LaunchOptions LoadLaunch() const;
+		void SaveLaunch(const LaunchOptions& options);
 
 		// a missing or unreadable file gives the defaults
 		assistant::VoiceSettings LoadVoice() const;

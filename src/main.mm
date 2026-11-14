@@ -47,18 +47,32 @@ namespace {
 		window.ShowKeys(false, true);
 		window.Snapshot(directory / "wizard-3.png");
 		window.ShowInstall();
-		window.SetProgress(Progress{ "disc", "mods/bf2/Objects_client.zip", 400'000'000, 1'000'000'000, 400, 1000 });
+		window.SetProgress(Progress{ "inputs", "", 500'000'000, 1'000'000'000, 1, 3 });
+		window.SetProgress(Progress{ "disc", "", 1'000'000'000, 1'000'000'000, 1000, 1000 });
+		window.SetProgress(Progress{ "patch141", "", 0, 0, 300, 1000 });
 		window.Snapshot(directory / "wizard-4.png");
 		window.ShowVoice({}, false);
 		window.SetMicrophone(MicrophoneStatus::skipped);
 		window.SetLevel(0.35);
 		window.Snapshot(directory / "wizard-5.png");
-		window.ShowReady(false, { { "bf2", "Battlefield 2" } }, "bf2");
-		require(window.SelectedMod() == "bf2", "the only mod is not the selected one");
+
+		auto options = LaunchOptions{};
+		options.fullscreen = false;
+		options.width = 1280;
+		options.height = 800;
+		options.player = "Player One";
+		window.ShowLauncher(options, { { "bf2", "Battlefield 2" }, { "xpack", "Battlefield 2: Special Forces" }, { "twin", "Battlefield 2" } }, true, "");
+		window.SetCommandLine(command_line(launch_arguments(options)));
+		require(window.Options() == options, "the launcher does not give back what it was shown");
 		window.Snapshot(directory / "wizard-6.png");
-		window.ShowReady(true, { { "bf2", "Battlefield 2" }, { "xpack", "Battlefield 2: Special Forces" }, { "twin", "Battlefield 2" } }, "xpack");
-		require(window.SelectedMod() == "xpack", "the remembered mod is not the selected one");
-		window.Snapshot(directory / "wizard-mods-6.png");
+		options = LaunchOptions{};
+		options.override = "+modPath mods/bf2 +fullscreen 0";
+		window.ShowLauncher(options, { { "bf2", "Battlefield 2" } }, true, "The game data has not been verified since it changed.");
+		require(window.Options().override == options.override && window.Options().mod == "bf2", "the unlocked command line was not given back");
+		window.Snapshot(directory / "wizard-6-unlocked.png");
+		window.ShowLauncher(LaunchOptions{}, { { "bf2", "Battlefield 2" } }, false, "The game client is not part of this build.");
+		window.SetCommandLine(command_line(launch_arguments(LaunchOptions{})));
+		window.Snapshot(directory / "wizard-6-noclient.png");
 
 		window.ShowKeys(false, true);
 		require(window.Keys().key.empty(), "the key page did not start empty");
@@ -80,7 +94,7 @@ namespace {
 		window.ShowVoice({ 1.0, 0.5, 0.1, false }, true);
 		require(assistant::voiceSettingsText(window.Voice()) == "1\n0.5\n0.1\n0\n", "Voice settings text from the controls is wrong");
 
-		std::cout << "Seven wizard screens plus Deluxe key and mod screens rendered; grouped paste, mod selection and the voice settings passed\n";
+		std::cout << "Seven wizard screens plus the Deluxe key, unlocked and client-less launcher screens rendered; grouped paste, the launcher options and the voice settings passed\n";
 		return 0;
 	}
 

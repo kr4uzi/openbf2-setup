@@ -2,6 +2,7 @@
 
 #include "edition.h"
 #include "key_check.h"
+#include "launch.h"
 #include "mods.h"
 #include "patch.h"
 #include "session.h"
@@ -14,14 +15,15 @@
 #include <boost/asio/io_context.hpp>
 
 namespace setup {
-	enum class Page { welcome, disc, patches, keys, install, voice, ready };
+	enum class Page { welcome, disc, patches, keys, install, voice, launcher };
 
 	// what the user did. `next` is the default button, its label depends on the page
 	// (Continue, Install, Cancel, Save, Play)
 	struct Event
 	{
-		// activated: the user came back to the application from another one, where they may have changed files
-		enum class Kind { next, back, voice_setup, mods_folder, microphone, disc_chosen, patch141_chosen, patch150_chosen, keys_edited, activated, close };
+		// activated: the user came back to the application from another one, where they may have changed files.
+		// options_edited: any change on the launcher page, the lock included
+		enum class Kind { next, back, voice_setup, verify, options_edited, mods_folder, microphone, disc_chosen, patch141_chosen, patch150_chosen, keys_edited, activated, close };
 
 		Kind kind;
 		// the file of the three *_chosen kinds
@@ -51,12 +53,15 @@ namespace setup {
 		~Window();
 
 		// the event loop of the toolkit. it also runs the asio context, so the coroutines run on the thread
-		// that owns the window
+		// that owns the window. the window itself appears with the first page (or message): the usual start
+		// of an installed game shows none
 		void Run();
 		void Close();
 
 		// every click, drop and edit ends up here, one at a time and in the order it happened
 		task<Event> WaitForEvent();
+		// the Option key was down when the application started: the user wants the pages, not the game
+		bool OptionKeyHeld() const;
 
 		// each page replaces the one before. the file wells and the key fields keep what the user gave them,
 		// so going back and forth loses nothing
@@ -66,9 +71,10 @@ namespace setup {
 		void ShowKeys(bool deluxe, bool back);
 		void ShowInstall();
 		void ShowVoice(const assistant::VoiceSettings& settings, bool profilesExist);
-		// the mods can be chosen from if there is more than Battlefield 2 itself. selected is the directory
-		// of the one which is chosen to begin with
-		void ShowReady(bool clientPresent, const std::vector<Mod>& mods, const std::string& selected);
+		// the page of an installed game: the start-up options, Play, the voice setup and the verification.
+		// the controls start out as the options say, mods fills the list, Battlefield 2 first; Play needs
+		// the client. note is shown in warning colour, e.g. that the game data is not verified
+		void ShowLauncher(const LaunchOptions& options, const std::vector<Mod>& mods, bool clientPresent, const std::string& note);
 
 		// nothing can be clicked, chosen or dropped until the next page is shown; the default button reads `label`
 		void SetBusy(const std::string& label);
@@ -86,8 +92,12 @@ namespace setup {
 		// replaces the progress text, for the moment between a click on Cancel and the installer stopping
 		void SetStatus(const std::string& text);
 
-		// the directory of the mod chosen on the Ready page
-		std::string SelectedMod() const;
+		// the launcher page as the user left it. the override is the text of the unlocked command line,
+		// empty while it is locked
+		LaunchOptions Options() const;
+		// the read-only command line at the bottom of the launcher page. ignored while it is unlocked:
+		// then the user is writing it
+		void SetCommandLine(const std::string& line);
 
 		// the sliders and the checkbox. the playback volume has no control and is the one ShowVoice received
 		assistant::VoiceSettings Voice() const;

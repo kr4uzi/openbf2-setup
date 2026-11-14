@@ -7,15 +7,33 @@
 #include <exception>
 #include <string>
 #include <boost/asio/co_spawn.hpp>
+#include <boost/asio/deferred.hpp>
 #include <boost/asio/detached.hpp>
-#include <boost/asio/experimental/awaitable_operators.hpp>
+#include <boost/asio/experimental/parallel_group.hpp>
 #include <boost/asio/this_coro.hpp>
+#include <boost/asio/use_awaitable.hpp>
 using namespace setup;
-using namespace boost::asio::experimental::awaitable_operators;
 
 namespace {
 	// the user closed the window: every page gives up and Launch returns
 	struct WindowClosed {};
+
+	// `work` beside a `guard` which watches the window meanwhile. it ends when the work ends, with its result or
+	// its exception, and the guard is cancelled. (the || of the awaitable operators waits for a success, and
+	// a guard never succeeds: a failing work would wait forever)
+	template<typename T>
+	task<T> guarded(task<T> work, task<void> guard)
+	{
+		auto executor = co_await boost::asio::this_coro::executor;
+		auto [order, error, result, guardError] = co_await boost::asio::experimental::make_parallel_group(
+			boost::asio::co_spawn(executor, std::move(work), boost::asio::deferred),
+			boost::asio::co_spawn(executor, std::move(guard), boost::asio::deferred))
+			.async_wait(boost::asio::experimental::wait_for_one(), boost::asio::use_awaitable);
+		if (error)
+			std::rethrow_exception(error);
+
+		co_return std::move(result);
+	}
 }
 
 Setup::Setup(Window& window, Installer& installer, Store& store, Client& client, Microphone& microphone)
@@ -33,8 +51,18 @@ task<int> Setup::Launch()
 			// the game data is there but Registry.con is not: only the keys are asked for
 			co_await EnterMissingKeys(installation->edition == DiscEdition::Deluxe);
 		}
+		else if (!m_Unverified && !m_Window.OptionKeyHeld() && m_Client.Present() && !m_Store.LoadLaunch().always_show) {
+			// the usual start of an installed game: no window, straight into the game, and the application goes
+			// with it once the game was played and quit. the Option key, or the choice to see the launcher every
+			// time, lead to the pages instead; so does game data which did not pass the quick check
+			if (co_await Play(*installation, LoadOptions(*installation))) {
+				m_Microphone.Stop();
+				co_return 0;
+			}
+		}
 
-		co_await Ready(*installation);
+		while (co_await Launcher(*installation))
+			installation = co_await InstallGame();
 	}
 	catch (const WindowClosed&) {
 	}
@@ -45,24 +73,25 @@ task<int> Setup::Launch()
 
 task<std::optional<Installation>> Setup::FindInstallation()
 {
-	m_Window.ShowWelcome();
-	if (!m_Store.HasInstallation())
+	if (!m_Store.HasInstallation()) {
+		m_Window.ShowWelcome();
 		co_return std::nullopt;
+	}
 
-	m_Window.SetBusy("Verifying…");
-	auto failure = std::string{};
+	// the files as they were after the last full check: a moment, and nothing to show for it
+	if (auto installation = co_await m_Installer.QuickCheck())
+		co_return installation;
+
+	// no record, or a file differs: the launcher says so and offers the full verification
 	try {
-		auto verified = co_await (m_Installer.Verify() || CancelOnClose());
-		co_return std::get<Installation>(verified);
+		m_Unverified = true;
+		co_return m_Installer.Current();
 	}
 	catch (const std::exception& e) {
-		failure = e.what();
+		m_Window.ShowWelcome();
+		m_Window.Message("Existing installation could not be read", e.what());
+		co_return std::nullopt;
 	}
-
-	// the assistant offers to install again. the generation which failed stays where it is
-	m_Window.ShowWelcome();
-	m_Window.Message("Existing installation could not be verified", failure);
-	co_return std::nullopt;
 }
 
 task<Installation> Setup::InstallGame()
@@ -97,25 +126,120 @@ task<Installation> Setup::InstallGame()
 	}
 }
 
-task<void> Setup::Ready(const Installation& installation)
+task<bool> Setup::Launcher(const Installation& installation)
 {
-	// the mod played last
-	auto selected = m_Store.LoadMod();
+	ReloadLauncher(installation);
 	while (true) {
-		// looked up every time: the user may just have put a mod into the library, or taken one out
-		auto mods = m_Store.Mods(installation);
-		if (std::ranges::find(mods, selected, &Mod::directory) == mods.end())
-			selected = mods.empty() ? "bf2" : mods.front().directory;
-
-		m_Window.ShowReady(m_Client.Present(), mods, selected);
-		auto event = co_await NextEvent();
-		selected = m_Window.SelectedMod();
-		if (event.kind == Event::Kind::next)
-			co_await Play(installation, selected);
-		else if (event.kind == Event::Kind::voice_setup)
-			co_await VoiceSetup();
-		else if (event.kind == Event::Kind::mods_folder)
+		auto event = co_await m_Window.WaitForEvent();
+		switch (event.kind) {
+		case Event::Kind::options_edited:
+			m_Window.SetCommandLine(command_line(launch_arguments(m_Window.Options())));
+			break;
+		case Event::Kind::mods_folder:
 			m_Window.Reveal(m_Store.ModLibrary());
+			break;
+		case Event::Kind::activated:
+			// back from the file manager: the list of mods may have changed, the edits stay
+			ShowLauncher(installation, m_Window.Options());
+			break;
+		case Event::Kind::voice_setup:
+			if (SaveOptions()) {
+				co_await VoiceSetup();
+				ReloadLauncher(installation);
+			}
+			break;
+		case Event::Kind::verify:
+			if (!SaveOptions())
+				break;
+
+			if (!co_await VerifyGameData())
+				co_return true;
+
+			ReloadLauncher(installation);
+			break;
+		case Event::Kind::next:
+			if (SaveOptions()) {
+				co_await Play(installation, m_Window.Options());
+				ReloadLauncher(installation);
+			}
+			break;
+		case Event::Kind::close:
+			// the edits go with the user
+			SaveOptions();
+			throw WindowClosed{};
+		default:
+			break;
+		}
+	}
+}
+
+task<bool> Setup::VerifyGameData()
+{
+	m_Window.SetBusy("Verifying…");
+	auto failure = std::string{};
+	try {
+		co_await ::guarded(m_Installer.Verify(), CancelOnClose());
+		m_Unverified = false;
+		m_Window.Message("Game data verified", "Every installed file matches the installation record.");
+		co_return true;
+	}
+	catch (const std::exception& e) {
+		failure = e.what();
+	}
+
+	// the window was closed meanwhile: the stopped verification is the end of it
+	if (m_Closing)
+		throw WindowClosed{};
+
+	// the assistant offers to install again. the generation which failed stays where it is
+	m_Window.ShowWelcome();
+	m_Window.Message("Game data could not be verified", failure + "\nInstall again from your disc to repair it.");
+	co_return false;
+}
+
+LaunchOptions Setup::LoadOptions(const Installation& installation)
+{
+	auto options = m_Store.LoadLaunch();
+	// looked up every time: the user may just have put a mod into the library, or taken one out
+	auto mods = m_Store.Mods(installation);
+	if (std::ranges::find(mods, options.mod, &Mod::directory) == mods.end())
+		options.mod = mods.empty() ? "bf2" : mods.front().directory;
+
+	return options;
+}
+
+void Setup::ShowLauncher(const Installation& installation, const LaunchOptions& options)
+{
+	auto note = std::string{};
+	if (!m_Client.Present())
+		note = "The game client is not part of this build.";
+	else if (m_Unverified)
+		note = "The game data has not been verified since it changed.";
+
+	m_Window.ShowLauncher(options, m_Store.Mods(installation), m_Client.Present(), note);
+	m_Window.SetCommandLine(command_line(launch_arguments(options)));
+}
+
+void Setup::ReloadLauncher(const Installation& installation)
+{
+	m_Saved = LoadOptions(installation);
+	ShowLauncher(installation, m_Saved);
+}
+
+bool Setup::SaveOptions()
+{
+	auto options = m_Window.Options();
+	if (options == m_Saved)
+		return true;
+
+	try {
+		m_Store.SaveLaunch(options);
+		m_Saved = options;
+		return true;
+	}
+	catch (const std::exception& e) {
+		m_Window.Message("Options could not be saved", e.what());
+		return false;
 	}
 }
 
@@ -276,17 +400,21 @@ task<std::optional<Installation>> Setup::Install()
 	auto failure = std::string{};
 	try {
 		auto progress = [this](const Progress& progress) { m_Window.SetProgress(progress); };
-		auto installed = co_await (m_Installer.Install(m_Media, specialForces, progress) || CancelOnClose());
+		auto installed = co_await ::guarded(m_Installer.Install(m_Media, specialForces, progress), CancelOnClose());
 
 		// from here on the game is installed, whatever happens to the key
 		title = "Key could not be saved";
 		m_Store.SaveKeys(keys);
 		m_Window.ClearKeys();
-		co_return std::get<Installation>(installed);
+		co_return installed;
 	}
 	catch (const std::exception& e) {
 		failure = e.what();
 	}
+
+	// the window was closed meanwhile: the paused installation resumes next time
+	if (m_Closing)
+		throw WindowClosed{};
 
 	if (title == "Setup paused")
 		failure += "\nYour previous installation is retained. Choose Install to retry or resume.";
@@ -347,24 +475,24 @@ void Setup::ShowMicrophone()
 	}
 }
 
-task<void> Setup::Play(const Installation& installation, std::string mod)
+task<bool> Setup::Play(const Installation& installation, const LaunchOptions& options)
 {
-	m_Window.SetBusy("Play");
+	m_Window.SetBusy("Playing…");
 
 	auto failure = std::string{};
 	try {
-		m_Store.SaveMod(mod);
-		auto finished = co_await (m_Client.Run(installation, mod) || RefuseClose());
-		if (auto status = std::get<int>(finished); status != 0)
+		auto status = co_await ::guarded(m_Client.Run(installation, options), RefuseClose());
+		if (status != 0)
 			m_Window.Message("Battlefield 2 stopped", "The client exited with status " + std::to_string(status) + ".");
 
-		co_return;
+		co_return status == 0;
 	}
 	catch (const std::exception& e) {
 		failure = e.what();
 	}
 
 	m_Window.Message("Could not start Battlefield 2", failure);
+	co_return false;
 }
 
 task<Event> Setup::NextEvent()
@@ -384,6 +512,9 @@ task<void> Setup::CancelOnClose()
 		auto event = co_await m_Window.WaitForEvent();
 		if (event.kind != Event::Kind::next && event.kind != Event::Kind::close)
 			continue;
+
+		if (event.kind == Event::Kind::close)
+			m_Closing = true;
 
 		m_Installer.Cancel();
 		m_Window.SetStatus("Cancelling after the current patch record…");

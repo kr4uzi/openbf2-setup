@@ -47,8 +47,11 @@ namespace {
 		case Kind::back:
 			return !g_Machine.busy && (page == Page::disc || page == Page::patches || (page == Page::keys && g_Machine.back));
 		case Kind::voice_setup:
+		case Kind::verify:
+			return !g_Machine.busy && page == Page::launcher;
+		case Kind::options_edited:
 		case Kind::mods_folder:
-			return !g_Machine.busy && page == Page::ready;
+			return !g_Machine.busy && page == Page::launcher;
 		case Kind::activated:
 			return true;
 		case Kind::microphone:
@@ -92,6 +95,8 @@ task<Event> Window::WaitForEvent()
 			g_Machine.script.pop_front();
 			if (action.kind == Event::Kind::keys_edited)
 				g_Machine.keys = action.keys;
+			else if (action.kind == Event::Kind::options_edited)
+				g_Machine.edited_options = action.options;
 
 			co_return Event{ action.kind, action.path };
 		}
@@ -106,6 +111,7 @@ task<Event> Window::WaitForEvent()
 	if (!g_Machine.script.empty())
 		state += ", next action " + std::to_string(int(g_Machine.script.front().kind));
 
+	++g_Machine.stuck;
 	throw std::logic_error{ "the script is stuck (" + state + ")" };
 }
 
@@ -145,11 +151,18 @@ void Window::ShowVoice(const assistant::VoiceSettings&, bool)
 	g_Machine.microphone_status.reset();
 }
 
-void Window::ShowReady(bool clientPresent, const std::vector<Mod>& mods, const std::string& selected)
+bool Window::OptionKeyHeld() const
 {
-	::show(Page::ready, clientPresent);
+	return g_Machine.option_key_held;
+}
+
+void Window::ShowLauncher(const LaunchOptions& options, const std::vector<Mod>& mods, bool clientPresent, const std::string& note)
+{
+	::show(Page::launcher, clientPresent);
+	g_Machine.shown_options = options;
 	g_Machine.shown_mods = mods;
-	g_Machine.selected_mod = selected;
+	g_Machine.edited_options.reset();
+	g_Machine.launcher_note = note;
 }
 
 void Window::SetBusy(const std::string& label)
@@ -163,9 +176,14 @@ void Window::EnableNext(bool enabled)
 	g_Machine.next_enabled = enabled;
 }
 
-std::string Window::SelectedMod() const
+LaunchOptions Window::Options() const
 {
-	return g_Machine.chosen_mod.empty() ? g_Machine.selected_mod : g_Machine.chosen_mod;
+	return g_Machine.edited_options.value_or(g_Machine.shown_options);
+}
+
+void Window::SetCommandLine(const std::string& line)
+{
+	g_Machine.command_line = line;
 }
 
 void Window::SetPatch(PatchSlot slot, PatchStatus status, double)
@@ -273,6 +291,21 @@ task<Installation> Installer::Install(Media media, bool specialForces, std::func
 	co_return *g_Machine.installed;
 }
 
+Installation Installer::Current() const
+{
+	return g_Machine.installed.value();
+}
+
+task<std::optional<Installation>> Installer::QuickCheck()
+{
+	::call("quick-check");
+	co_await ::yield();
+	if (g_Machine.quick_record && g_Machine.installed)
+		co_return g_Machine.installed;
+
+	co_return std::nullopt;
+}
+
 task<Installation> Installer::Verify()
 {
 	m_Cancelled = false;
@@ -328,15 +361,15 @@ std::vector<Mod> Store::Mods(const Installation&)
 	return g_Machine.mods;
 }
 
-std::string Store::LoadMod() const
+LaunchOptions Store::LoadLaunch() const
 {
-	return g_Machine.stored_mod;
+	return g_Machine.stored_launch;
 }
 
-void Store::SaveMod(const std::string& mod)
+void Store::SaveLaunch(const LaunchOptions& options)
 {
-	::call("save-mod");
-	g_Machine.stored_mod = mod;
+	::call("save-launch");
+	g_Machine.stored_launch = options;
 }
 
 assistant::VoiceSettings Store::LoadVoice() const
@@ -368,11 +401,11 @@ bool Client::Present() const
 	return g_Machine.client_present;
 }
 
-task<int> Client::Run(const Installation&, std::string mod)
+task<int> Client::Run(const Installation&, LaunchOptions options)
 {
 	::call("run-client");
 	++g_Machine.client_runs;
-	g_Machine.client_mod = mod;
+	g_Machine.client_options = options;
 	g_Machine.client_running = true;
 	// the game runs for a moment, long enough for the user to try to close the window
 	for (auto i = 0; i < 5; ++i)

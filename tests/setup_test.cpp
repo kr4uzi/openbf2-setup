@@ -107,6 +107,7 @@ namespace {
 
 			check(exitCode == 0, "the application did not return 0");
 			check(g_Machine.script.empty(), "the script was not played to its end");
+			check(g_Machine.stuck == 0, "the application waited for an event which could not come");
 			verify();
 		}
 		catch (const std::exception& e) {
@@ -120,10 +121,10 @@ int main()
 {
 	run("fresh installation", [](FakeMachine& machine) {
 		machine.script = until_install("bf2.iso", { key });
-		append(machine.script, { click(Page::keys), click(Page::voice), click(Page::ready), quit() });
+		append(machine.script, { click(Page::keys), click(Page::voice), click(Page::launcher), quit() });
 	}, [] {
-		check(g_Machine.pages == std::vector{ Page::welcome, Page::welcome, Page::disc, Page::patches, Page::keys, Page::install, Page::voice, Page::ready, Page::ready }, "pages are out of order");
-		check(g_Machine.calls == std::vector<std::string>{ "check-disc", "check-patch141", "check-patch150", "install", "save-keys", "save-voice", "save-mod", "run-client" }, "calls are out of order");
+		check(g_Machine.pages == std::vector{ Page::welcome, Page::welcome, Page::disc, Page::patches, Page::keys, Page::install, Page::voice, Page::launcher, Page::launcher }, "pages are out of order");
+		check(g_Machine.calls == std::vector<std::string>{ "check-disc", "check-patch141", "check-patch150", "install", "save-keys", "save-voice", "run-client" }, "calls are out of order");
 		check(g_Machine.installed_media->disc == "bf2.iso" && g_Machine.installed_media->patch141 == "patch141.exe" && g_Machine.installed_media->patch150 == "patch150.exe", "the chosen media did not reach the installer");
 		check(g_Machine.installed_special_forces == false, "a regular disc installed Special Forces");
 		check(g_Machine.saved_keys->key == key && g_Machine.keys.key.empty(), "the key was not saved and cleared");
@@ -197,7 +198,7 @@ int main()
 	}, [] {
 		check(called("cancel") && told("Setup paused"), "the installation was not paused");
 		check(std::ranges::count(g_Machine.pages, Page::install) == 2 && called("install"), "the installation was not resumed");
-		check(g_Machine.pages.back() == Page::ready, "the resumed installation did not finish");
+		check(g_Machine.pages.back() == Page::launcher, "the resumed installation did not finish");
 	});
 
 	run("a failing installation can be retried", [](FakeMachine& machine) {
@@ -218,21 +219,102 @@ int main()
 		check(g_Machine.keys.key == key, "the typed key was lost");
 	});
 
-	run("closing during the installation cancels it", [](FakeMachine& machine) {
+	run("closing during the installation cancels it and quits", [](FakeMachine& machine) {
 		machine.script = until_install("bf2.iso", { key });
-		append(machine.script, { click(Page::keys), { Kind::close }, quit() });
+		append(machine.script, { click(Page::keys), { Kind::close } });
 	}, [] {
-		check(called("cancel") && !called("install") && told("Setup paused"), "closing did not cancel");
+		check(called("cancel") && !called("install") && g_Machine.messages.empty(), "closing did not cancel, or a message was shown on the way out");
+		check(g_Machine.pages.back() == Page::install, "a page replaced the install page before the exit");
+	});
+
+	run("closing during the verification cancels it and quits", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.quick_record = false;
+		machine.script = { { Kind::verify }, { Kind::close } };
+	}, [] {
+		check(called("cancel") && !called("run-client") && g_Machine.messages.empty(), "closing did not cancel the verification");
 	});
 
 	run("existing installation", [](FakeMachine& machine) {
 		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
 		machine.keys_stored = true;
-		machine.script = { click(Page::ready), quit() };
+		machine.script = { click(Page::launcher), quit() };
 	}, [] {
-		check(g_Machine.calls == std::vector<std::string>{ "verify", "save-mod", "run-client" }, "the installation was not verified before Play");
-		check(g_Machine.client_mod == "bf2", "Battlefield 2 itself was not what Play started");
-		check(g_Machine.pages == std::vector{ Page::welcome, Page::ready, Page::ready }, "pages are out of order");
+		check(g_Machine.calls == std::vector<std::string>{ "quick-check", "run-client" }, "the quick check was not what preceded Play, or unchanged options were written");
+		check(g_Machine.client_options == LaunchOptions{} && g_Machine.command_line == "+modPath mods/bf2 +restart 1", "Battlefield 2 itself, fullscreen as the game's own default and without movies, was not what Play started");
+		// the launcher, and again after the game
+		check(g_Machine.pages == std::vector{ Page::launcher, Page::launcher }, "pages are out of order");
+	});
+
+	run("the plain start goes straight into the game", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.option_key_held = false;
+	}, [] {
+		check(g_Machine.calls == std::vector<std::string>{ "quick-check", "run-client" } && g_Machine.client_runs == 1, "the game was not started without a click, or the files were hashed although the record matched");
+		check(g_Machine.pages.empty() && g_Machine.messages.empty(), "a page or a message was shown on the way into the game");
+	});
+
+	run("the plain start with unverified game data shows the launcher", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.option_key_held = false;
+		machine.quick_record = false;
+		machine.script = { quit() };
+	}, [] {
+		check(g_Machine.calls == std::vector<std::string>{ "quick-check" } && g_Machine.pages == std::vector{ Page::launcher }, "the game started, or the files were hashed, without being asked");
+		check(g_Machine.launcher_note.starts_with("The game data has not been verified"), "the launcher did not say that the data is unverified");
+	});
+
+	run("verification on demand", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.quick_record = false;
+		machine.script = { { Kind::verify }, click(Page::launcher), quit() };
+	}, [] {
+		check(g_Machine.calls == std::vector<std::string>{ "quick-check", "verify", "run-client" }, "the verification did not run on the click, or Play did not follow");
+		check(told("Game data verified") && g_Machine.launcher_note.empty(), "the verified data was still marked as unverified");
+	});
+
+	run("the plain start comes back to the launcher when the game fails", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.option_key_held = false;
+		machine.client_status = 6;
+		// nothing to close until the game has failed and the launcher is up
+		machine.script = { { Kind::close, {}, {}, [](const FakeMachine& machine) { return !machine.client_running && ::page(machine) == Page::launcher; } } };
+	}, [] {
+		check(told("Battlefield 2 stopped") && g_Machine.client_runs == 1, "the failure was not reported");
+		check(g_Machine.pages == std::vector{ Page::launcher } && !g_Machine.busy, "the launcher was not the first and only page, after the failure");
+	});
+
+	run("the plain start without a client stays on the launcher", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.option_key_held = false;
+		machine.client_present = false;
+		machine.script = { quit() };
+	}, [] {
+		check(!called("run-client") && ::page(g_Machine) == Page::launcher && !g_Machine.next_enabled, "Play was tried without a client");
+	});
+
+	run("the pages can be asked for at every start", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.option_key_held = false;
+		machine.stored_launch.always_show = true;
+		machine.script = { click(Page::launcher), quit() };
+	}, [] {
+		check(g_Machine.calls == std::vector<std::string>{ "quick-check", "run-client" } && g_Machine.pages == std::vector{ Page::launcher, Page::launcher }, "the game started before the click");
+	});
+
+	run("the plain start asks for missing keys first", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.option_key_held = false;
+		machine.script = { { Kind::keys_edited, {}, { key } }, click(Page::keys), quit() };
+	}, [] {
+		check(g_Machine.saved_keys && !called("run-client") && ::page(g_Machine) == Page::launcher, "the keys were not asked for, or the game started by itself afterwards");
 	});
 
 	run("existing installation without keys", [](FakeMachine& machine) {
@@ -242,15 +324,17 @@ int main()
 	}, [] {
 		check(g_Machine.deluxe_keys && !g_Machine.back, "the key page was not the Deluxe one without Back");
 		check(told("Key could not be saved") && g_Machine.saved_keys, "the keys were not asked for again and saved");
-		check(!called("install") && g_Machine.pages.back() == Page::ready, "the assistant did not go straight to Ready");
+		check(!called("install") && g_Machine.pages.back() == Page::launcher, "the assistant did not go straight to the launcher");
 	});
 
 	run("existing installation which is damaged", [](FakeMachine& machine) {
 		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.quick_record = false;
 		machine.failures["verify"] = 1;
-		machine.script = { click(Page::welcome), quit() };
+		machine.script = { { Kind::verify }, click(Page::welcome), quit() };
 	}, [] {
-		check(told("Existing installation could not be verified"), "the user was not told");
+		check(told("Game data could not be verified"), "the user was not told");
 		check(g_Machine.pages.back() == Page::disc && !called("run-client"), "the assistant did not offer to install again");
 	});
 
@@ -258,7 +342,7 @@ int main()
 		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
 		machine.keys_stored = true;
 		machine.client_status = 6;
-		machine.script = { click(Page::ready), { Kind::close, {}, {}, [](const FakeMachine& machine) { return machine.client_running; } }, quit() };
+		machine.script = { click(Page::launcher), { Kind::close, {}, {}, [](const FakeMachine& machine) { return machine.client_running; } }, quit() };
 	}, [] {
 		check(told("Battlefield 2 is running"), "the window could be closed while the game ran");
 		check(told("Battlefield 2 stopped") && g_Machine.messages.back().ends_with("status 6."), "the exit status was not shown");
@@ -268,7 +352,7 @@ int main()
 		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
 		machine.keys_stored = true;
 		machine.failures["run-client"] = 1;
-		machine.script = { click(Page::ready), click(Page::ready), quit() };
+		machine.script = { click(Page::launcher), click(Page::launcher), quit() };
 	}, [] {
 		check(told("Could not start Battlefield 2") && g_Machine.client_runs == 1, "Play could not be tried again");
 	});
@@ -279,21 +363,52 @@ int main()
 		machine.client_present = false;
 		machine.script = { quit() };
 	}, [] {
-		check(!g_Machine.next_enabled && ::page(g_Machine) == Page::ready, "Play was offered without a client");
+		check(!g_Machine.next_enabled && ::page(g_Machine) == Page::launcher, "Play was offered without a client");
 	});
 
-	run("a mod is chosen and remembered", [](FakeMachine& machine) {
+	run("options are chosen, shown and remembered", [](FakeMachine& machine) {
 		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::Deluxe };
 		machine.keys_stored = true;
 		machine.mods = { { "bf2", "Battlefield 2" }, { "xpack", "Battlefield 2: Special Forces" } };
-		machine.chosen_mod = "xpack";
-		machine.script = { click(Page::ready), quit() };
+		auto chosen = LaunchOptions{};
+		chosen.mod = "xpack";
+		chosen.skip_movies = false;
+		chosen.fullscreen = false;
+		chosen.width = 1280;
+		chosen.height = 800;
+		chosen.server = "192.168.1.20";
+		chosen.player = "Player One";
+		// edit, Play
+		machine.script = { { Kind::options_edited, {}, {}, {}, chosen }, click(Page::launcher), quit() };
 	}, [] {
-		check(g_Machine.shown_mods.size() == 2 && g_Machine.client_mod == "xpack", "the chosen mod was not started");
-		check(g_Machine.stored_mod == "xpack" && g_Machine.selected_mod == "xpack", "the choice was not remembered for the next time");
+		check(g_Machine.shown_mods.size() == 2 && g_Machine.shown_options.mod == "xpack", "the launcher did not come back with both mods and the saved choice");
+		check(called("save-launch") && g_Machine.stored_launch.mod == "xpack" && g_Machine.stored_launch.width == 1280, "the options were not saved by Play");
+		check(g_Machine.command_line == "+modPath mods/xpack +fullscreen 0 +szx 1280 +szy 800 +joinServer 192.168.1.20 +port 16567 +playerName \"Player One\"", "the command line did not follow the saved options");
+		check(g_Machine.client_options.mod == "xpack" && !g_Machine.client_options.fullscreen, "Play did not use the edited options");
 	});
 
-	run("a mod is added while the application is open", [](FakeMachine& machine) {
+	run("an edit is kept when the window is closed", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		auto chosen = LaunchOptions{};
+		chosen.fullscreen = false;
+		machine.script = { { Kind::options_edited, {}, {}, {}, chosen }, { Kind::close } };
+	}, [] {
+		check(called("save-launch") && !g_Machine.stored_launch.fullscreen && !called("run-client"), "the edit was lost, or the game started");
+	});
+
+	run("the unlocked command line is what is started", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		auto chosen = LaunchOptions{};
+		chosen.override = "+modPath mods/bf2 +fullscreen 0 +szx 800 +szy 600";
+		machine.script = { { Kind::options_edited, {}, {}, {}, chosen }, click(Page::launcher), quit() };
+	}, [] {
+		check(g_Machine.command_line == "+modPath mods/bf2 +fullscreen 0 +szx 800 +szy 600", "the override was not shown as the command line");
+		check(g_Machine.client_options.override == "+modPath mods/bf2 +fullscreen 0 +szx 800 +szy 600", "the override did not reach the client");
+	});
+
+	run("a mod is added while the launcher is open", [](FakeMachine& machine) {
 		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
 		machine.keys_stored = true;
 		machine.dropped_mods = { { "community", "A Community Mod" } };
@@ -303,25 +418,28 @@ int main()
 	}, [] {
 		check(g_Machine.revealed == std::vector<std::filesystem::path>{ "CustomMods" }, "the mod library was not opened");
 		check(g_Machine.shown_mods.size() == 2 && g_Machine.shown_mods[1].directory == "community", "the new mod was not offered after coming back");
-		check(g_Machine.client_mod == "bf2", "the selection changed by itself");
+		check(g_Machine.client_options.mod == "bf2", "the selection changed by itself");
 	});
 
 	run("a remembered mod which is gone", [](FakeMachine& machine) {
 		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
 		machine.keys_stored = true;
-		machine.stored_mod = "removed";
-		machine.script = { click(Page::ready), quit() };
+		machine.stored_launch.mod = "removed";
+		machine.script = { click(Page::launcher), quit() };
 	}, [] {
-		check(g_Machine.client_mod == "bf2", "Battlefield 2 was not the fallback");
+		check(g_Machine.client_options.mod == "bf2", "Battlefield 2 was not the fallback");
 	});
 
-	run("the choice cannot be saved", [](FakeMachine& machine) {
+	run("the options cannot be saved", [](FakeMachine& machine) {
 		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
 		machine.keys_stored = true;
-		machine.failures["save-mod"] = 1;
-		machine.script = { click(Page::ready), quit() };
+		machine.failures["save-launch"] = 1;
+		auto chosen = LaunchOptions{};
+		chosen.player = "Someone";
+		machine.script = { { Kind::options_edited, {}, {}, {}, chosen }, click(Page::launcher), click(Page::launcher), quit() };
 	}, [] {
-		check(told("Could not start Battlefield 2") && g_Machine.client_runs == 0, "the game started although the launch options could not be written");
+		check(told("Options could not be saved") && std::ranges::count(g_Machine.calls, "save-launch") == 2, "saving was not tried again");
+		check(g_Machine.client_runs == 1, "Play ran without its options saved, or not at all on the second try");
 	});
 
 	run("voice setup asks for the microphone", [](FakeMachine& machine) {

@@ -335,11 +335,10 @@ bool clientSettings(const std::string& path) {
     auto name=lower(path);if(!begins(name,"mods/"))return false;
     auto mod=name.find('/',5);return mod!=std::string::npos&&name.compare(mod,10,"/settings/")==0;
 }
-}
-void verifyManifest(const fs::path& game,const fs::path& manifest,const Control& control,bool allowExtraFiles) {
+struct Expected {std::string path,hash;uint64_t size;};
+std::vector<Expected> readManifest(const fs::path& manifest) {
     std::ifstream in(manifest);check(bool(in),"cannot open final content manifest");
-    struct Expected {std::string path,hash;uint64_t size;};std::vector<Expected> expected;
-    std::set<std::string> names;std::string line;uint64_t total=0;
+    std::vector<Expected> expected;std::set<std::string> names;std::string line;uint64_t total=0;
     while(std::getline(in,line)) {
         if(line.empty()||line[0]=='#')continue;
         std::istringstream row(line);Expected e;std::string size;
@@ -350,6 +349,40 @@ void verifyManifest(const fs::path& game,const fs::path& manifest,const Control&
         check(e.size<=UINT64_MAX-total,"manifest size overflow");total+=e.size;expected.push_back(e);
     }
     check(in.eof()&&!expected.empty(),"empty/unreadable manifest");
+    return expected;
+}
+// The modification time as the file system keeps it, in the ticks of file_time_type.
+int64_t modified(const fs::path& path) {return int64_t(fs::last_write_time(path).time_since_epoch().count());}
+}
+std::string verificationStamp(const fs::path& game,const fs::path& manifest) {
+    std::string text;
+    for(const auto& e:readManifest(manifest)) {
+        auto path=game/e.path;check(fs::is_regular_file(fs::symlink_status(path)),"stamp of a missing file: "+e.path);
+        text+=e.path+"\t"+std::to_string(fs::file_size(path))+"\t"+std::to_string(modified(path))+"\n";
+    }
+    return text;
+}
+bool stampMatches(const fs::path& game,const fs::path& manifest,const std::string& stamp) {
+    try {
+        std::map<std::string,std::pair<uint64_t,int64_t>> recorded;std::istringstream lines(stamp);std::string line;
+        while(std::getline(lines,line)) {
+            std::istringstream row(line);std::string path,size,time;
+            if(!std::getline(row,path,'\t')||!std::getline(row,size,'\t')||!std::getline(row,time))return false;
+            recorded[lower(path)]={std::stoull(size),std::stoll(time)};
+        }
+        auto expected=readManifest(manifest);
+        if(recorded.size()!=expected.size())return false;
+        for(const auto& e:expected) {
+            auto path=game/e.path;auto found=recorded.find(lower(e.path));
+            if(found==recorded.end()||found->second.first!=e.size||!fs::is_regular_file(fs::symlink_status(path)))return false;
+            if(clientSettings(e.path))continue;
+            if(fs::file_size(path)!=e.size||modified(path)!=found->second.second)return false;
+        }
+        return true;
+    } catch(const std::exception&) {return false;}
+}
+void verifyManifest(const fs::path& game,const fs::path& manifest,const Control& control,bool allowExtraFiles) {
+    auto expected=readManifest(manifest);uint64_t total=0;for(const auto& e:expected)total+=e.size;
     // Inventory first; reject extra files, symlinks and ambiguous case aliases.
     std::map<std::string,fs::path> actual;
     check(fs::is_directory(game)&&!fs::is_symlink(fs::symlink_status(game)),"missing game data directory");
@@ -397,6 +430,11 @@ void secureDirectory(const fs::path& directory) {
 void textFile(const fs::path& path,const std::string& text,Platform& platform) {
     writeFile(path,[&](const Sink& sink){sink(reinterpret_cast<const uint8_t*>(text.data()),text.size());});platform.syncFile(path);platform.syncDirectory(path.parent_path());
 }
+}
+void writeTextFile(const fs::path& path,const std::string& text,Platform& platform) {
+    std::error_code stale;fs::remove(path,stale);textFile(path,text,platform);
+}
+namespace {
 
 }
 void exportDisc(const fs::path& source,const fs::path& output,const Control& control) {

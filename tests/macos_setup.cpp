@@ -180,6 +180,23 @@ int main(int argc, char** argv) {
         save(game/"a",{'a','b','c'});setup::fs::remove(game/"a");rejects([&]{setup::verifyManifest(game,manifest,{},true);},"missing file hidden by an extra file");
         save(game/"a",{'a','b','c'});setup::fs::remove(game/"extra");
         {
+            // The start-up shortcut: sizes and times recorded after a full verification.
+            auto stamp=setup::verificationStamp(game,manifest);
+            check(stamp.rfind("a\t3\t",0)==0&&setup::stampMatches(game,manifest,stamp),"fresh stamp does not match its files");
+            check(!setup::stampMatches(game,manifest,"")&&!setup::stampMatches(game,manifest,"garbage"),"an empty or broken stamp matched");
+            save(game/"a",{'a','b','c','d'});check(!setup::stampMatches(game,manifest,stamp),"a file of another size matched");
+            setup::fs::remove(game/"a");check(!setup::stampMatches(game,manifest,stamp),"a missing file matched");
+            save(game/"a",{'a','b','c'});check(!setup::stampMatches(game,manifest,stamp),"a rewritten file matched its old time");
+            check(setup::stampMatches(game,manifest,setup::verificationStamp(game,manifest)),"a new stamp does not match");
+            setup::fs::remove(game/"a");setup::fs::create_symlink(root/"manifest.tsv",game/"a");
+            rejects([&]{setup::verificationStamp(game,manifest);},"a symlink was stamped");
+            setup::fs::remove(game/"a");save(game/"a",{'a','b','c'});
+            auto text=[](const setup::fs::path& p){auto b=setup::View(p).all();return std::string(b.begin(),b.end());};
+            auto platform=setup::nativePlatform();setup::writeTextFile(root/"stamp.tsv",setup::verificationStamp(game,manifest),*platform);
+            check(setup::stampMatches(game,manifest,text(root/"stamp.tsv")),"the written stamp does not match");
+            setup::writeTextFile(root/"stamp.tsv","replaced",*platform);check(text(root/"stamp.tsv")=="replaced","the stamp was not replaced");
+        }
+        {
             // Settings the client saves over shipped ones: fine in a generation in use, never in a fresh one.
             auto settings=root/"game-settings";setup::fs::create_directories(settings/"mods/bf2/Settings");setup::fs::create_directories(settings/"mods/bf2/Other");
             save(settings/"mods/bf2/Settings/controls.con",{'a','b','c'});save(settings/"mods/bf2/Other/a",{'a','b','c'});

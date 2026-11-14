@@ -1,5 +1,7 @@
 # Native client artifact contract
 
+*For:* Maintainers and the OpenBF2 engine side. *Covers:* the contract for the embedded native client: the files, the CI entry point, and everything the launcher does with the client at run time (arguments, environment, files, locks).
+
 The setup app (`OpenBF2.app`, which is also the launcher) embeds the OpenBF2 macOS client at build
 time and starts it from the Play page. The engine build supplies the client as
 a directory; the setup build copies exactly three files out of it and never
@@ -74,18 +76,45 @@ The client's side of this contract is OpenBF2's `docs/macos-write-paths.md`: the
 directories it uses, every file it writes and what a launcher must and must not
 do. The setup app follows it as described here.
 
-- Launches `Contents/MacOS/bf2_client` with the arguments `+modPath mods/<mod>`.
-  `<mod>` is the directory the user chose on the Ready page, `bf2` by default.
-  Offered is every directory below `mods/` of the generation which has a
+- Launches `Contents/MacOS/bf2_client` with the command line of the start-up
+  options: `+modPath mods/<mod>`, `+restart 1` (skip the intro movies, on by
+  default), nothing for fullscreen (the engine's own default, as in retail) and
+  `+fullscreen 0` for windowed mode, `+szx <w> +szy <h>` only when windowed and
+  a size was given, `+joinServer <host> +port <port>` when a
+  server was given, with `+password <password>` when one was given as well (its
+  own argument, never quoted by the app, double quotes dropped, left out when
+  empty, as the engine's parser wants it), `+playerName <name>` when a name was
+  given. Behind the lock of the options page
+  the user may write the whole line instead; it is split on whitespace with
+  double quotes kept together, and its `+modPath` mod must still be installed.
+  Offered as `<mod>` is every directory below `mods/` of the generation which has a
   `mod.desc` and at least one level (`levels/<name>/info/<name>.desc`, or a
   non-empty `<importlevels>`); `xpack` only for an edition which installed
   Special Forces. The name shown is `<title>` of `mod.desc`, resolved through the
-  English localization files if it is a key. The choice is kept in
-  `Setup/Launch.txt` (`mod=<directory>`); no file of the game is written for it.
+  English localization files if it is a key. The choices are kept in
+  `Setup/Launch.txt` (`name=value` lines, `mod=` first; see `src/launch.h`); no
+  file of the game is written for them.
+- The usual start of an installed game goes straight into the client, without
+  a window; the Option key held while the app opens, the "Open this screen every
+  time" choice of the launcher page, game data which did not pass the quick
+  check, a missing client, missing keys or a client which did not exit with 0
+  lead to the launcher page instead. When the client exits with 0 after such a
+  direct start, the app quits with it.
+- After a full verification, and right after an installation, the app records
+  size and modification time of every manifest file in
+  `Setup/Verified-<generation>.tsv`. Every start compares the files against
+  that record in a fraction of a second (files below `mods/<mod>/settings/`
+  only have to exist, as in the full check). When a file differs, is missing or
+  is not a regular file, or the record is missing or unreadable, the launcher
+  page opens with the note that the data has not been verified; nothing is
+  hashed on its own. The full verification runs from "Verify Game Data…" on
+  that page, writes the record again, and on failure offers the installation
+  wizard to repair the data. The record is an integrity cache against
+  accidental damage, not a defence against someone who can write the game data.
 - Mods of the user live in `~/Library/Application Support/OpenBF2/CustomMods/<name>`,
   outside the generation, so a reinstallation keeps them. (Not `Mods`: the client's
   caches are in `mods/` of the support root, and a case-insensitive volume does
-  not tell the two apart.) Whenever the Ready page is shown, the setup app makes a
+  not tell the two apart.) Whenever the launcher page is shown, the setup app makes a
   symlink `mods/<name>` in the generation for every directory of the library
   with a `mod.desc`, unless the name is taken there, and removes links of mods
   which left the library. The start-up verification tolerates symlinks directly
@@ -110,7 +139,9 @@ do. The setup app follows it as described here.
   `ProtectedData.key`); the setup app never deletes or replaces any of it, and
   nothing is written into the app bundle.
 - The client writes into the generation: `Client.lock`, `RendDX9Rebuilt.log`,
-  `settings/banlist.con` and saved settings below `mods/<mod>/settings/`. Some of
+  `settings/banlist.con` and saved settings below `mods/<mod>/settings/`. The
+  app adds `OpenBF2Client.log` there: the client's standard output and error
+  of the latest run, truncated at every start (the client has no log switch). Some of
   the latter are shipped files (`maplist.con`, `serversettings.con`: the save
   targets while no profile has redirected them). The start-up verification of a
   generation therefore tolerates extra regular files anywhere and changed files

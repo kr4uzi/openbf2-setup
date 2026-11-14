@@ -22,6 +22,16 @@ fs::path install(const InstallOptions&, Platform&);
 // ones, and symlinks directly in mods/ (the user's own mods; never followed).
 // Every manifest file must still exist, and every other one match exactly.
 void verifyManifest(const fs::path& game, const fs::path& manifest, const Control& = {}, bool allowExtraFiles = false);
+// The start-up shortcut of the verification. The stamp records size and modification time of
+// every manifest file right after a full verification; stampMatches compares the files against
+// it (regular files, same size and time; the client's own settings files only have to exist),
+// in a fraction of a second. Anything else, a missing or torn stamp included, means the full
+// verification runs again. The stamp is an integrity cache, not a protection against an
+// adversary who can write the game data anyway.
+std::string verificationStamp(const fs::path& game, const fs::path& manifest);
+bool stampMatches(const fs::path& game, const fs::path& manifest, const std::string& stamp);
+// A small text file, flushed with its directory.
+void writeTextFile(const fs::path& path, const std::string& text, Platform&);
 std::string sha256(const View&);
 // Diagnostic: export every cabinet entry (all languages/features), preserving
 // duplicates by descriptor index. Requires a fresh output directory.

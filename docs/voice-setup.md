@@ -1,10 +1,12 @@
 # Voice setup step
 
+*For:* Maintainers. *Covers:* the voice setup step and the one file it writes, with the retail behaviour it is modelled on.
+
 Retail Battlefield 2 ran `BF2VoiceSetup.exe` ("BF2 BattleCommo") at the end of
 installation: a microphone level meter, a capture volume slider, an activation
 threshold slider and a microphone boost checkbox. The setup assistant has the
 same step after a successful installation and behind the "Voice Setup…" button
-on the Ready page. It builds its own UI; no retail tool is run or reconstructed.
+on the launcher page. It builds its own UI; no retail tool is run or reconstructed.
 
 ## The one file
 

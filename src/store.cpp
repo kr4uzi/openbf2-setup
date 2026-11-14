@@ -49,15 +49,15 @@ std::vector<Mod> Store::Mods(const Installation& installation)
 	return find_mods(installation.game, installation.edition, library);
 }
 
-std::string Store::LoadMod() const
+LaunchOptions Store::LoadLaunch() const
 {
-	return assistant::launchMod(m_Support);
+	return assistant::loadLaunch(m_Support);
 }
 
-void Store::SaveMod(const std::string& mod)
+void Store::SaveLaunch(const LaunchOptions& options)
 {
 	auto platform = nativePlatform();
-	assistant::saveLaunchMod(m_Support, mod, *platform);
+	assistant::saveLaunch(m_Support, options, *platform);
 }
 
 assistant::VoiceSettings Store::LoadVoice() const
