@@ -79,13 +79,29 @@ requires a verified generation and locally valid stored keys before showing Play
 
 `macos/build-dmg.sh APP OUTPUT.dmg` makes a staging copy beside OUTPUT,
 audits universal binaries, signs nested dylibs/client before the app, verifies
-strictly, adds an Applications shortcut and runs `hdiutil create -format UDZO`.
-The staging directory is always cleaned. Add `--check-only` as the third argument
-to audit/stage/sign/verify without hdiutil; no DMG is created in that mode.
-Ad-hoc signing (`-`) is the default
-placeholder. `SETUP_SIGN_IDENTITY` selects an existing identity but the current
-script does not constitute a complete hardened-runtime release-signing policy.
-It must never re-sign the user's drag-copied app during first-run setup.
+strictly, adds an Applications shortcut, the background picture
+(`macos/dmg/background.png`, drawn by `make-background.swift`) and the Finder
+window layout (`macos/dmg/DS_Store`: app left, Applications right, arrow
+between) and runs `hdiutil create -format UDZO`. The layout file was made once
+with `macos/dmg/make-layout.sh`, which runs the Finder locally; CI only copies
+it, so no Finder automation runs there. Remake it when the background, the
+positions or the volume name change. The staging directory is always cleaned.
+Add `--check-only` as the third argument to audit/stage/sign/verify without any
+image; no DMG is created in that mode. `SETUP_DMG_ALLOW_THIN=1` is a developer
+override for a local test image with a non-universal client; CI never sets it.
+Ad-hoc signing (`-`) is the default. With `SETUP_SIGN_IDENTITY` set to a real
+identity (Developer ID), `macos/sign-bundle.sh` signs every binary with the
+hardened runtime and a secure timestamp, gives `bf2_client` the entitlements
+named by `SETUP_ENTITLEMENTS_CLIENT` (required then; OpenBF2's build supplies
+its file, `com.apple.security.device.audio-input` alone) and the app the ones
+of `SETUP_ENTITLEMENTS_APP` (default `macos/OpenBF2.entitlements`, the same
+single entitlement for the microphone level meter), verifies deep and strict,
+runs `spctl` for information (it passes only after notarization) and
+`build-dmg.sh` signs the image with the same identity. Ad-hoc signatures never
+get the runtime option: without a Team ID, library validation would refuse the
+client's own dylibs. Notarization and stapling are done by OpenBF2's workflow
+after `build-release.sh`. The scripts must never re-sign the user's drag-copied
+app during first-run setup.
 
 Earlier managed-session attempt: architecture and ad-hoc signature
 verification passed; hdiutil failed `create failed - Device not configured`.
