@@ -1,5 +1,5 @@
-#include "Installer.h"
-#include "RtpBridge.h"
+#include "install.h"
+#include "rtp_bridge.h"
 #include <array>
 #include <csignal>
 #include <iostream>

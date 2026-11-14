@@ -10,7 +10,7 @@ are stored in the repository or downloaded by setup.
 | BF2 1.0 → 1.41 | 562,044,991 | `7bfd6236b67c0380acb522d237273d51a2764769a8f9c223098f93350bdd5c64` |
 | BF2 1.41 → 1.5 | 2,067,515,943 | `c5b150c96916a4c642daff03da3e9e52a7bccec6a7d6c6492494b57733c77977` |
 
-`core/Media.cpp` is the common pin source. A matching size and complete SHA-256
+`src/patch.cpp` is the common pin source. A matching size and complete SHA-256
 are both required for the chosen slot. The other known patch gives a targeted
 message, for example: “This is the 1.5 patch; please select the 1.41 patch here.”
 An unknown, truncated or modified file gives an expected-slot size/SHA-256 error.

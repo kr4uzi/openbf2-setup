@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #include <string_view>
 
 namespace setup {
@@ -8,4 +9,6 @@ enum class KeyEdition { BF2, SpecialForces };
 // case-insensitive compact keys or five groups separated by single hyphens.
 // No trimming, logging, I/O, mutable global state, or key reconstruction.
 bool validateKey(KeyEdition edition, std::string_view key);
+// Shape only: twenty letters or digits, compact or in five hyphenated groups.
+bool keyFormat(const std::string& key);
 }

@@ -1,4 +1,4 @@
-#include "Platform.h"
+#include "platform.h"
 #include <fcntl.h>
 #include <sys/file.h>
 #include <unistd.h>

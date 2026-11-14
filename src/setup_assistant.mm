@@ -1,7 +1,10 @@
 #import <AppKit/AppKit.h>
 #import <AVFoundation/AVFoundation.h>
-#include "Installer.h"
-#include "SetupSession.h"
+#include "install.h"
+#include "edition.h"
+#include "patch.h"
+#include "key_check.h"
+#include "session.h"
 #include <atomic>
 #include <cstdarg>
 #include <cstdlib>

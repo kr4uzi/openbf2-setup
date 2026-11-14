@@ -18,7 +18,7 @@ source inventory, 108 XP1 record outcomes and validation limits.
 | 1.41 → 1.50 SFX | 2,067,515,943 | `c5b150c96916a4c642daff03da3e9e52a7bccec6a7d6c6492494b57733c77977` |
 
 DVD-folder mode accepts the equivalent `data1.hdr`, `data1.cab`, `data2.cab`
-identities encoded in Installer.cpp, with MD5/size validation of every selected
+identities encoded in `src/install.cpp`, with MD5/size validation of every selected
 expanded file, including loose English support text. ISO parsing never mounts
 or modifies the image. SFX parsing reads bounded ranges, never executes EXEs.
 

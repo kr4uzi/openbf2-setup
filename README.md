@@ -59,8 +59,8 @@ alone; the DMG script still rejects such a bundle. Build all targets or
 
 On other hosts, configure/build the same core and CLI with CMake. Rust's host
 triple is detected; Apple frameworks and AppKit are selected only on macOS.
-POSIX and Windows adapters implement locking and durable publication outside
-`core/`. Windows/Linux compilation and runtime are not yet validated. The
+POSIX and Windows adapters implement locking and durable publication in
+`src/posix.cpp` and `src/windows.cpp`. Windows/Linux compilation and runtime are not yet validated. The
 Windows UI remains future work. See [third-party provenance](third_party/README.md)
 for the pinned owner-fork source and alternate checkout option.
 

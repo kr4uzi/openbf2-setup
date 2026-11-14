@@ -1,4 +1,5 @@
-#include "SetupSession.h"
+#include "session.h"
+#include "key_check.h"
 #include <fcntl.h>
 #include <cerrno>
 #include <unistd.h>
@@ -144,21 +145,9 @@ DiscEdition currentEdition(const fs::path& support) {
     if(lines.find("\nedition=deluxe-base\n")!=std::string::npos)return DiscEdition::DeluxeBase;
     return DiscEdition::BF2;
 }
-const char* manifestName(DiscEdition edition) {
-    switch(edition){
-        case DiscEdition::Deluxe:return "content-deluxe-150";
-        case DiscEdition::DeluxeBase:return "content-deluxe-base-150";
-        default:return "content-150";
-    }
-}
 bool storedKey(const fs::path& support,bool sf) {
     noLinks(support/"Registry.con");
     return fs::exists(support/"Registry.con")&&registryHasKey(read(support/"Registry.con"),sf);
-}
-DiscEdition validateDisc(const fs::path& path) {return detectDisc(path);}
-void validatePatches(const fs::path& a,const fs::path& b,const Control& control) {
-    verifyPatch(View(a),PatchSlot::Patch141,control);
-    verifyPatch(View(b),PatchSlot::Patch150,control);
 }
 bool clientPresent(const fs::path& contents) {
     for(auto name:{"bf2_client","libdice_py.dylib","libaidll.dylib"}){

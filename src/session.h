@@ -1,5 +1,6 @@
 #pragma once
-#include "Installer.h"
+#include "edition.h"
+#include "platform.h"
 
 namespace setup::assistant {
 // These helpers are shared by AppKit and headless checks. Keys never enter errors.
@@ -13,16 +14,6 @@ fs::path currentGeneration(const fs::path& support);
 bool storedKey(const fs::path& support, bool specialForces = false);
 // BF2, Deluxe, or DeluxeBase (Deluxe media installed without Special Forces).
 DiscEdition currentEdition(const fs::path& support);
-// Bundled content manifest resource name for an edition, without extension.
-const char* manifestName(DiscEdition);
-DiscEdition validateDisc(const fs::path&);
-void validatePatches(const fs::path& patch141, const fs::path& patch150, const Control& = {});
-bool clientPresent(const fs::path& contents);
-struct Launch {
-    fs::path executable, directory, support;
-    std::vector<std::string> arguments;
-};
-Launch clientLaunch(const fs::path& contents, const fs::path& support);
 // Voice chat defaults, the one file retail's BF2VoiceSetup writes
 // (Profiles/BattleCommoDefaultUserSettings.con). The client reads it only
 // when it creates its first profile; existing profiles keep their Audio.con.
@@ -38,4 +29,10 @@ VoiceSettings loadVoiceSettings(const fs::path& support);
 void saveVoiceSettings(const fs::path& support, const VoiceSettings&, Platform&);
 // True once the client has created a profile directory under Profiles/.
 bool profilesExist(const fs::path& support);
+bool clientPresent(const fs::path& contents);
+struct Launch {
+    fs::path executable, directory, support;
+    std::vector<std::string> arguments;
+};
+Launch clientLaunch(const fs::path& contents, const fs::path& support);
 }

@@ -6,7 +6,7 @@ The owner's rule was already implemented and remains unchanged: if the selected
 strict source/output checks and explicit historical-source policy.
 
 `install` creates the replacement set from `selection(full, false)` in
-`core/Installer.cpp`. That selection contains **274 full-file destinations** from
+`src/install.cpp`. That selection contains **274 full-file destinations** from
 381 cabinet descriptors, after feature/language selection. The `patch141` loop
 checks exact normalized destinations against that set before loading the old
 source or calling `obf2_rtp_apply`; it records `superseded-by-150`. The same set

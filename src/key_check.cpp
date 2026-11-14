@@ -1,4 +1,4 @@
-#include "KeyCheck.h"
+#include "key_check.h"
 #include <array>
 #include <cstdint>
 #include <utility>
@@ -61,5 +61,14 @@ bool validateKey(KeyEdition edition, std::string_view key) {
     for(int shift=25;shift>=0;shift-=5)
         crc=crcByte(crc,intermediateAlphabet[(intermediate>>shift)&31]);
     return crc==expected;
+}
+bool keyFormat(const std::string& key) {
+    if(key.size()!=20 && key.size()!=24)return false;
+    for(size_t i=0;i<key.size();++i) {
+        char c=key[i];
+        if(key.size()==24 && (i+1)%5==0) {if(c!='-')return false;continue;}
+        if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')))return false;
+    }
+    return true;
 }
 }

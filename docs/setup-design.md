@@ -8,15 +8,21 @@ are preserved; their original repository links are historical paths.
 
 ## Boundaries
 
-- `core/`: C++17 range readers, ISO/Joliet and mounted-directory providers,
-  PE SFX ranges, format-9 cabinet verification, English feature mapping,
-  checked RTP application, final manifest, progress/cancellation and transactions.
+- `src/`: one flat source directory. The portable core is `media` (range readers,
+  ISO/Joliet and mounted-directory providers, PE SFX ranges), `cabinet` (format-9
+  cabinet verification), `edition` (English feature mapping and edition decisions),
+  `patch` (pinned patch identities), `install` (checked RTP application, final
+  manifest, transactions), `progress` (progress/cancellation), `digest` and `key_check`.
 - `core/rtp-bridge/`: Rust static C ABI for the pinned owner's rtptool fork.
-- `platform/`: POSIX/Windows locks, file and directory flushes, atomic replace.
+  `core/*.tsv` are the bundled content manifests.
+- `src/platform.h` with `src/posix.cpp` and `src/windows.cpp`: locks, file and
+  directory flushes, atomic replace.
   No macOS APIs, POSIX system calls or Apple digests live in the portable core.
 - `cli/`: testing/diagnostic frontend, Ctrl-C and progress text.
-- `macos/`: native AppKit wizard, five-field key rows (BF2 plus SF for Deluxe), Registry.con persistence,
-  Application Support resolution and the future native client launch hook.
+- `src/setup_assistant.mm`: native AppKit wizard, five-field key rows (BF2 plus SF for Deluxe),
+  Application Support resolution. `src/session` holds Registry.con persistence, the current
+  installation, the voice settings file and the native client launch.
+- `macos/`: bundle metadata and the packaging scripts.
 - `third_party/`: unmodified rtptool snapshot with MIT notice and locked Rust
   dependency notices. zlib comes from the build platform.
 

@@ -1,4 +1,4 @@
-#include "Digest.h"
+#include "digest.h"
 #include <algorithm>
 namespace setup {
 namespace {

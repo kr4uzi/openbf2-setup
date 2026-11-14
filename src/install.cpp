@@ -1,7 +1,10 @@
 // [CHOSEN, not recovered] Setup policy for the owner-requested macOS port.
-#include "Installer.h"
-#include "RtpBridge.h"
-#include "Digest.h"
+#include "install.h"
+#include "cabinet.h"
+#include "edition.h"
+#include "patch.h"
+#include "rtp_bridge.h"
+#include "digest.h"
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -321,15 +324,6 @@ int compare(const fs::path& output, const fs::path& reference, const fs::path& a
 }
 
 std::string sha256(const View& source) {return digest(source,true);}
-bool keyFormat(const std::string& key) {
-    if(key.size()!=20 && key.size()!=24)return false;
-    for(size_t i=0;i<key.size();++i) {
-        char c=key[i];
-        if(key.size()==24 && (i+1)%5==0) {if(c!='-')return false;continue;}
-        if(!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')))return false;
-    }
-    return true;
-}
 
 void verifyManifest(const fs::path& game,const fs::path& manifest,const Control& control,bool allowExtraFiles) {
     std::ifstream in(manifest);check(bool(in),"cannot open final content manifest");

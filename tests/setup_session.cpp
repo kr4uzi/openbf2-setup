@@ -1,4 +1,7 @@
-#include "SetupSession.h"
+#include "install.h"
+#include "edition.h"
+#include "patch.h"
+#include "session.h"
 #include <fstream>
 #include <iostream>
 #include <unistd.h>

@@ -1,4 +1,4 @@
-#include "KeyCheck.h"
+#include "key_check.h"
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>

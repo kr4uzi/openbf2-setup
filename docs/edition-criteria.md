@@ -134,7 +134,7 @@ but not the English installation. See the linked TSV for every individual path.
 
 ## Exact rule currently implemented
 
-`core/Media.cpp:discEdition` performs these inventory checks:
+`src/edition.cpp:discEdition` performs these inventory checks:
 
 1. Require an entry named `objects_client.zip` (case-insensitive) in a group
    whose name starts exactly with `Mods - bf2`. Otherwise reject unsupported media.

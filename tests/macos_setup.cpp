@@ -1,7 +1,11 @@
 // [TEMP] [CHOSEN, not recovered] Malformed-input and C ABI checks for setup.
-#include "Installer.h"
-#include "RtpBridge.h"
-#include "Digest.h"
+#include "install.h"
+#include "cabinet.h"
+#include "edition.h"
+#include "patch.h"
+#include "key_check.h"
+#include "rtp_bridge.h"
+#include "digest.h"
 #include <algorithm>
 #include <fstream>
 #include <iostream>

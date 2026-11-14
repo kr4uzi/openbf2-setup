@@ -1,6 +1,6 @@
 // Optional owner-media fault injection. All mutations are confined to an existing
 // scratch support tree created by the CLI; no input/reference is ever modified.
-#include "Installer.h"
+#include "install.h"
 #include <atomic>
 #include <fstream>
 #include <iostream>

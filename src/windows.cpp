@@ -1,4 +1,4 @@
-#include "Platform.h"
+#include "platform.h"
 #define NOMINMAX
 #include <windows.h>
 #include <stdexcept>
