@@ -16,8 +16,11 @@ struct InstallOptions {
 // Installs an immutable generation and atomically switches Setup/Current.txt.
 // Resumes its private Setup/work transaction; never reads a reference tree.
 fs::path install(const InstallOptions&, Platform&);
-// allowExtraFiles tolerates regular files outside the manifest (runtime output of
-// the game such as settings or logs); manifest files must still match exactly.
+// allowExtraFiles is for a generation the game has run in: regular files outside the
+// manifest are tolerated (Client.lock, logs, saved settings), and so are changed
+// files below mods/<mod>/settings/, where the client saves settings over shipped
+// ones, and symlinks directly in mods/ (the user's own mods; never followed).
+// Every manifest file must still exist, and every other one match exactly.
 void verifyManifest(const fs::path& game, const fs::path& manifest, const Control& = {}, bool allowExtraFiles = false);
 std::string sha256(const View&);
 // Diagnostic: export every cabinet entry (all languages/features), preserving

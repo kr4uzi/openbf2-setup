@@ -1,5 +1,6 @@
 #pragma once
 #include "edition.h"
+#include "mods.h"
 #include "platform.h"
 
 namespace setup::assistant {
@@ -34,5 +35,10 @@ struct Launch {
     fs::path executable, directory, support;
     std::vector<std::string> arguments;
 };
-Launch clientLaunch(const fs::path& contents, const fs::path& support);
+// mod is the name of a directory below mods/ of the current generation.
+Launch clientLaunch(const fs::path& contents, const fs::path& support, const std::string& mod = "bf2");
+// The launcher's own choices (Setup/Launch.txt, "name=value" lines); the game's files are
+// never written for them. An unreadable or missing file means no choice was made.
+std::string launchMod(const fs::path& support);
+void saveLaunchMod(const fs::path& support, const std::string& mod, Platform&);
 }

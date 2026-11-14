@@ -325,6 +325,17 @@ int compare(const fs::path& output, const fs::path& reference, const fs::path& a
 
 std::string sha256(const View& source) {return digest(source,true);}
 
+namespace {
+// The client saves game settings into mods/<mod>/settings/ of its working directory,
+// as retail does into its game folder. Some of those files are shipped content
+// (maplist.con, serversettings.con: the save targets while no profile has redirected
+// them), so a generation the game has run in may hold changed ones. It never deletes
+// one: a missing file is still a damaged installation.
+bool clientSettings(const std::string& path) {
+    auto name=lower(path);if(!begins(name,"mods/"))return false;
+    auto mod=name.find('/',5);return mod!=std::string::npos&&name.compare(mod,10,"/settings/")==0;
+}
+}
 void verifyManifest(const fs::path& game,const fs::path& manifest,const Control& control,bool allowExtraFiles) {
     std::ifstream in(manifest);check(bool(in),"cannot open final content manifest");
     struct Expected {std::string path,hash;uint64_t size;};std::vector<Expected> expected;
@@ -343,11 +354,15 @@ void verifyManifest(const fs::path& game,const fs::path& manifest,const Control&
     std::map<std::string,fs::path> actual;
     check(fs::is_directory(game)&&!fs::is_symlink(fs::symlink_status(game)),"missing game data directory");
     for(const auto& e:fs::recursive_directory_iterator(game)) {
+        // The launcher links the user's own mods into mods/ of the generation in use. Such a
+        // link is not followed; one in the place of shipped content leaves that content missing.
+        if(allowExtraFiles&&fs::is_symlink(e.symlink_status())&&e.path().parent_path()==game/"mods")continue;
         check(!fs::is_symlink(e.symlink_status()),"symlink in final game data");if(e.is_directory())continue;
         check(e.is_regular_file(),"nonregular game data");
         check(actual.emplace(lower(safePath(e.path().lexically_relative(game).generic_string())),e.path()).second,"case collision in final game data");
     }
-    check(allowExtraFiles?actual.size()>=expected.size():actual.size()==expected.size(),"final content file count mismatch");
+    // A generation in use is checked for its shipped files only; see clientSettings.
+    check(allowExtraFiles||actual.size()==expected.size(),"final content file count mismatch");
     Progress progress{"verify","",0,total,0,expected.size()};
     std::atomic<size_t> next{0};std::mutex mutex;std::exception_ptr error;
     auto work=[&] {
@@ -356,7 +371,9 @@ void verifyManifest(const fs::path& game,const fs::path& manifest,const Control&
                 size_t index=next.fetch_add(1);if(index>=expected.size())return;
                 {std::lock_guard<std::mutex> lock(mutex);if(error)return;}
                 if(control.cancelled&&control.cancelled->load())throw std::runtime_error("Cancelled; setup can resume");
-                const auto& e=expected[index];auto found=actual.find(lower(e.path));check(found!=actual.end(),"missing required file: "+e.path);
+                const auto& e=expected[index];auto found=actual.find(lower(e.path));
+                if(allowExtraFiles&&found!=actual.end()&&clientSettings(e.path)){std::lock_guard<std::mutex> lock(mutex);++progress.completedFiles;progress.completedBytes+=e.size;progress.path=e.path;if(control.progress)control.progress(progress);continue;}
+                check(found!=actual.end(),"missing required file: "+e.path);
                 View view(found->second);Digest h;
                 view.stream([&](const uint8_t* p,size_t n){if(control.cancelled&&control.cancelled->load())throw std::runtime_error("Cancelled; setup can resume");h.update(p,n);});
                 check(view.size()==e.size&&h.finish()==e.hash,"final content identity mismatch: "+e.path);

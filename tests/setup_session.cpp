@@ -2,6 +2,7 @@
 #include "edition.h"
 #include "patch.h"
 #include "session.h"
+#include "mods.h"
 #include <fstream>
 #include <iostream>
 #include <unistd.h>
@@ -88,6 +89,53 @@ int main(int argc,char** argv){
         auto support=root/"support";fs::create_directories(support/"Setup");fs::create_directories(support/"Profiles");
         write(support/"Profiles/existing","profile");write(support/"Registry.con",registry);
         auto platform=setup::nativePlatform();
+        {
+            // Mods of a generation: the game's own name a localization key, community mods write their title.
+            auto utf16=[](const std::string& ascii){std::string out("\xFF\xFE",2);for(char c:ascii){out+=c;out+='\0';}return out;};
+            auto game=root/"mods-game";
+            for(auto level:{"mods/bf2/Levels/Dalian_plant/Info","mods/xpack/Levels/Ghost_Town/info","mods/Community/levels/one/info","mods/borrowed","mods/nolevels/levels/empty","mods/.hidden/levels/x/info","mods/nodesc/levels/x/info"})fs::create_directories(game/level);
+            fs::create_directories(game/"mods/bf2/Localization/English");
+            write(game/"mods/bf2/Localization/English/English.utxt",utf16("ID_LANGUAGE   English\r\nMODDESC_BF2_TITLE_LONG   wrong\r\nMODDESC_BF2_TITLE             Battlefield 2\r\n"));
+            write(game/"mods/bf2/Mod.desc","<mod>\n\t<title> MODDESC_BF2_TITLE </title>\n</mod>\n");write(game/"mods/bf2/Levels/Dalian_plant/Info/Dalian_plant.desc","");
+            write(game/"mods/xpack/mod.desc","<mod><title> MODDESC_XP_TITLE </title><parentmod> bf2 </parentmod></mod>");write(game/"mods/xpack/Levels/Ghost_Town/info/ghost_town.desc","");
+            write(game/"mods/Community/mod.desc","<mod><TITLE>A Community Mod</TITLE></mod>");write(game/"mods/Community/levels/one/info/one.desc","");
+            write(game/"mods/borrowed/mod.desc","<mod><title>UNKNOWN_KEY</title><importlevels> bf2 </importlevels></mod>");
+            write(game/"mods/nolevels/mod.desc","<mod><title>No Levels</title></mod>");
+            write(game/"mods/.hidden/mod.desc","<mod><title>Hidden</title></mod>");write(game/"mods/.hidden/levels/x/info/x.desc","");
+            write(game/"mods/nodesc/levels/x/info/x.desc","");
+            using setup::Mod;
+            check(setup::find_mods(game,setup::DiscEdition::BF2)==std::vector<Mod>{{"bf2","Battlefield 2"},{"Community","A Community Mod"},{"borrowed","UNKNOWN_KEY"}},"mods of a regular installation");
+            check(setup::find_mods(game,setup::DiscEdition::DeluxeBase).size()==3,"Special Forces offered without being installed");
+            check(setup::find_mods(game,setup::DiscEdition::Deluxe)==std::vector<Mod>{{"bf2","Battlefield 2"},{"xpack","Battlefield 2: Special Forces"},{"Community","A Community Mod"},{"borrowed","UNKNOWN_KEY"}},"mods of a Deluxe installation");
+            fs::remove(game/"mods/xpack/Levels/Ghost_Town/info/ghost_town.desc");
+            check(setup::find_mods(game,setup::DiscEdition::Deluxe).size()==3,"Special Forces stub without levels offered");
+            check(setup::find_mods(root/"missing",setup::DiscEdition::BF2).empty(),"mods of a missing generation");
+            // The mod library outside the generation: one link per mod, never over a name the game has.
+            auto library=setup::mod_library(root/"library-support");
+            check(library.filename()=="CustomMods","mod library must not share a name with the client's mods/ cache directory");
+            for(auto level:{"Kept/levels/one/info","bf2/levels/one/info","undescribed/levels/one/info"})fs::create_directories(library/level);
+            write(library/"Kept/mod.desc","<mod><title>Kept Across Reinstalls</title></mod>");write(library/"Kept/levels/one/info/one.desc","");
+            write(library/"bf2/mod.desc","<mod><title>Impostor</title></mod>");write(library/"bf2/levels/one/info/one.desc","");
+            fs::create_directories(root/"elsewhere/levels/one/info");write(root/"elsewhere/mod.desc","<mod><title>Elsewhere</title></mod>");write(root/"elsewhere/levels/one/info/one.desc","");
+            fs::create_directory_symlink(root/"elsewhere",game/"mods/elsewhere");
+            setup::link_mods(library,game);setup::link_mods(library,game);
+            check(fs::is_symlink(game/"mods/Kept")&&fs::read_symlink(game/"mods/Kept")==library/"Kept","mod of the library not linked");
+            check(!fs::is_symlink(game/"mods/bf2")&&!fs::exists(fs::symlink_status(game/"mods/undescribed")),"a taken name or a folder without mod.desc was linked");
+            auto linked=setup::find_mods(game,setup::DiscEdition::BF2,library);
+            check(linked.size()==4&&linked[0]==Mod{"bf2","Battlefield 2"}&&linked[2]==Mod{"Kept","Kept Across Reinstalls"},"linked mod not offered");
+            check(setup::find_mods(game,setup::DiscEdition::BF2).size()==3,"a link was followed without a library");
+            fs::remove_all(library/"Kept");setup::link_mods(library,game);
+            check(!fs::exists(fs::symlink_status(game/"mods/Kept"))&&fs::is_symlink(game/"mods/elsewhere"),"dead link kept or a foreign link removed");
+            check(setup::find_mods(game,setup::DiscEdition::BF2,library).size()==3,"a foreign link was offered as a mod");
+            fs::remove(game/"mods/elsewhere");
+            check(setup::localized(utf16("A  one\r\nAB  two\r\n"),"AB")=="two"&&setup::localized(utf16("A  one\r\n"),"B").empty(),"localization key lookup");
+            // The launcher's own options file.
+            check(session::launchMod(support).empty(),"mod choice before any was made");
+            session::saveLaunchMod(support,"xpack",*platform);check(session::launchMod(support)=="xpack"&&read(support/"Setup/Launch.txt")=="mod=xpack\n","mod choice not saved");
+            session::saveLaunchMod(support,"Community",*platform);check(session::launchMod(support)=="Community","mod choice not replaced");
+            rejects([&]{session::saveLaunchMod(support,"../evil",*platform);},"mod name with a path accepted");
+            rejects([&]{session::saveLaunchMod(support,"a\nb",*platform);},"mod name with a line break accepted");
+        }
         check(!session::storedKey(support),"legacy format-only registry accepted");
         for(auto invalidKey:{key,std::string("bad")}) {
             rejects([&]{session::saveKey(support,invalidKey,*platform);},"invalid key saved");

@@ -179,6 +179,33 @@ int main(int argc, char** argv) {
         save(game/"a",{'x','b','c'});rejects([&]{setup::verifyManifest(game,manifest,{},true);},"corrupt content accepted when extras are allowed");
         save(game/"a",{'a','b','c'});setup::fs::remove(game/"a");rejects([&]{setup::verifyManifest(game,manifest,{},true);},"missing file hidden by an extra file");
         save(game/"a",{'a','b','c'});setup::fs::remove(game/"extra");
+        {
+            // Settings the client saves over shipped ones: fine in a generation in use, never in a fresh one.
+            auto settings=root/"game-settings";setup::fs::create_directories(settings/"mods/bf2/Settings");setup::fs::create_directories(settings/"mods/bf2/Other");
+            save(settings/"mods/bf2/Settings/controls.con",{'a','b','c'});save(settings/"mods/bf2/Other/a",{'a','b','c'});
+            auto shipped=root/"manifest-settings.tsv";
+            {std::ofstream m(shipped);m<<"mods/bf2/Settings/controls.con\t3\tba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\nmods/bf2/Other/a\t3\tba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\n";}
+            setup::verifyManifest(settings,shipped);check(true,"valid manifest with settings");
+            save(settings/"mods/bf2/Settings/controls.con",{'c','h','a','n','g','e','d'});save(settings/"Client.lock",{});save(settings/"mods/bf2/Settings/usersettings.con",{'x'});
+            rejects([&]{setup::verifyManifest(settings,shipped);},"changed settings accepted in a fresh installation");
+            setup::verifyManifest(settings,shipped,{},true);check(true,"settings saved by the client rejected on reopen");
+            setup::fs::remove(settings/"mods/bf2/Settings/controls.con");
+            rejects([&]{setup::verifyManifest(settings,shipped,{},true);},"missing shipped settings file accepted on reopen");
+            save(settings/"mods/bf2/Settings/controls.con",{'c','h','a','n','g','e','d'});
+            save(settings/"mods/bf2/Other/a",{'x','b','c'});
+            rejects([&]{setup::verifyManifest(settings,shipped,{},true);},"changed game data beside the settings accepted");
+            save(settings/"mods/bf2/Other/a",{'a','b','c'});
+            // Links to the user's own mods: only directly in mods/, only in a generation in use.
+            setup::fs::create_directories(root/"library/custom");save(root/"library/custom/file",{'x'});
+            setup::fs::create_directory_symlink(root/"library/custom",settings/"mods/custom");
+            setup::verifyManifest(settings,shipped,{},true);check(true,"link to a mod of the user rejected on reopen");
+            rejects([&]{setup::verifyManifest(settings,shipped);},"symlink accepted in a fresh installation");
+            setup::fs::remove(settings/"mods/custom");setup::fs::create_directory_symlink(root/"library/custom",settings/"mods/bf2/custom");
+            rejects([&]{setup::verifyManifest(settings,shipped,{},true);},"symlink below a shipped mod accepted");
+            setup::fs::remove(settings/"mods/bf2/custom");
+            setup::fs::rename(settings/"mods/bf2/Other",settings/"mods/bf2/settingsx");
+            rejects([&]{setup::verifyManifest(settings,shipped,{},true);},"a directory merely named like settings was exempted");
+        }
         std::atomic<bool> cancelled{true};setup::Control ctrl;ctrl.cancelled=&cancelled;
         rejects([&]{setup::verifyManifest(game,manifest,ctrl);},"verification ignored cancellation");
         // Special Forces disc content is identified by destination, case-insensitively.

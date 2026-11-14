@@ -19,9 +19,13 @@ are preserved; their original repository links are historical paths.
   directory flushes, atomic replace.
   No macOS APIs, POSIX system calls or Apple digests live in the portable core.
 - `cli/`: testing/diagnostic frontend, Ctrl-C and progress text.
-- `src/setup_assistant.mm`: native AppKit wizard, five-field key rows (BF2 plus SF for Deluxe),
-  Application Support resolution. `src/session` holds Registry.con persistence, the current
-  installation, the voice settings file and the native client launch.
+- `src/setup`: the assistant as one coroutine class (page order, Back, Cancel, failures), free of
+  AppKit and tested against `tests/fake.cpp`. `src/installer` and `src/store` are its portable
+  services over the core; `src/session` holds Registry.con persistence, the current installation,
+  the voice settings file and the launch arguments as plain functions.
+- `src/window.mm`, `src/client.mm`, `src/microphone.mm`, `src/main.mm`: the macOS side. AppKit
+  window with five-field key rows (BF2 plus SF for Deluxe), NSTask client launch, AVFoundation
+  microphone permission and meter, Application Support resolution.
 - `macos/`: bundle metadata and the packaging scripts.
 - `third_party/`: unmodified rtptool snapshot with MIT notice and locked Rust
   dependency notices. zlib comes from the build platform.

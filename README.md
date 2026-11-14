@@ -25,8 +25,9 @@ Play requires a separately supplied native client artifact.
 
 ## Build offline
 
-Prerequisites already available on the builder: CMake 3.24+, C++17 compiler,
-zlib development library, Cargo with the locked dependencies cached. macOS also
+Prerequisites already available on the builder: CMake 3.24+, C++23 compiler,
+zlib development library, Boost headers (1.86 or newer, for the app and its
+application checks), Cargo with the locked dependencies cached. macOS also
 needs Command Line Tools and preinstalled `aarch64-apple-darwin` and
 `x86_64-apple-darwin` Rust targets. Builds never install or download dependencies.
 
@@ -63,6 +64,58 @@ POSIX and Windows adapters implement locking and durable publication in
 `src/posix.cpp` and `src/windows.cpp`. Windows/Linux compilation and runtime are not yet validated. The
 Windows UI remains future work. See [third-party provenance](third_party/README.md)
 for the pinned owner-fork source and alternate checkout option.
+
+## Reading the code
+
+All sources are in `src/`, one flat directory. The assistant is one application
+class, `Setup`, whose `Launch` coroutine reads top to bottom as the whole program.
+It knows nothing about AppKit:
+
+```cpp
+task<int> Setup::Launch()
+{
+	try {
+		auto installation = co_await FindInstallation();
+		if (!installation)
+			installation = co_await InstallGame();
+		else if (!m_Store.HasKeys(installation->edition))
+			co_await EnterMissingKeys(installation->edition == DiscEdition::Deluxe);
+
+		co_await Ready(*installation);
+	}
+	catch (const WindowClosed&) {
+	}
+
+	m_Microphone.Stop();
+	co_return 0;
+}
+```
+
+| File | Content |
+|---|---|
+| `setup` | the application: pages, their order, what happens on Back, Cancel and failures |
+| `window.h`, `window.mm` | what the application needs from a window (pages, events, progress) and its AppKit implementation |
+| `installer` | disc and patch checks, installation and verification on the worker threads |
+| `store` | CD keys and voice defaults below the support root |
+| `client.h`, `client.mm` | the game process: started with NSTask, awaited until it quits |
+| `microphone.h`, `microphone.mm` | microphone permission and the level meter (AVFoundation) |
+| `main.mm` | puts the pieces together, runs the window, holds the two UI checks |
+| `media`, `cabinet`, `edition`, `patch`, `install`, `digest`, `key_check` | the portable setup core |
+| `session` | Registry.con, receipts, voice file, launch options and launch arguments as plain functions |
+| `mods` | the mods of an installed game and their names, from `mod.desc` and the game's localization |
+| `platform.h`, `posix.cpp`, `windows.cpp` | locks, flushes, atomic replace |
+
+The application needs Boost.Asio (header-only, 1.86 or newer; `-DSETUP_BOOST_ROOT=DIR`
+for a header tree which is not installed). The core, the CLI and their checks build
+without it. A Windows front end would implement `window.h`, `client.h` and
+`microphone.h` again and reuse everything else.
+
+`application_checks` links the real `src/setup.cpp` against `tests/fake.cpp`, which
+implements `Window`, `Installer`, `Store`, `Client` and `Microphone` on top of a
+described machine and a scripted user. It covers the order of the pages, Back,
+key gating, the Special Forces checkbox, wrong media, Cancel and resume, failures
+and Play. It runs on Linux and macOS. It does not cover AppKit, the media formats
+or a real installation; those keep their own checks.
 
 ## CLI
 
@@ -133,9 +186,9 @@ See [distribution and client contract](docs/distribution.md) before release.
 Use `--check-only` as the third script argument to stage/sign/verify without
 creating a disk image. This path is tested with synthetic client code.
 
-A developer UI smoke mode renders the eight screens and checks key paste and the
-voice controls without reading an installation, touching the microphone,
-launching anything or saving anything:
+A developer UI smoke mode renders the nine screens into PNG files and checks key
+paste and the voice controls. It shows no window and does not read an installation,
+touch the microphone, launch anything or save anything:
 
 ```sh
 "$scratch/build/macos/OpenBF2.app/Contents/MacOS/OpenBF2" \

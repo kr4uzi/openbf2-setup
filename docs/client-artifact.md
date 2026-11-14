@@ -70,23 +70,55 @@ bash macos/embed-client.sh client-universal /tmp/embed-check && rm -r /tmp/embed
 
 ## Runtime contract (what the setup app does with the client)
 
-- Launches `Contents/MacOS/bf2_client` with the arguments `+modPath mods/bf2`.
+The client's side of this contract is OpenBF2's `docs/macos-write-paths.md`: the
+directories it uses, every file it writes and what a launcher must and must not
+do. The setup app follows it as described here.
+
+- Launches `Contents/MacOS/bf2_client` with the arguments `+modPath mods/<mod>`.
+  `<mod>` is the directory the user chose on the Ready page, `bf2` by default.
+  Offered is every directory below `mods/` of the generation which has a
+  `mod.desc` and at least one level (`levels/<name>/info/<name>.desc`, or a
+  non-empty `<importlevels>`); `xpack` only for an edition which installed
+  Special Forces. The name shown is `<title>` of `mod.desc`, resolved through the
+  English localization files if it is a key. The choice is kept in
+  `Setup/Launch.txt` (`mod=<directory>`); no file of the game is written for it.
+- Mods of the user live in `~/Library/Application Support/OpenBF2/CustomMods/<name>`,
+  outside the generation, so a reinstallation keeps them. (Not `Mods`: the client's
+  caches are in `mods/` of the support root, and a case-insensitive volume does
+  not tell the two apart.) Whenever the Ready page is shown, the setup app makes a
+  symlink `mods/<name>` in the generation for every directory of the library
+  with a `mod.desc`, unless the name is taken there, and removes links of mods
+  which left the library. The start-up verification tolerates symlinks directly
+  in `mods/` and does not follow them. Checked on the engine side with client
+  build mac-metal b39a681e: server and client ran `+modPath mods/<name>` through
+  such a link (absolute target) and loaded a map. The client's compiled-effect
+  cache of every mod except `xpack` is `mods/bf2/cache` in the support root, as
+  in retail; a custom mod gets no cache directory of its own.
 - Working directory: the verified game-data generation,
   `~/Library/Application Support/OpenBF2/GameData/1.50-<id>` (a complete 1.50
-  tree: `mods/bf2/...`, `python/`, `pylib-2.3.4.zip`, DLL stand-ins, etc.).
-- Environment: the user's environment plus `OPENBF2_DATA_ROOT=<generation>` and
-  `OPENBF2_SUPPORT_ROOT=~/Library/Application Support/OpenBF2`. The client
-  currently derives everything from `HOME`; the two variables are informational.
-- Per-user state the client reads and writes under
-  `~/Library/Application Support/OpenBF2`: `Registry.con` (the CD key line the
-  setup app wrote, mode 0600), `Profiles/`, `Client.lock`, `FxNative/`
-  (shader cache) and `ProtectedData.key`. Nothing is written into the app bundle.
-- Runtime writes into the game-data generation observed with the 2026-11-11
-  client: `RendDX9Rebuilt.log` and `mods/bf2/Settings/usersettings.con`. The
-  setup app's start-up verification therefore tolerates extra regular files in
-  the generation, but every manifest file must still be byte-identical, and a
-  fresh installation is verified strictly. Keep client writes to new files;
-  modifying installed content makes the installation unverifiable.
+  tree: `mods/bf2/...`, `python/`, `pylib-2.3.4.zip`, DLL stand-ins, etc.). The
+  generation is created by the user and stays writable by the user.
+- Environment: the user's environment with `HOME` set to the home directory the
+  setup app derived the support root from, so both sides look at the same files
+  (a test home moves everything), and with `PYTHONPATH` and `PYTHONCASEOK`
+  removed. No other variable is set.
+- Support root `~/Library/Application Support/OpenBF2`: the setup app writes
+  `Registry.con` (CD key lines, mode 0600; the client only reads it),
+  `Profiles/BattleCommoDefaultUserSettings.con` and its own `Setup/` and
+  `GameData/` directories. Everything else there belongs to the client
+  (`Profiles/`, `FxNative/`, `mods/<mod>/cache/`, `screenshots/`, `logocache/`,
+  `ProtectedData.key`); the setup app never deletes or replaces any of it, and
+  nothing is written into the app bundle.
+- The client writes into the generation: `Client.lock`, `RendDX9Rebuilt.log`,
+  `settings/banlist.con` and saved settings below `mods/<mod>/settings/`. Some of
+  the latter are shipped files (`maplist.con`, `serversettings.con`: the save
+  targets while no profile has redirected them). The start-up verification of a
+  generation therefore tolerates extra regular files anywhere and changed files
+  below `mods/<mod>/settings/`. The client deletes no shipped file, so every
+  manifest file must still exist, every other one must be byte-identical, and a
+  fresh installation is verified strictly before the client ever runs in it.
+- The setup app never deletes or replaces a generation: an installation creates a
+  new one and switches `Setup/Current.txt`. Old generations stay on disk.
 - Voice chat: the setup app writes
   `Profiles/BattleCommoDefaultUserSettings.con` (four plain lines; see
   [voice-setup.md](voice-setup.md)) and requests microphone access itself. The
@@ -112,8 +144,9 @@ absolute paths). Configures a universal Release build with
 `SETUP_CLIENT_ARTIFACT` and the thin override off, builds, runs `ctest` with the opt-in owner/media tests cleared
 from the environment, runs `build-dmg.sh` (ad-hoc signing unless
 `SETUP_SIGN_IDENTITY` is set), verifies the image and writes `<dmg>.sha256`.
-Build prerequisites on the runner: Xcode Command Line Tools, CMake 3.24+, and
-a Rust toolchain with the `aarch64-apple-darwin` and `x86_64-apple-darwin`
+Build prerequisites on the runner: Xcode Command Line Tools, CMake 3.24+, the
+Boost headers (1.86 or newer, found by CMake or given as `SETUP_BOOST_ROOT` in
+the environment of the script), and a Rust toolchain with the `aarch64-apple-darwin` and `x86_64-apple-darwin`
 targets whose dependencies are already vendored/cached (the Rust build runs
 `--offline --locked`). Notarisation is not part of the script; see
 [distribution.md](distribution.md).

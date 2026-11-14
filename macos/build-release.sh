@@ -46,7 +46,8 @@ export TMPDIR="$scratch"
 echo "== configure ($build)"
 cmake -S "$repo" -B "$build" -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_OSX_ARCHITECTURES='arm64;x86_64' -DSETUP_SCRATCH="$scratch" \
-  -DSETUP_CLIENT_ARTIFACT="$client" -DSETUP_CLIENT_ALLOW_THIN=OFF
+  -DSETUP_CLIENT_ARTIFACT="$client" -DSETUP_CLIENT_ALLOW_THIN=OFF \
+  ${SETUP_BOOST_ROOT:+-DSETUP_BOOST_ROOT="$SETUP_BOOST_ROOT"}
 echo "== build"
 cmake --build "$build" -j"$jobs"
 app="$build/macos/OpenBF2.app"

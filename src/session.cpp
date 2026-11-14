@@ -156,10 +156,30 @@ bool clientPresent(const fs::path& contents) {
     }
     return ::access((contents/"MacOS/bf2_client").c_str(),X_OK)==0;
 }
-Launch clientLaunch(const fs::path& contents,const fs::path& support) {
+Launch clientLaunch(const fs::path& contents,const fs::path& support,const std::string& mod) {
     require(clientPresent(contents),"The native client or its libraries are missing from this build.");
     require(storedKey(support),"Enter your CD key before playing.");
     if(currentEdition(support)==DiscEdition::Deluxe)require(storedKey(support,true),"Enter your Special Forces CD key before playing.");
-    return {contents/"MacOS/bf2_client",currentGeneration(support),support,{"+modPath","mods/bf2"}};
+    auto generation=currentGeneration(support);
+    require(!mod.empty()&&mod.find_first_of("/\\")==std::string::npos&&mod!="."&&mod!=".."&&safePath(mod)==mod,"The selected mod has an invalid name.");
+    // A mod of the user is a link into the mod library; any other link is refused.
+    auto directory=generation/"mods"/mod;std::error_code unreadable;
+    require(fs::is_directory(directory)&&(!fs::is_symlink(fs::symlink_status(directory))||fs::read_symlink(directory,unreadable)==mod_library(support)/mod),"The selected mod is not installed.");
+    return {contents/"MacOS/bf2_client",generation,support,{"+modPath","mods/"+mod}};
+}
+std::string launchMod(const fs::path& support) {
+    try {
+        noLinks(support/"Setup/Launch.txt");
+        std::istringstream lines(read(support/"Setup/Launch.txt"));std::string line;
+        while(std::getline(lines,line))if(line.rfind("mod=",0)==0)return trim(line.substr(4));
+    } catch(const std::exception&) {}
+    return {};
+}
+void saveLaunchMod(const fs::path& support,const std::string& mod,Platform& platform) {
+    require(!mod.empty()&&mod.find_first_of("/\\\r\n")==std::string::npos,"The selected mod has an invalid name.");
+    noLinks(support/"Setup/Launch.txt");noLinks(support/"Setup/Launch.pending");
+    auto lock=platform.lock(support/"Setup/Install.lock");
+    std::error_code stale;fs::remove(support/"Setup/Launch.pending",stale);
+    writePrivately(support/"Setup/Launch.pending",support/"Setup/Launch.txt","mod="+mod+"\n",platform,"launch options");
 }
 }
