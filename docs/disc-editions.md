@@ -1,6 +1,58 @@
-# BF2 and Deluxe media (2026-11-10)
+# BF2 and Deluxe media
 
-The subsequent [edition criteria review](edition-criteria.md) includes complete
+*For:* Maintainers, and anyone asking what a given disc installs. *Covers:* the three editions (regular, Deluxe, Deluxe without Special Forces), what each installs, and the evidence behind the manifests.
+
+## What each disc installs
+
+| Edition | How it is chosen | Installed files | Special Forces |
+| --- | --- | ---: | --- |
+| Regular BF2 | regular disc or ISO | 1,755 | not on the disc |
+| Deluxe | Deluxe disc, "Install Special Forces" checked (default) | 3,030 | playable: 213 `mods/xpack` files, 908 MB, eight maps |
+| Deluxe without Special Forces | Deluxe disc, checkbox unchecked | 1,749 | not installed; no expansion key asked |
+
+Every edition ends up with a `mods/xpack` folder of 19 files (391 MB): object,
+menu and shader archives, scripts, `Mod.desc`. Patch 1.50 ships that subset to
+every Battlefield 2, Deluxe or not, exactly as it did in retail, so a patched
+installation keeps the files the patch's checksums expect. It has no levels, the
+launcher does not offer it as a mod, and it is not Special Forces. The edition is
+recorded in `Setup/Receipt-<id>.txt` and decides which manifest the verification
+uses and which keys are required.
+
+### Deluxe media without Special Forces
+
+The CD-key page shows an "Install Special Forces" checkbox in front of the
+Special Forces key row on Deluxe media, checked by default. Unchecked, the
+expansion key row is disabled and not required, the Special Forces key is
+neither validated nor written to `Registry.con`, and the installer takes the
+base-game path from the Deluxe disc: the xpack disc content (every destination
+under `mods/xpack/` and `SupportXP1/`) is not selected and the XP1 1.41 records
+are not applied. The 1.50 overlay is unchanged, so its own 19 `mods/xpack`
+files and two `SupportXP1` files are installed exactly as on a regular disc.
+The receipt records `edition=deluxe-base`; on reopen the app verifies against
+`core/content-deluxe-base-150.tsv` and asks for the base key only. The CLI
+equivalent is
+`bf2_setup install ... core/content-deluxe-base-150.tsv --no-special-forces`.
+
+The result is the base game, but not byte-for-byte the regular-disc contract,
+because the Deluxe disc is a later baseline. Against the 1,755-file regular
+contract the 1,749-file base-only contract lacks eight files that only the
+regular disc carries (`mods/bf2/locale`, six `pb/htm` pages and the regular
+arcade installer), differs in 32 files (the preserved Deluxe renderer
+`RendDX9x2.dll`, 21 SafeDisc language DLLs and ten `Support` registration
+dictionaries), and adds two Deluxe-disc extras in shared groups
+(`pb/pbsvnew.dll` and the Deluxe arcade installer). All game archives, levels
+and executables agree. The contract was derived from the Deluxe contract by
+removing the xpack disc content and confirmed by a fresh strict install from the
+owner's Deluxe ISO (`tests/transaction_local.cpp --deluxe-base`).
+
+The Special Forces choice is part of the transaction identity: a cancelled
+base-only install cannot be resumed with the expansion enabled, or the reverse.
+Adding Special Forces to an existing base-only installation is not offered; it
+needs a new installation from the Deluxe disc with the box checked.
+
+## Evidence (2026-11-10)
+
+The subsequent [edition criteria review](research/edition-criteria.md) includes complete
 owner-local cabinet exports, group/path differences and the exact current rule.
 
 The assistant detects cabinet content, not the filename or volume label. The
@@ -68,7 +120,7 @@ ZIPs, Common_client.zip, Common_server.zip, Fonts_client.zip, AI and most other
 disc assets; its 17 overlapping XP1 targets do not replace the other histories.
 The 1.50 cabinet also directly overlays scoringCommon.py and Controls.con,
 which are not separate XP1 RTP targets. Those retained/updated files are verified in `core/content-deluxe-150.tsv`.
-`docs/deluxe-xp1-records.tsv` records the full 108-target disposition and whether
+`docs/research/deluxe-xp1-records.tsv` records the full 108-target disposition and whether
 each target exists in the Deluxe cabinet selection.
 
 The owner-confirmed patch policy skips a 1.41 target **before calling RTPatch**
@@ -76,7 +128,7 @@ whenever the selected 1.50 cabinet supplies that exact destination as a full
 file. This uses the actual selected cabinet inventory, never a filename pattern
 or an RTP error fallback: 110 BF2 targets on either disc, plus 17 XP1 targets on
 Deluxe. Targets without full replacements retain their required 1.41 histories.
-See [patch skip verification](patch-skip-verification.md) for fresh strict
+See [patch skip verification](research/patch-skip-verification.md) for fresh strict
 verification and measured time saved in the following round.
 
 ## Exact supported identities and final contract
@@ -109,35 +161,3 @@ archives otherwise agree between the two manifests; their remaining shared
 identity differences are inert SafeDisc language DLLs and support dictionaries.
 Desktop key-row/paste/error/progress checks, mounted physical media, native SF
 runtime behavior and Apple-silicon execution remain desktop checks.
-
-## Deluxe media without Special Forces (2026-11-14)
-
-The CD-key page shows an "Install Special Forces" checkbox in front of the
-Special Forces key row on Deluxe media, checked by default. Unchecked, the
-expansion key row is disabled and not required, the Special Forces key is
-neither validated nor written to `Registry.con`, and the installer takes the
-base-game path from the Deluxe disc: the xpack disc content (every destination
-under `mods/xpack/` and `SupportXP1/`) is not selected and the XP1 1.41 records
-are not applied. The 1.50 overlay is unchanged, so its own 19 `mods/xpack`
-files and two `SupportXP1` files are installed exactly as on a regular disc.
-The receipt records `edition=deluxe-base`; on reopen the app verifies against
-`core/content-deluxe-base-150.tsv` and asks for the base key only. The CLI
-equivalent is
-`bf2_setup install ... core/content-deluxe-base-150.tsv --no-special-forces`.
-
-The result is the base game, but not byte-for-byte the regular-disc contract,
-because the Deluxe disc is a later baseline. Against the 1,755-file regular
-contract the 1,749-file base-only contract lacks eight files that only the
-regular disc carries (`mods/bf2/locale`, six `pb/htm` pages and the regular
-arcade installer), differs in 32 files (the preserved Deluxe renderer
-`RendDX9x2.dll`, 21 SafeDisc language DLLs and ten `Support` registration
-dictionaries), and adds two Deluxe-disc extras in shared groups
-(`pb/pbsvnew.dll` and the Deluxe arcade installer). All game archives, levels
-and executables agree. The contract was derived from the Deluxe contract by
-removing the xpack disc content and confirmed by a fresh strict install from the
-owner's Deluxe ISO (`tests/transaction_local.cpp --deluxe-base`).
-
-The Special Forces choice is part of the transaction identity: a cancelled
-base-only install cannot be resumed with the expansion enabled, or the reverse.
-Adding Special Forces to an existing base-only installation is not offered; it
-needs a new installation from the Deluxe disc with the box checked.

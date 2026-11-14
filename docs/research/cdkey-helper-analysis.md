@@ -1,7 +1,7 @@
 # Static analysis of the disc CD-key helper
 
 Historical initial inspection. The owner's later 2026-11-10 decision authorizes
-independent validation reconstruction; [cdkey-check.md](cdkey-check.md) records
+independent validation reconstruction; [cdkey-check.md](../cdkey-check.md) records
 the implementation and address-level provenance that supersede the format-only
 policy below.
 

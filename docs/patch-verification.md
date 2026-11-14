@@ -1,5 +1,7 @@
 # Official patch identity checks
 
+*For:* Maintainers. *Covers:* the official patch files the setup accepts, by size and SHA-256, and how the selectors check them.
+
 These pins were independently recomputed on 2026-11-10 from the owner's read-only
 files listed in the external installer-inputs.md manifest. They identify these
 specific supplied executables; filenames are not trusted. No executable bytes

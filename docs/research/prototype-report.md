@@ -1,24 +1,24 @@
 # mac-setup progress and validation
 
 Historical prototype snapshot. Current build, decisions and results are in
-[README](../README.md), [setup-design.md](setup-design.md) and
+[README](../../README.md), [setup-design.md](../setup-design.md) and
 the project notes. Original repository links below are historical.
 
 `[CHOSEN, not recovered]` Owner-requested native macOS installation work, based on
 the decisions supplied on 2026-11-10. The owner's request substitutes for an issue
-under [macos-port.md](macos-port.md). Work began with a clean worktree on
+under `macos-port.md` (OpenBF2 repository). Work began with a clean worktree on
 `agent/mac-setup` from `fc2f5cfe`. Changes remained uncommitted for review.
 No engine behavior was recovered or changed, and no IDA/Ghidra recovery claim is
 made.
 
 ## Delivered
 
-- [macos-setup-design.md](macos-setup-design.md): the in-app wizard screens/states,
+- `macos-setup-design.md` (OpenBF2 repository): the in-app wizard screens/states,
   extraction/patch pipeline, native modules, vendoring/builds, bundle layout,
   signing/notarization, transactional failure handling and both data locations.
   Recommendation: fixed per-user Application Support game data, leaving the app
   immutable. The owner still decides the data location.
-- [tools/macos/setup](../tools/macos/setup/README.md): C++ ISO/Joliet, SFX and
+- `tools/macos/setup` (OpenBF2 repository): C++ ISO/Joliet, SFX and
   InstallShield format-9 readers; bounded read-only input views; raw DEFLATE and
   stored size/MD5 checks; fresh private staging; selected English feature mapping;
   native rtptool C ABI; CLI and full-tree SHA-256 comparison.

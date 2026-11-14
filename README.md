@@ -9,9 +9,16 @@ or ISO (regular BF2 or BF2 Deluxe with Special Forces) and the official
 
 The app is `OpenBF2.app`, intended for drag-and-drop into Applications. It is
 both the installer and the launcher: with no installation it runs the setup
-wizard, afterwards it verifies the game data and launches the game.
+wizard, afterwards it starts the game right away, with no window.
+Hold the Option (⌥) key while opening the app to get its launcher page instead,
+with the start-up options, Play, the voice setup and "Verify Game Data…"; the
+page can also ask to be opened every time. Every start compares sizes and
+modification times of the installed files against the record of the last full
+verification, which takes a moment; when that comparison fails or no record
+exists, the launcher page opens with a note instead, and the full check of every
+file runs only from its button.
 First launch walks through Welcome → DVD/ISO → patches → CD key → installation
-→ voice setup → shader preparation → Play. Deluxe shows an "Install Special Forces" checkbox (on by default) and a
+→ voice setup → Play. Deluxe shows an "Install Special Forces" checkbox (on by default) and a
 second Special Forces key row; unchecked, only the base game is installed from the Deluxe disc and no expansion key is
 asked for or stored (see [disc editions](docs/disc-editions.md)). Both key rows use the independently
 reconstructed [retail local CD-key check](docs/cdkey-check.md); Install requires
@@ -21,7 +28,36 @@ Each patch selector verifies the pinned size/SHA-256 in the background with prog
 After installation a voice-chat step, modelled on retail's BF2VoiceSetup
 ("BF2 BattleCommo"), asks for microphone access, shows a level meter and saves
 capture volume, activation threshold and boost; see [voice setup](docs/voice-setup.md).
-Play requires a separately supplied native client artifact.
+The start-up options (intro movies, fullscreen or a window size, the mod, a server
+to join with its password and a player name, or a free-form command line behind a
+lock) only ever go
+on the client's command line, as retail's shortcut switches did; the app writes no
+file of the game for them. Play requires a separately supplied native client artifact.
+
+## What gets installed
+
+Everything lives in `~/Library/Application Support/OpenBF2`; the app bundle is
+never written to.
+
+| Path | Content |
+| --- | --- |
+| `GameData/1.50-<id>/` | one complete, patched installation, a "generation": `mods/bf2`, `python`, the DLL stand-ins and so on. The client runs with it as its working directory and writes its logs and saved settings there. A new installation makes a new generation and switches to it; old ones are kept. |
+| `Setup/Current.txt`, `Setup/Receipt-<id>.txt` | which generation is current and which edition it is |
+| `Setup/Verified-<id>.tsv` | size and time of every installed file after the last full verification; the quick check at every start compares against it |
+| `Setup/Launch.txt` | the start-up options of the launcher page |
+| `Setup/work/` | an installation in progress; it resumes after a cancel and is gone once published |
+| `Registry.con` | the CD keys in retail's registry line format, mode 0600; the client reads it |
+| `Profiles/` | the game's own profiles, plus `BattleCommoDefaultUserSettings.con` from the voice setup |
+| `CustomMods/` | your own mods, linked into the generation's `mods/` at every start |
+| `mods/`, `FxNative/`, `logocache/`, … | the client's caches |
+
+Three editions exist. A regular disc installs 1,755 files. A Deluxe disc with
+"Install Special Forces" checked installs 3,030 files, with Special Forces
+playable as the `xpack` mod. A Deluxe disc with the box unchecked installs the
+base game alone, 1,749 files, and asks for no expansion key. Every edition has a
+`mods/xpack` folder of 19 files (391 MB) because patch 1.50 ships that subset to
+every Battlefield 2, as it did in retail; it has no levels and is not offered as
+a mod. Details and evidence: [disc editions](docs/disc-editions.md).
 
 ## Build offline
 
@@ -97,7 +133,8 @@ task<int> Setup::Launch()
 | `setup` | the application: pages, their order, what happens on Back, Cancel and failures |
 | `window.h`, `window.mm` | what the application needs from a window (pages, events, progress) and its AppKit implementation |
 | `installer` | disc and patch checks, installation and verification on the worker threads |
-| `store` | CD keys and voice defaults below the support root |
+| `store` | CD keys, start-up options and voice defaults below the support root |
+| `launch` | the start-up options, their file and the command line they become: pure functions |
 | `client.h`, `client.mm` | the game process: started with NSTask, awaited until it quits |
 | `microphone.h`, `microphone.mm` | microphone permission and the level meter (AVFoundation) |
 | `main.mm` | puts the pieces together, runs the window, holds the two UI checks |
@@ -114,8 +151,9 @@ without it. A Windows front end would implement `window.h`, `client.h` and
 `application_checks` links the real `src/setup.cpp` against `tests/fake.cpp`, which
 implements `Window`, `Installer`, `Store`, `Client` and `Microphone` on top of a
 described machine and a scripted user. It covers the order of the pages, Back,
-key gating, the Special Forces checkbox, wrong media, Cancel and resume, failures
-and Play. It runs on Linux and macOS. It does not cover AppKit, the media formats
+key gating, the Special Forces checkbox, wrong media, Cancel and resume, failures,
+the start-up options, the plain start into the game and Play. It runs on Linux and
+macOS. It does not cover AppKit, the media formats
 or a real installation; those keep their own checks.
 
 ## CLI
@@ -151,7 +189,7 @@ descriptor-index directories preserve duplicate names. Loose payloads are
 resolved from the disc and checked against cabinet metadata. Invalid descriptors
 and empty installer self-references get manifest rows without invented payloads.
 This diagnostic never patches or executes content. Keep its game bytes outside
-every repository. See [edition criteria](docs/edition-criteria.md) for the owner's
+every repository. See [edition criteria](docs/research/edition-criteria.md) for the owner's
 two retained exports, full differences and the current detection rule.
 
 `prototype` and `compare` are diagnostics: their report output is confined to
@@ -162,7 +200,7 @@ bytes are never replacement sources. Logs contain filenames and integrity
 metadata, never a CD key.
 
 The supported input hashes, resolved patch outcomes and intentional differences
-are documented in [correctness](docs/correctness.md). The contracts cover the
+are documented in [correctness](docs/research/correctness.md). The contracts cover the
 observed English BF2 and Deluxe discs and the two pinned official patches.
 Other editions/locales and exact Windows installer side effects are unvalidated.
 
@@ -173,22 +211,23 @@ files both work through the same cabinet pipeline; the app never mounts an ISO.
 Drag-and-drop and Choose are available for the disc and both patches. Each key row has five visible text
 fields supporting whole-key paste, auto-advance and backspace within that row. Progress/cancellation
 run through the C++ callbacks on a worker thread, with UI updates on the main
-thread. Existing content is reverified before Play is enabled.
+thread.
 
 ```sh
 macos/build-dmg.sh "$scratch/build/macos/OpenBF2.app" "$scratch/OpenBF2.dmg"
 ```
 
 The script audits every Mach-O for both architectures, ad-hoc signs a staging
-copy by default, verifies it, adds an Applications shortcut and invokes
-`hdiutil create`. It never runs notarization. Here hdiutil failed with
-`Device not configured`; the app and signature audit built successfully.
-See [distribution and client contract](docs/distribution.md) before release.
-Use `--check-only` as the third script argument to stage/sign/verify without
-creating a disk image. This path is tested with synthetic client code.
+copy by default, verifies it, and builds a drag-and-drop image: the app on the
+left, the Applications folder on the right, an arrow between them. The window
+layout is a committed file, so no Finder automation runs. It never runs
+notarization. See [distribution and client contract](docs/distribution.md)
+before release. Use `--check-only` as the third script argument to
+stage/sign/verify without creating a disk image. This path is tested with
+synthetic client code.
 
-A developer UI smoke mode renders the nine screens into PNG files and checks key
-paste and the voice controls. It shows no window and does not read an installation,
+A developer UI smoke mode renders every screen into PNG files and checks key
+paste, the launcher options and the voice controls. It shows no window and does not read an installation,
 touch the microphone, launch anything or save anything:
 
 ```sh
@@ -196,12 +235,12 @@ touch the microphone, launch anything or save anything:
   --smoke-test "$scratch/ui-smoke"
 ```
 
-The documents under `docs/` record the design, the correctness evidence and the
-validation results; `docs/client-artifact.md` is the contract for the embedded
-native client.
+## Documents
 
-Current media support and evidence: [disc editions and SF patch requirements](docs/disc-editions.md),
-[official patch pins and verification](docs/patch-verification.md), and
-[retail CD-key check and provenance](docs/cdkey-check.md). No third-party key tool
-was copied or consulted. Interactive wizard and SF client validation
-remain desktop checks; this is not a release-ready playable client.
+`docs/` holds the maintainer documents, each with a line saying who it is for:
+[setup design](docs/setup-design.md), [client contract](docs/client-artifact.md),
+[distribution and signing](docs/distribution.md), [disc editions](docs/disc-editions.md),
+[official patch pins](docs/patch-verification.md), [CD-key check](docs/cdkey-check.md)
+and [voice setup](docs/voice-setup.md). `docs/research/` keeps the evidence from
+which the manifests and the policies were derived, with [an index](docs/research/README.md)
+of when to open which. No third-party key tool was copied or consulted.

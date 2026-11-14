@@ -165,7 +165,7 @@ Both key rows already subclass `NSTextField`; no `NSSecureTextField` is used.
 Both keep independent whole-key paste, auto-advance and backspace handling.
 Both rows now use the independently reconstructed retail local CD-key check,
 with distinct products; the 2026-11-10 owner decision supersedes format-only
-handling. See [validation provenance](cdkey-check.md).
+handling. See [validation provenance](../cdkey-check.md).
 Desktop rendering/paste checks remain desktop GUI checks.
 
 Owner review: confirm these five sentinels and strict inventory sizes, or specify

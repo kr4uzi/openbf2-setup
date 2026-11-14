@@ -1,12 +1,12 @@
 # Native setup prototype
 
 Historical prototype snapshot. Current build, decisions and results are in
-[README](../README.md), [setup-design.md](setup-design.md) and
+[README](../../README.md), [setup-design.md](../setup-design.md) and
 the project notes. Original repository links below are historical.
 
 `[CHOSEN, not recovered]` Owner-requested macOS port work, 2026-11-10.
-See [design](../../../docs/macos-setup-design.md) and
-[measured results](../../../docs/macos-mac-setup.md). This is a diagnostic
+See `macos-setup-design.md` (OpenBF2 repository) and
+`macos-mac-setup.md` (OpenBF2 repository). This is a diagnostic
 extraction prototype, not a distributable installer. It never stores a CD key,
 publishes installed data, launches the game or runs the patch EXEs.
 

@@ -1,5 +1,7 @@
 # Retail CD-key validation (setup-cdkey, 2026-11-10)
 
+*For:* Maintainers and reviewers of the key policy. *Covers:* what the CD-key check does and does not do, and where it comes from.
+
 The owner's 2026-11-10 decision replaces the earlier format-only policy.
 `setup::validateKey(KeyEdition, std::string_view)` independently implements the
 retail local check for Battlefield 2 and Special Forces as separate products.
@@ -17,7 +19,7 @@ ISO supplied `Support/Battlefield 2_code.exe` and
 | Special Forces | `5671e943aa681b0c98d3121023b7a299d2b1bff69c9d325ce1fdc786352922c2` |
 
 The BF2 helper also matches the regular-disc copy recorded in
-[the initial inspection](cdkey-helper-analysis.md). LLVM objdump inspected fresh
+[the initial inspection](research/cdkey-helper-analysis.md). LLVM objdump inspected fresh
 scratch copies. Ghidra 12.0.1 headless decompiled the BF2 copy in a fresh scratch
 project with `-readOnly`; its import was discarded. Neither Windows binary was
 executed, emulated, patched or loaded for execution. No installer or game

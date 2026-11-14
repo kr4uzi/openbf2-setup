@@ -1,14 +1,14 @@
 # Native macOS setup design
 
 Historical prototype snapshot. Current build, decisions and results are in
-[README](../README.md), [setup-design.md](setup-design.md) and
+[README](../../README.md), [setup-design.md](../setup-design.md) and
 the project notes. Original repository links below are historical.
 
 `[CHOSEN, not recovered]` This design implements the owner's installation decisions
 of 2026-11-10. That request authorizes this intentional port work in place of an
-issue, as [macos-port.md](macos-port.md) describes. It changes no recovered engine
+issue, as `macos-port.md` (OpenBF2 repository) describes. It changes no recovered engine
 behavior, ABI, packet format or game file format. The prototype and measured results
-are described in [macos-mac-setup.md](macos-mac-setup.md).
+are described in `macos-mac-setup.md` (OpenBF2 repository).
 
 Distribute a DMG containing **Battlefield 2.app** and an Applications shortcut.
 The user drags the app into Applications and launches it. Setup belongs inside
@@ -29,7 +29,7 @@ has been implemented in this package.
 | Welcome | Explain that the user supplies their BF2 DVD/ISO and the two official patch files. Continue opens Disc. An existing verified data receipt opens Play instead. |
 | Disc | Choose ISO with `NSOpenPanel`, choose a mounted DVD volume, or drag either into the drop area. Show detected edition/language and validate the cabinet inventory before enabling Continue. Unsupported editions remain here with a specific explanation. |
 | Patches | Two labeled file wells: 1.00 → 1.41 and 1.41 → 1.50. Drag/drop and Choose both work. Check container shape and SHA-256 against the supported-media catalog; swapped or wrong patches disable Continue. |
-| CD key | Five fields of four ASCII alphanumeric characters per product. Auto-advance, backspace and whole-key paste work within each row. Per the 2026-11-10 owner decision, independently reconstruct the retail local check; require BF2 and, for Deluxe, SF to validate before Install. Show live row status. No key generation or online authentication claim. See [provenance](cdkey-check.md). |
+| CD key | Five fields of four ASCII alphanumeric characters per product. Auto-advance, backspace and whole-key paste work within each row. Per the 2026-11-10 owner decision, independently reconstruct the retail local check; require BF2 and, for Deluxe, SF to validate before Install. Show live row status. No key generation or online authentication claim. See [provenance](../cdkey-check.md). |
 | Install | Show phases, current file, completed/total expanded bytes, estimated remaining disk use, and Cancel. Worker callbacks update the main thread. Disable Back while writes are active. A failure offers Retry or Return to the relevant input screen. |
 | Done | Reached only after extraction, patching, content verification and publication all pass. Show Play. Launch the native bundled client with the verified content root and existing profile location. |
 
@@ -60,7 +60,7 @@ stateDiagram-v2
 The key is held in memory until the user starts setup. Save it only with private
 file permissions, outside diagnostic logs and receipts. Preserve existing
 `Registry.con` entries and profiles; update the BF2 `ergc` value atomically using
-the existing [registry-file syntax](macos-r1-registry-file.md). That source expects
+the existing `macos-r1-registry-file.md` (OpenBF2 repository). That source expects
 unmarked key text. Do not write a Windows DPAPI blob or silently introduce a new
 key storage format. Keep `Registry.con` mode 0600 and its parent mode 0700. Logs
 must never contain the entered key, including failed paste contents.

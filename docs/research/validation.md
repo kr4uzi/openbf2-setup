@@ -99,7 +99,7 @@ and staged signature verification. GUI, SF runtime/independent reference, DMG
 and Apple-silicon runs are not claimed. The new plaintext key rows build; their
 interactive smoke check remains pending in a normal desktop session.
 
-See [disc-editions.md](disc-editions.md),
-[patch-verification.md](patch-verification.md), and PROGRESS.md for exact evidence
+See [disc-editions.md](../disc-editions.md),
+[patch-verification.md](../patch-verification.md), and PROGRESS.md for exact evidence
 and limits. Only metadata from these content checks is retained. This round did
 not repeat the unchanged Rust tests or the earlier sanitizer/reference tests.
