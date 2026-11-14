@@ -1,5 +1,7 @@
 # macOS distribution and native client contract
 
+*For:* Maintainers preparing a release. *Covers:* the app bundle, signing (ad-hoc and Developer ID), the disk image, notarization steps and the key file format.
+
 The CMake AppKit target creates `OpenBF2.app`. It statically links the
 portable C++/Rust setup libraries. No game data, installer EXE, patch payload,
 key or profile belongs in its resources. `Resources/Setup` contains only the
@@ -79,9 +81,16 @@ requires a verified generation and locally valid stored keys before showing Play
 
 `macos/build-dmg.sh APP OUTPUT.dmg` makes a staging copy beside OUTPUT,
 audits universal binaries, signs nested dylibs/client before the app, verifies
-strictly, adds an Applications shortcut and runs `hdiutil create -format UDZO`.
-The staging directory is always cleaned. Add `--check-only` as the third argument
-to audit/stage/sign/verify without hdiutil; no DMG is created in that mode.
+strictly, adds an Applications shortcut, the background picture
+(`macos/dmg/background.png`, drawn by `make-background.swift`) and the Finder
+window layout (`macos/dmg/DS_Store`: app left, Applications right, arrow
+between) and runs `hdiutil create -format UDZO`. The layout file was made once
+with `macos/dmg/make-layout.sh`, which runs the Finder locally; CI only copies
+it, so no Finder automation runs there. Remake it when the background, the
+positions or the volume name change. The staging directory is always cleaned.
+Add `--check-only` as the third argument to audit/stage/sign/verify without any
+image; no DMG is created in that mode. `SETUP_DMG_ALLOW_THIN=1` is a developer
+override for a local test image with a non-universal client; CI never sets it.
 Ad-hoc signing (`-`) is the default
 placeholder. `SETUP_SIGN_IDENTITY` selects an existing identity but the current
 script does not constitute a complete hardened-runtime release-signing policy.

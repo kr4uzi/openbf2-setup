@@ -12,6 +12,9 @@ target_link_libraries(OpenBF2 PRIVATE bf2_setup_session bf2_setup_boost "-framew
 set(content_manifests "${CMAKE_SOURCE_DIR}/core/content-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-deluxe-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-deluxe-base-150.tsv")
 set_source_files_properties(${content_manifests} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/Setup)
 target_sources(OpenBF2 PRIVATE ${content_manifests})
+# The app icon: an original drawing (macos/icon/make-icon.swift regenerates it), no game artwork.
+set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/OpenBF2.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+target_sources(OpenBF2 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/OpenBF2.icns")
 # Client artifacts are supplied by a separate engine build, never fetched here.
 set(SETUP_CLIENT_ARTIFACT "" CACHE PATH "Local directory with bf2_client, libdice_py.dylib, libaidll.dylib (read-only)")
 option(SETUP_CLIENT_ALLOW_THIN "Developer builds only: accept a client artifact built for the host architecture alone (DMG creation still rejects it)" OFF)

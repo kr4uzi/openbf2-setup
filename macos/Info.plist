@@ -3,6 +3,7 @@
 <plist version="1.0"><dict>
 <key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundleExecutable</key><string>OpenBF2</string>
+<key>CFBundleIconFile</key><string>OpenBF2</string>
 <key>CFBundleIdentifier</key><string>de.krauzi.openbf2</string>
 <key>CFBundleName</key><string>OpenBF2</string>
 <key>CFBundlePackageType</key><string>APPL</string>
