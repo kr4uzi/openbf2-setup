@@ -69,9 +69,14 @@ struct Control {
     std::atomic<bool>* cancelled = nullptr;
     unsigned workers = 4;
 };
-enum class DiscEdition { BF2, Deluxe };
+// DeluxeBase is an installed edition only: Deluxe media installed without
+// Special Forces. discEdition/detectDisc never return it; receipts carry it.
+enum class DiscEdition { BF2, Deluxe, DeluxeBase };
 // Detect content, never the ISO filename. Reject incomplete xpack inventories.
 DiscEdition discEdition(const std::vector<Entry>&);
+// Special Forces content on the Deluxe disc: destinations under mods/xpack/
+// and SupportXP1/. The 1.50 overlay's own mods/xpack files are not disc content.
+bool expansionContent(const std::string& destination);
 DiscEdition detectDisc(const fs::path&);
 std::string discDestination(const std::string& group, const std::string& path);
 // Diagnostic: export every cabinet entry (all languages/features), preserving
@@ -86,6 +91,9 @@ PatchIdentity verifyPatch(const View&, PatchSlot, const Control& = {});
 struct InstallOptions {
     fs::path disc, patch141, patch150, supportRoot, manifest;
     Control control;
+    // Deluxe media only: false installs the base game alone (DeluxeBase receipt,
+    // no xpack disc content, no XP1 patch records). Ignored for regular discs.
+    bool specialForces = true;
 };
 // Installs an immutable generation and atomically switches Setup/Current.txt.
 // Resumes its private Setup/work transaction; never reads a reference tree.

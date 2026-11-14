@@ -5,7 +5,8 @@ with exact sizes and SHA-256. It was generated from the checked media pipeline,
 not by copying reference bytes. The 125 independent earlier-patch acceptance
 paths remain `tests/acceptance-125.txt`. All 125 match the owner's reference.
 Only metadata and implementation code are in the repository. Deluxe uses a
-separate 3,030-file contract; see [disc-editions.md](disc-editions.md) for its
+separate 3,030-file contract, and Deluxe media installed without Special Forces
+a derived 1,749-file contract; see [disc-editions.md](disc-editions.md) for its
 source inventory, 108 XP1 record outcomes and validation limits.
 
 ## Input identities

@@ -7,9 +7,13 @@ required in the distributed app. Users supply their own supported English DVD
 or ISO (regular BF2 or BF2 Deluxe with Special Forces) and the official
 **1.0 → 1.41 → 1.50** patch chain.
 
-The app is `Battlefield 2.app`, intended for drag-and-drop into Applications.
+The app is `OpenBF2.app`, intended for drag-and-drop into Applications. It is
+both the installer and the launcher: with no installation it runs the setup
+wizard, afterwards it verifies the game data and launches the game.
 First launch walks through Welcome → DVD/ISO → patches → CD key → installation
-→ voice setup → shader preparation → Play. Deluxe shows a second Special Forces key row. Both use the independently
+→ voice setup → shader preparation → Play. Deluxe shows an "Install Special Forces" checkbox (on by default) and a
+second Special Forces key row; unchecked, only the base game is installed from the Deluxe disc and no expansion key is
+asked for or stored (see [disc editions](docs/disc-editions.md)). Both key rows use the independently
 reconstructed [retail local CD-key check](docs/cdkey-check.md); Install requires
 all required keys to validate. This does not establish online entitlement.
 Each patch selector verifies the pinned size/SHA-256 in the background with progress. Data, keys and profiles live under
@@ -17,9 +21,6 @@ Each patch selector verifies the pinned size/SHA-256 in the background with prog
 After installation a voice-chat step, modelled on retail's BF2VoiceSetup
 ("BF2 BattleCommo"), asks for microphone access, shows a level meter and saves
 capture volume, activation threshold and boost; see [voice setup](docs/voice-setup.md).
-An optional shader step then runs the native client once per map set with its
-`+warmupLevel` switch so the first real map load compiles nothing; see
-[shader warm-up](docs/shader-warmup.md).
 Play requires a separately supplied native client artifact.
 
 ## Build offline
@@ -40,7 +41,7 @@ ctest --test-dir "$scratch/build" --output-on-failure
 ```
 
 Targets: `bf2_setup_core`, `bf2_setup_platform`, `bf2_setup`,
-`bf2_setup_checks`, `bf2_setup_rtp`, and macOS `Battlefield2`. Both Rust slices
+`bf2_setup_checks`, `bf2_setup_rtp`, and macOS `OpenBF2`. Both Rust slices
 are built with `--release --offline --locked`, merged with `lipo` and statically
 linked. C++ and AppKit get the same universal architectures. No Rust compiler
 is needed on an end user's machine.
@@ -77,8 +78,10 @@ bf2_setup prototype ISO PATCH141 PATCH150 NEW_SCRATCH REFERENCE ACCEPTANCE
 bf2_setup compare GAME_ROOT REFERENCE ACCEPTANCE
 ```
 
-Use `core/content-150.tsv` for regular BF2, or `core/content-deluxe-150.tsv`
-for Deluxe, as `MANIFEST`. The app selects the edition automatically. These contain only paths,
+Use `core/content-150.tsv` for regular BF2, `core/content-deluxe-150.tsv` for
+Deluxe, or `core/content-deluxe-base-150.tsv` with `--no-special-forces` for
+Deluxe media without the expansion, as `MANIFEST`. The app selects the edition
+automatically. These contain only paths,
 sizes and SHA-256 metadata. `install` needs no installed reference. For developer
 media runs use a scratch support root, never the live owner support directory.
 `install` checks full input identities, extracts and patches with progress,
@@ -111,7 +114,7 @@ Other editions/locales and exact Windows installer side effects are unvalidated.
 
 ## App and DMG
 
-The app is built at `build/macos/Battlefield 2.app`. Mounted DVD folders and ISO
+The app is built at `build/macos/OpenBF2.app`. Mounted DVD folders and ISO
 files both work through the same cabinet pipeline; the app never mounts an ISO.
 Drag-and-drop and Choose are available for the disc and both patches. Each key row has five visible text
 fields supporting whole-key paste, auto-advance and backspace within that row. Progress/cancellation
@@ -119,7 +122,7 @@ run through the C++ callbacks on a worker thread, with UI updates on the main
 thread. Existing content is reverified before Play is enabled.
 
 ```sh
-macos/build-dmg.sh "$scratch/build/macos/Battlefield 2.app" "$scratch/Battlefield-2.dmg"
+macos/build-dmg.sh "$scratch/build/macos/OpenBF2.app" "$scratch/OpenBF2.dmg"
 ```
 
 The script audits every Mach-O for both architectures, ad-hoc signs a staging
@@ -135,7 +138,7 @@ voice controls without reading an installation, touching the microphone,
 launching anything or saving anything:
 
 ```sh
-"$scratch/build/macos/Battlefield 2.app/Contents/MacOS/Battlefield 2" \
+"$scratch/build/macos/OpenBF2.app/Contents/MacOS/OpenBF2" \
   --smoke-test "$scratch/ui-smoke"
 ```
 

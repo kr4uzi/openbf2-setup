@@ -2,14 +2,14 @@ enable_language(OBJCXX)
 add_library(bf2_setup_session STATIC SetupSession.cpp)
 target_link_libraries(bf2_setup_session PUBLIC bf2_setup_core bf2_setup_platform)
 target_include_directories(bf2_setup_session PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
-add_executable(Battlefield2 MACOSX_BUNDLE SetupAssistant.mm)
-set_target_properties(Battlefield2 PROPERTIES OUTPUT_NAME "Battlefield 2" MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist" OBJCXX_STANDARD 17)
-target_compile_options(Battlefield2 PRIVATE -fobjc-arc)
-target_compile_definitions(Battlefield2 PRIVATE SETUP_UI_TEST_ROOT="${SETUP_SCRATCH}")
-target_link_libraries(Battlefield2 PRIVATE bf2_setup_session "-framework AppKit" "-framework AVFoundation")
-set(content_manifests "${CMAKE_SOURCE_DIR}/core/content-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-deluxe-150.tsv")
+add_executable(OpenBF2 MACOSX_BUNDLE SetupAssistant.mm)
+set_target_properties(OpenBF2 PROPERTIES OUTPUT_NAME "OpenBF2" MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist" OBJCXX_STANDARD 17)
+target_compile_options(OpenBF2 PRIVATE -fobjc-arc)
+target_compile_definitions(OpenBF2 PRIVATE SETUP_UI_TEST_ROOT="${SETUP_SCRATCH}")
+target_link_libraries(OpenBF2 PRIVATE bf2_setup_session "-framework AppKit" "-framework AVFoundation")
+set(content_manifests "${CMAKE_SOURCE_DIR}/core/content-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-deluxe-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-deluxe-base-150.tsv")
 set_source_files_properties(${content_manifests} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/Setup)
-target_sources(Battlefield2 PRIVATE ${content_manifests})
+target_sources(OpenBF2 PRIVATE ${content_manifests})
 # Client artifacts are supplied by a separate engine build, never fetched here.
 set(SETUP_CLIENT_ARTIFACT "" CACHE PATH "Local directory with bf2_client, libdice_py.dylib, libaidll.dylib (read-only)")
 option(SETUP_CLIENT_ALLOW_THIN "Developer builds only: accept a client artifact built for the host architecture alone (DMG creation still rejects it)" OFF)
@@ -19,15 +19,17 @@ if(SETUP_CLIENT_ARTIFACT)
     set(client_thin 1)
   endif()
   add_custom_target(bf2_setup_client ALL
-    COMMAND "${CMAKE_COMMAND}" -E env "SETUP_CLIENT_ALLOW_THIN=${client_thin}" /bin/bash "${CMAKE_CURRENT_SOURCE_DIR}/embed-client.sh" "${SETUP_CLIENT_ARTIFACT}" "$<TARGET_BUNDLE_DIR:Battlefield2>/Contents/MacOS"
-    DEPENDS Battlefield2 VERBATIM)
+    COMMAND "${CMAKE_COMMAND}" -E env "SETUP_CLIENT_ALLOW_THIN=${client_thin}" /bin/bash "${CMAKE_CURRENT_SOURCE_DIR}/embed-client.sh" "${SETUP_CLIENT_ARTIFACT}" "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/MacOS"
+    COMMAND /bin/bash "${CMAKE_CURRENT_SOURCE_DIR}/sign-bundle.sh" "$<TARGET_BUNDLE_DIR:OpenBF2>"
+    DEPENDS OpenBF2 VERBATIM)
 else()
   add_custom_target(bf2_setup_client ALL
-    COMMAND "${CMAKE_COMMAND}" -E rm -f "$<TARGET_BUNDLE_DIR:Battlefield2>/Contents/MacOS/bf2_client" "$<TARGET_BUNDLE_DIR:Battlefield2>/Contents/MacOS/libdice_py.dylib" "$<TARGET_BUNDLE_DIR:Battlefield2>/Contents/MacOS/libaidll.dylib"
-    DEPENDS Battlefield2 VERBATIM)
+    COMMAND "${CMAKE_COMMAND}" -E rm -f "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/MacOS/bf2_client" "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/MacOS/libdice_py.dylib" "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/MacOS/libaidll.dylib"
+    COMMAND /bin/bash "${CMAKE_CURRENT_SOURCE_DIR}/sign-bundle.sh" "$<TARGET_BUNDLE_DIR:OpenBF2>"
+    DEPENDS OpenBF2 VERBATIM)
 endif()
 if(BUILD_TESTING)
-  add_test(NAME wizard_disc_actions COMMAND "$<TARGET_FILE:Battlefield2>" --test-disc-selection)
+  add_test(NAME wizard_disc_actions COMMAND "$<TARGET_FILE:OpenBF2>" --test-disc-selection)
   set_tests_properties(wizard_disc_actions PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 90)
   add_executable(bf2_setup_session_checks "${CMAKE_SOURCE_DIR}/tests/setup_session.cpp")
   target_link_libraries(bf2_setup_session_checks PRIVATE bf2_setup_session)
@@ -43,4 +45,4 @@ configure_file("${CMAKE_SOURCE_DIR}/LICENSE" "licences/OpenBF2-Setup-LICENSE.txt
 configure_file("${CMAKE_SOURCE_DIR}/docs/prototype-LICENSE" "licences/Prototype-LICENSE.txt" COPYONLY)
 file(GLOB licences "${CMAKE_CURRENT_BINARY_DIR}/licences/*.txt")
 set_source_files_properties(${licences} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/Setup/Licences)
-target_sources(Battlefield2 PRIVATE ${licences})
+target_sources(OpenBF2 PRIVATE ${licences})

@@ -1,6 +1,6 @@
 # Native client artifact contract
 
-The setup app ("Battlefield 2.app") embeds the OpenBF2 macOS client at build
+The setup app (`OpenBF2.app`, which is also the launcher) embeds the OpenBF2 macOS client at build
 time and starts it from the Play page. The engine build supplies the client as
 a directory; the setup build copies exactly three files out of it and never
 modifies, re-links or re-signs the source. This page is the contract between
@@ -91,13 +91,10 @@ bash macos/embed-client.sh client-universal /tmp/embed-check && rm -r /tmp/embed
   `Profiles/BattleCommoDefaultUserSettings.con` (four plain lines; see
   [voice-setup.md](voice-setup.md)) and requests microphone access itself. The
   client is a child process of the app bundle, so macOS attributes the
-  microphone permission to "Battlefield 2" and the game does not prompt
+  microphone permission to "OpenBF2" and the game does not prompt
   mid-match. The bundle's Info.plist carries `NSMicrophoneUsageDescription`.
-- Shader warm-up: the setup app runs `bf2_client +modPath <mod> +warmupLevel
-  <level> [+playerName <default user>]` once per shader set (see
-  [shader-warmup.md](shader-warmup.md)), reads the `warmup:` stdout lines for
-  progress and maps the exit status (0 done, 2 start failed, 3 timeout, 4
-  effect build failures). The client fills its `FxNative` cache itself.
+- Shaders: the client builds a map's shaders into its `FxNative` cache at the
+  map's first load; the setup app does not pre-build them.
 - The setup app holds `Setup/Install.lock` while the client runs, refuses a
   second Play and refuses to quit until the client exits, and shows a dialog
   if the client exits with a non-zero status. A clean quit must therefore exit
@@ -106,7 +103,7 @@ bash macos/embed-client.sh client-universal /tmp/embed-check && rm -r /tmp/embed
 ## CI entry point
 
 ```sh
-macos/build-release.sh client-universal /path/to/Battlefield-2.dmg [build-dir]
+macos/build-release.sh client-universal /path/to/OpenBF2.dmg [build-dir]
 ```
 
 Relative `OUTPUT.dmg` / `build-dir` arguments are resolved against the current

@@ -2,14 +2,15 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleDevelopmentRegion</key><string>en</string>
-<key>CFBundleExecutable</key><string>Battlefield 2</string>
-<key>CFBundleIdentifier</key><string>org.openbf2.setup</string>
-<key>CFBundleName</key><string>Battlefield 2</string>
+<key>CFBundleExecutable</key><string>OpenBF2</string>
+<key>CFBundleIdentifier</key><string>de.krauzi.openbf2</string>
+<key>CFBundleName</key><string>OpenBF2</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>0.1.0</string>
 <key>CFBundleVersion</key><string>1</string>
 <key>LSMinimumSystemVersion</key><string>11.0</string>
 <key>NSHighResolutionCapable</key><true/>
-<key>NSMicrophoneUsageDescription</key><string>Battlefield 2 uses the microphone for in-game voice chat. Setup uses it only to show your microphone level while you adjust the voice settings.</string>
+<key>NSLocalNetworkUsageDescription</key><string>OpenBF2 searches your local network for Battlefield 2 servers and connects to LAN games and voice chat.</string>
+<key>NSMicrophoneUsageDescription</key><string>OpenBF2 uses the microphone for in-game voice chat. Setup uses it only to show your microphone level while you adjust the voice settings.</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict></plist>

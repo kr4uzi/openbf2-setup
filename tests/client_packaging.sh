@@ -52,10 +52,10 @@ cp "$fixture/client" "$fixture/source/bf2_client"
 reject 'absolute build dependency'
 cp "$fixture/client" "$fixture/source/bf2_client"
 # Exercise staging and signing with all three fixtures, never hdiutil.
-app="$fixture/Battlefield 2.app"
+app="$fixture/OpenBF2.app"
 mkdir -p "$app/Contents/MacOS"
 cp "$fixture/source/"{bf2_client,libdice_py.dylib,libaidll.dylib} "$app/Contents/MacOS/"
-cp "$fixture/source/bf2_client" "$app/Contents/MacOS/Battlefield 2"
+cp "$fixture/source/bf2_client" "$app/Contents/MacOS/OpenBF2"
 cp "$macos/Info.plist" "$app/Contents/Info.plist"
 SETUP_SIGN_IDENTITY=- /bin/bash "$macos/build-dmg.sh" "$app" "$fixture/test.dmg" --check-only
 [[ ! -e "$fixture/test.dmg" ]]

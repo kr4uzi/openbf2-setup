@@ -1,6 +1,6 @@
 # macOS distribution and native client contract
 
-The CMake AppKit target creates `Battlefield 2.app`. It statically links the
+The CMake AppKit target creates `OpenBF2.app`. It statically links the
 portable C++/Rust setup libraries. No game data, installer EXE, patch payload,
 key or profile belongs in its resources. `Resources/Setup` contains only the
 path/size/hash manifest and licence notices.
@@ -17,7 +17,7 @@ artifact/
 
 CMake's `bf2_setup_client` target copies **only these files** into `Contents/MacOS`,
 alongside the assistant. Build the default target or `bf2_setup_client`; building
-only `Battlefield2` does not run the import. This matches the client's existing
+only `OpenBF2` does not run the import. This matches the client's existing
 `@loader_path` rpath and `@rpath/libaidll.dylib` loading. Each artifact is checked
 as executable/dylib Mach-O with both arm64 and x86_64, without symlinks, absolute
 build dependencies or external rpaths. The source is never rewritten/re-signed.
@@ -96,7 +96,9 @@ it did not retry hdiutil or GUI startup.
 
 ## Release steps (documented, not executed)
 
-1. The standalone licence is MIT. Finalize bundle identifier,
+1. The standalone licence is MIT. The bundle identifier is `de.krauzi.openbf2`
+   (the owner's domain, reverse-DNS); it must not change after signing, because
+   macOS keys the microphone permission and preferences on it. Finalize the
    Developer ID identity, minimum OS and engine artifact provenance.
 2. Build/audit all universal code. Test the assistant and native client on both
    Intel and Apple silicon, including key paste, mounted DVD and ISO selection,
@@ -107,8 +109,16 @@ it did not retry hdiutil or GUI startup.
    entitlement the assistant itself needs under the hardened runtime is
    `com.apple.security.device.audio-input` (microphone level meter and the
    permission request in the voice step; the bundle's Info.plist carries
-   `NSMicrophoneUsageDescription`). The ad-hoc script sets no runtime option,
-   so no entitlement file is needed for local builds.
+   `NSMicrophoneUsageDescription`). The Info.plist also carries
+   `NSLocalNetworkUsageDescription`: the game's LAN server browser broadcasts
+   to the local network, and macOS 15 attributes that prompt to the app because
+   the client is its child process. No Bonjour services and no multicast
+   entitlement are involved (the browser uses broadcast, not multicast).
+   `macos/sign-bundle.sh` signs nested code and the bundle with one identity
+   (ad-hoc by default, no runtime option, so no entitlement file is needed for
+   local builds); every build signs the bundle ad-hoc after embedding the
+   client, because macOS files microphone and local-network grants against the
+   bundle identifier plus code identity, and an unsigned bundle has none.
 4. Verify with `codesign --verify --strict --verbose=2`. Create/sign the DMG.
 5. Submit the release artifact with `xcrun notarytool submit ... --wait` using
    owner-managed credentials. Staple using `xcrun stapler staple`, validate the

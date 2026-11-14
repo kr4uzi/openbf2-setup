@@ -26,7 +26,7 @@ static NSString* Text(const std::string& s) { return [[NSString alloc] initWithB
 static setup::fs::path Path(NSString* s) { return s.length?setup::fs::path(s.fileSystemRepresentation):setup::fs::path{}; }
 static NSString* Support() { return [(testHome ?: NSHomeDirectory()) stringByAppendingPathComponent:@"Library/Application Support/OpenBF2"]; }
 static setup::fs::path Contents() { return Path([NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"Contents"]); }
-static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForResource:deluxe?@"content-deluxe-150":@"content-150" ofType:@"tsv" inDirectory:@"Setup"]; }
+static NSString* Manifest(setup::DiscEdition edition) { return [NSBundle.mainBundle pathForResource:@(setup::assistant::manifestName(edition)) ofType:@"tsv" inDirectory:@"Setup"]; }
 
 @interface FileWell : NSView
 @property(nonatomic,copy) NSString* path;
@@ -106,6 +106,7 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
 @property(strong) FileWell* patch150;
 @property(strong) NSArray<KeyField*>* keys;
 @property(strong) NSArray<NSTextField*>* keyStatuses;
+@property(strong) NSButton* specialForces; // Deluxe media only: install the expansion (default) or the base game alone
 @property(nonatomic) NSInteger step;
 @property(nonatomic) BOOL working;
 @property BOOL deluxe;
@@ -118,12 +119,6 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
 @property(strong) NSTextField* micStatus;
 @property(strong) NSButton* micButton;
 @property(strong) AVAudioEngine* engine;
-@property(strong) NSArray<NSTextField*>* warmupRows;
-@property(strong) NSProgressIndicator* warmupBar;
-@property BOOL warming;
-@property BOOL warmupFinished;
-@property BOOL warmupCancelled;
-@property NSInteger voiceReturn; // the step Save returns to (warm-up after install, Ready otherwise)
 - (void)pasteKey:(NSString*)value;
 - (void)pasteKey:(NSString*)value row:(NSInteger)row;
 - (void)runDiscActionTest;
@@ -137,26 +132,32 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
     std::unique_ptr<setup::Lock> _clientLock;
     std::shared_ptr<std::atomic<bool>> _checking141,_checking150;
     setup::assistant::VoiceSettings _voice; // playback volume is carried through unchanged (retail has no slider)
-    std::vector<setup::assistant::WarmupRun> _warmupRuns;
-    std::vector<std::string> _warmupResults;
 }
 @synthesize step=_step,working=_working;
 - (void)setStep:(NSInteger)step {Debug(@"state step %ld -> %ld working=%d",(long)_step,(long)step,_working);_step=step;}
 - (void)setWorking:(BOOL)working {Debug(@"state working %d -> %d step=%ld",_working,working,(long)_step);_working=working;}
 - (void)trace:(NSString*)action {
-    Debug(@"%@ step=%ld working=%d next.enabled=%d next.title=%@ target=%@ action=%@ disc=%@ revision=%lu patches=%d/%d deluxe=%d game-root=%@",action,(long)self.step,self.working,self.next.enabled,self.next.title,self.next.target==self?@"assistant":@"other/nil",NSStringFromSelector(self.next.action),self.disc.path,(unsigned long)self.disc.revision,self.patch141.verified,self.patch150.verified,self.deluxe,self.gameRoot);
+    Debug(@"%@ step=%ld working=%d next.enabled=%d next.title=%@ target=%@ action=%@ disc=%@ revision=%lu patches=%d/%d deluxe=%d special-forces=%d game-root=%@",action,(long)self.step,self.working,self.next.enabled,self.next.title,self.next.target==self?@"assistant":@"other/nil",NSStringFromSelector(self.next.action),self.disc.path,(unsigned long)self.disc.revision,self.patch141.verified,self.patch150.verified,self.deluxe,[self installSpecialForces],self.gameRoot);
+}
+- (BOOL)installSpecialForces {return self.deluxe&&self.specialForces.state==NSControlStateValueOn;}
+- (setup::DiscEdition)edition {return self.deluxe?([self installSpecialForces]?setup::DiscEdition::Deluxe:setup::DiscEdition::DeluxeBase):setup::DiscEdition::BF2;}
+- (void)specialForcesChanged:(id)sender {
+    Debug(@"action special-forces=%d",[self installSpecialForces]);
+    for(KeyField* f in self.keys)f.enabled=f.index<5||[self installSpecialForces];
+    [self updateKeyStatus];
 }
 - (void)applicationDidFinishLaunching:(NSNotification*)notification {
     Debug(@"action launch test-home=%@ smoke=%d disc-action-test=%d",testHome,smokeDirectory!=nil,discActionTest);
     _cancelled=false;self.step=0;
     self.window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,660,480) styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable backing:NSBackingStoreBuffered defer:NO];
-    self.window.title=@"Battlefield 2";self.window.delegate=self;[self.window center];
+    self.window.title=@"OpenBF2";self.window.delegate=self;[self.window center];
     self.disc=[[FileWell alloc] initWithTitle:@"Battlefield 2 DVD or ISO" disc:YES];
     self.patch141=[[FileWell alloc] initWithTitle:@"Patch 1.0 → 1.41" disc:NO];
     self.patch150=[[FileWell alloc] initWithTitle:@"Patch 1.41 → 1.50" disc:NO];
     __weak Assistant* weakSelf=self;
     self.patch141.changed=^{[weakSelf checkPatch:weakSelf.patch141 slot:setup::PatchSlot::Patch141];};
     self.patch150.changed=^{[weakSelf checkPatch:weakSelf.patch150 slot:setup::PatchSlot::Patch150];};
+    self.specialForces=[NSButton checkboxWithTitle:@"Install Special Forces" target:self action:@selector(specialForcesChanged:)];self.specialForces.frame=NSMakeRect(20,100,300,22);self.specialForces.state=NSControlStateValueOn;
     NSMutableArray* keys=[NSMutableArray array];
     for(NSInteger i=0;i<10;++i){KeyField* f=[[KeyField alloc] initWithFrame:NSMakeRect(20+(i%5)*106,i<5?154:64,92,32)];f.assistant=self;f.index=i;f.delegate=self;f.font=[NSFont monospacedSystemFontOfSize:20 weight:NSFontWeightRegular];f.accessibilityLabel=[NSString stringWithFormat:@"%@ CD key group %ld of 5",i<5?@"Battlefield 2":@"Special Forces",(long)(i%5)+1];[keys addObject:f];}self.keys=keys;
     self.captureVolume=[NSSlider sliderWithValue:1 minValue:0 maxValue:1 target:self action:@selector(voiceChanged:)];self.captureVolume.frame=NSMakeRect(170,118,320,24);self.captureVolume.continuous=YES;self.captureVolume.accessibilityLabel=@"Capture volume";
@@ -168,7 +169,7 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
     [self.window.contentView addSubview:self.next];[self.window.contentView addSubview:self.back];
     [self show];if(!discActionTest){[self.window makeKeyAndOrderFront:nil];[NSApp activateIgnoringOtherApps:YES];}
     NSMenu* menu=[NSMenu new];NSMenuItem* app=[NSMenuItem new];[menu addItem:app];NSMenu* submenu=[NSMenu new];
-    [submenu addItemWithTitle:@"Quit Battlefield 2" action:@selector(terminate:) keyEquivalent:@"q"];app.submenu=submenu;NSApp.mainMenu=menu;
+    [submenu addItemWithTitle:@"Quit OpenBF2" action:@selector(terminate:) keyEquivalent:@"q"];app.submenu=submenu;NSApp.mainMenu=menu;
     NSMenuItem* edit=[NSMenuItem new];edit.title=@"Edit";[menu addItem:edit];NSMenu* editMenu=[[NSMenu alloc] initWithTitle:@"Edit"];
     [editMenu addItemWithTitle:@"Cut" action:@selector(cut:) keyEquivalent:@"x"];
     [editMenu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];
@@ -179,7 +180,7 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
     } else if(smokeDirectory) {
         dispatch_async(dispatch_get_main_queue(),^{
             try { @try {
-                for(NSInteger step=0;step<8;++step){self.step=step;[self show];if(step==5)[self meterPeak:0.35];[self.window display];
+                for(NSInteger step=0;step<7;++step){self.step=step;[self show];if(step==5)[self meterPeak:0.35];[self.window display];
                     NSView* view=self.window.contentView;NSBitmapImageRep* rep=[view bitmapImageRepForCachingDisplayInRect:view.bounds];[view cacheDisplayInRect:view.bounds toBitmapImageRep:rep];
                     NSString* file=[smokeDirectory stringByAppendingPathComponent:[NSString stringWithFormat:@"wizard-%ld.png",(long)step]];
                     NSData* png=[rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];if(![png writeToFile:file atomically:YES])throw std::runtime_error("UI snapshot write failed");
@@ -193,6 +194,11 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
                 self.keys[9].stringValue=@"";[self updateKeyStatus];
                 if(self.next.enabled||![self.keyStatuses[1].stringValue isEqualToString:@"Enter all five groups"])throw std::runtime_error("Incomplete Special Forces key status/gating failed");
                 [self pasteKey:@"1111-2222-3333-4444-5555" row:1];
+                if([self edition]!=setup::DiscEdition::Deluxe||!self.keys[9].enabled)throw std::runtime_error("Deluxe default must install Special Forces with enabled key fields");
+                self.specialForces.state=NSControlStateValueOff;[self specialForcesChanged:self.specialForces];
+                if([self edition]!=setup::DiscEdition::DeluxeBase||self.keys[5].enabled||self.keys[9].enabled||![self.keyStatuses[1].stringValue isEqualToString:@"Special Forces will not be installed"]||self.next.enabled)throw std::runtime_error("Unchecking Special Forces did not disable its key row or select the base edition");
+                self.specialForces.state=NSControlStateValueOn;[self specialForcesChanged:self.specialForces];
+                if([self edition]!=setup::DiscEdition::Deluxe||!self.keys[5].enabled||![self.keyStatuses[1].stringValue hasPrefix:@"Invalid key"])throw std::runtime_error("Re-checking Special Forces did not restore its key row");
                 NSView* view=self.window.contentView;NSBitmapImageRep* rep=[view bitmapImageRepForCachingDisplayInRect:view.bounds];[view cacheDisplayInRect:view.bounds toBitmapImageRep:rep];
                 NSData* png=[rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
                 if(![png writeToFile:[smokeDirectory stringByAppendingPathComponent:@"wizard-deluxe-3.png"] atomically:YES])throw std::runtime_error("Deluxe UI snapshot write failed");
@@ -201,8 +207,7 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
                 self.captureVolume.doubleValue=0.5;[self voiceChanged:self.captureVolume];[self meterPeak:0.5];if(self.meter.level<0.24||self.meter.level>0.26)throw std::runtime_error("Capture volume not applied to the meter");
                 if(setup::assistant::voiceSettingsText([self voiceSettings])!="1\n0.5\n0.1\n0\n")throw std::runtime_error("Voice settings text from the controls is wrong");
                 self.captureVolume.doubleValue=1;[self voiceChanged:self.captureVolume];
-                self.step=6;[self show];if(self.warming||![self.next.title isEqualToString:@"Continue"])throw std::runtime_error("Warm-up page without a client must offer Continue only");
-                std::cout<<"Eight wizard screens plus Deluxe key screen rendered; grouped paste, live invalid/incomplete status, Install gating, the voice meter/settings and the warm-up page passed\n";[NSApp terminate:nil];
+                std::cout<<"Seven wizard screens plus Deluxe key screen rendered; grouped paste, live invalid/incomplete status, Install gating and the voice meter/settings passed\n";[NSApp terminate:nil];
             } @catch(NSException* exception){throw std::runtime_error("AppKit exception in UI smoke test");}
             }catch(const std::exception& e){std::cerr<<e.what()<<'\n';std::exit(1);}
         });
@@ -251,29 +256,27 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
     [self.body removeFromSuperview];self.body=[[NSView alloc] initWithFrame:NSMakeRect(30,76,600,370)];[self.window.contentView addSubview:self.body];
     if(self.step!=5)[self stopMeter];
     self.back.hidden=self.step==0||self.step>=4||(self.step==3&&self.gameRoot);self.next.enabled=!self.working&&(self.step!=2||(self.patch141.verified&&self.patch150.verified));self.back.enabled=!self.working;
-    self.next.title=self.step==3?@"Install":self.step==4?@"Cancel":self.step==5?@"Save":self.step==6?(self.warming?@"Cancel":self.warmupFinished?@"Continue":@"Prepare Shaders"):self.step==7?@"Play":@"Continue";
-    NSArray* titles=@[@"Welcome to Battlefield 2",@"Choose your disc",@"Choose the two patches",@"Enter your CD key",@"Installing Battlefield 2",@"Set up voice chat",@"Prepare shaders",@"Ready to play"];
+    self.next.title=self.step==3?@"Install":self.step==4?@"Cancel":self.step==5?@"Save":self.step==6?@"Play":@"Continue";
+    NSArray* titles=@[@"Welcome to Battlefield 2",@"Choose your disc",@"Choose the two patches",@"Enter your CD key",@"Installing Battlefield 2",@"Set up voice chat",@"Ready to play"];
     [self label:titles[self.step] y:280 size:27];
     if(self.step==0)[self label:@"Install from your Battlefield 2 DVD or ISO and the official 1.41 and 1.50 patches. Game data, your key and profiles are stored in your Library’s Application Support/OpenBF2 folder." y:155 size:16];
     if(self.step==1){self.disc.frame=NSMakeRect(20,150,560,92);[self.body addSubview:self.disc];[self label:@"Choose an English BF2 or BF2 Deluxe DVD or ISO. Deluxe includes Special Forces. Your original files are read only." y:50 size:14];}
     if(self.step==2){self.patch141.frame=NSMakeRect(20,165,560,92);self.patch150.frame=NSMakeRect(20,60,560,92);[self.body addSubview:self.patch141];[self.body addSubview:self.patch150];}
     if(self.step==3){[self label:@"Enter the key printed with your game. You can paste the whole key." y:205 size:16];NSTextField* base=[self label:@"Battlefield 2" y:190 size:14];base.frame=NSMakeRect(20,190,560,22);
-        if(self.deluxe){NSTextField* sf=[self label:@"Special Forces" y:100 size:14];sf.frame=NSMakeRect(20,100,560,22);}
+        if(self.deluxe)[self.body addSubview:self.specialForces];
         NSMutableArray* statuses=[NSMutableArray array];
         for(NSInteger row=0;row<(self.deluxe?2:1);++row){NSTextField* status=[self label:@"" y:row==0?126:36 size:13];status.frame=NSMakeRect(20,row==0?126:36,560,22);[statuses addObject:status];}
         self.keyStatuses=statuses;
-        for(KeyField* f in self.keys)if(f.index<5||self.deluxe)[self.body addSubview:f];[self updateKeyStatus];[self.window makeFirstResponder:self.keys.firstObject];}
+        for(KeyField* f in self.keys)if(f.index<5||self.deluxe){f.enabled=f.index<5||[self installSpecialForces];[self.body addSubview:f];}[self updateKeyStatus];[self.window makeFirstResponder:self.keys.firstObject];}
     if(self.step==4){
         self.progress=[[NSProgressIndicator alloc] initWithFrame:NSMakeRect(20,187,560,18)];self.progress.indeterminate=NO;self.progress.minValue=0;self.progress.maxValue=1;[self.body addSubview:self.progress];
         self.status=[self label:@"Checking your media…" y:85 size:14];self.status.frame=NSMakeRect(20,40,560,130);
     }
     if(self.step==5)[self showVoiceSetup];
-    if(self.step==6)[self showWarmup];
-    if(self.step==7){
+    if(self.step==6){
         BOOL client=setup::assistant::clientPresent(Contents());
         [self label:client?@"Installation verified. Your game data is ready.":@"Installation verified. The game client has not been included in this build." y:165 size:16];self.next.enabled=client&&!self.client;
         NSButton* voice=[NSButton buttonWithTitle:@"Voice Setup…" target:self action:@selector(voiceSetup:)];voice.frame=NSMakeRect(20,40,140,32);voice.enabled=!self.client;[self.body addSubview:voice];
-        NSButton* shaders=[NSButton buttonWithTitle:@"Prepare Shaders…" target:self action:@selector(prepareShaders:)];shaders.frame=NSMakeRect(170,40,160,32);shaders.enabled=client&&!self.client;[self.body addSubview:shaders];
     }
     [self trace:@"show"];
 }
@@ -307,6 +310,7 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
     if(self.step!=3)return;
     BOOL allValid=YES;
     for(NSInteger row=0;row<(self.deluxe?2:1);++row){
+        if(row==1&&![self installSpecialForces]){NSTextField* status=self.keyStatuses[1];status.stringValue=@"Special Forces will not be installed";status.textColor=NSColor.secondaryLabelColor;status.accessibilityLabel=@"Special Forces: not installed";continue;}
         NSString* key=[self keyForRow:row];
         BOOL valid=setup::validateKey(row==0?setup::KeyEdition::BF2:setup::KeyEdition::SpecialForces,std::string(key.UTF8String));
         allValid=allValid&&valid;
@@ -328,8 +332,7 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
     if(self.working&&self.step!=4){Debug(@"next ignored: working");return;}
     if(self.step==4){_cancelled.store(true);Debug(@"state cancellation requested by Cancel");self.next.enabled=NO;self.status.stringValue=@"Cancelling after the current patch record…";return;}
     if(self.step==5){[self saveVoice];return;}
-    if(self.step==6){if(self.warming)[self cancelWarmup];else if(self.warmupFinished){self.step=7;[self show];}else [self startWarmup];return;}
-    if(self.step==7){[self play];return;}
+    if(self.step==6){[self play];return;}
     try {
         if(self.step==1||self.step==2){
             if(self.step==1&&!self.disc.path.length)throw std::runtime_error("Choose your DVD or ISO first.");
@@ -338,7 +341,7 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
             if(!self.patch141.verified||!self.patch150.verified)throw std::runtime_error("Wait for both patch checks to finish, then choose matching files.");
             ++self.step;[self show];return;
         }
-        if(self.step==3){if(self.deluxe&&!setup::validateKey(setup::KeyEdition::SpecialForces,std::string([self keyForRow:1].UTF8String)))throw std::runtime_error("Special Forces: invalid CD key.");if(!setup::validateKey(setup::KeyEdition::BF2,std::string(self.key.UTF8String)))throw std::runtime_error("Battlefield 2: invalid CD key.");if(self.gameRoot){[self saveKey];for(KeyField* field in self.keys)field.stringValue=@"";self.step=7;[self show];return;}self.step=4;[self show];[self install];return;}
+        if(self.step==3){if([self installSpecialForces]&&!setup::validateKey(setup::KeyEdition::SpecialForces,std::string([self keyForRow:1].UTF8String)))throw std::runtime_error("Special Forces: invalid CD key.");if(!setup::validateKey(setup::KeyEdition::BF2,std::string(self.key.UTF8String)))throw std::runtime_error("Battlefield 2: invalid CD key.");if(self.gameRoot){[self saveKey];for(KeyField* field in self.keys)field.stringValue=@"";self.step=6;[self show];return;}self.step=4;[self show];[self install];return;}
         ++self.step;[self show];
     }catch(const std::exception& e){[self message:@"Check your setup files" detail:Text(e.what())];}
 }
@@ -387,13 +390,13 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
 }
 - (void)saveKey {
     Debug(@"action save-keys (values omitted)");
-    auto platform=setup::nativePlatform();setup::assistant::saveKeys(Path(Support()),std::string(self.key.UTF8String),self.deluxe?std::string([self keyForRow:1].UTF8String):"",*platform);
+    auto platform=setup::nativePlatform();setup::assistant::saveKeys(Path(Support()),std::string(self.key.UTF8String),[self installSpecialForces]?std::string([self keyForRow:1].UTF8String):"",*platform);
 }
 - (void)install {
     [self trace:@"action install"];
     self.working=YES;_cancelled=false;
-    setup::InstallOptions options{Path(self.disc.path),Path(self.patch141.path),Path(self.patch150.path),Path(Support()),Path(Manifest(self.deluxe)),{}};
-    options.control.cancelled=&_cancelled;
+    setup::InstallOptions options{Path(self.disc.path),Path(self.patch141.path),Path(self.patch150.path),Path(Support()),Path(Manifest([self edition])),{}};
+    options.control.cancelled=&_cancelled;options.specialForces=[self installSpecialForces];
     // Parallel input checks report one item each; keep a line per item (main thread only).
     NSMutableArray<NSString*>* itemNames=[NSMutableArray array];NSMutableDictionary<NSString*,NSString*>* itemLines=[NSMutableDictionary dictionary];NSMutableString* lastPhase=[NSMutableString string];
     options.control.progress=[self,itemNames,itemLines,lastPhase](const setup::Progress& p){
@@ -419,7 +422,7 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
     };
     std::thread([self,options]{@autoreleasepool{
         try {auto platform=setup::nativePlatform();auto root=setup::install(options,*platform);NSString* game=Text(root.string());
-            dispatch_async(dispatch_get_main_queue(),^{self.working=NO;self.gameRoot=game;try{[self saveKey];for(KeyField* field in self.keys)field.stringValue=@"";self.voiceReturn=6;self.step=5;[self show];}catch(const std::exception& e){self.step=3;[self show];[self message:@"Key could not be saved" detail:Text(e.what())];}});
+            dispatch_async(dispatch_get_main_queue(),^{self.working=NO;self.gameRoot=game;try{[self saveKey];for(KeyField* field in self.keys)field.stringValue=@"";self.step=5;[self show];}catch(const std::exception& e){self.step=3;[self show];[self message:@"Key could not be saved" detail:Text(e.what())];}});
         }catch(const std::exception& e){NSString* error=Text(e.what());dispatch_async(dispatch_get_main_queue(),^{self.working=NO;self.step=3;[self show];[self message:@"Setup paused" detail:[error stringByAppendingString:@"\nYour previous installation is retained. Choose Install to retry or resume."]];});}
     }}).detach();
 }
@@ -431,7 +434,7 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
     std::thread([self,current]{@autoreleasepool{
         NSString* game=nil;NSString* error=nil;BOOL hasStoredKey=NO;BOOL deluxe=NO;
         try {auto platform=setup::nativePlatform();auto lock=platform->lock(Path(Support())/"Setup/Install.lock");auto root=setup::assistant::currentGeneration(Path(Support()));
-            setup::Control control;control.cancelled=&self->_cancelled;deluxe=setup::assistant::currentEdition(Path(Support()))==setup::DiscEdition::Deluxe;setup::verifyManifest(root,Path(Manifest(deluxe)),control,true); // the client writes settings/logs beside the data
+            setup::Control control;control.cancelled=&self->_cancelled;auto edition=setup::assistant::currentEdition(Path(Support()));deluxe=edition==setup::DiscEdition::Deluxe;setup::verifyManifest(root,Path(Manifest(edition)),control,true); // the client writes settings/logs beside the data
             hasStoredKey=setup::assistant::storedKey(Path(Support()))&&(!deluxe||setup::assistant::storedKey(Path(Support()),true));game=Text(root.string());
         }catch(const std::exception& e){error=Text(e.what());}
         dispatch_async(dispatch_get_main_queue(),^{self.working=NO;if(game){self.deluxe=deluxe;self.gameRoot=game;self.step=hasStoredKey?7:3;}[self show];if(error)[self message:@"Existing installation could not be verified" detail:error];});
@@ -461,11 +464,10 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
     self.captureVolume.toolTip=[NSString stringWithFormat:@"%.0f%%",self.captureVolume.doubleValue*100];self.captureThreshold.toolTip=[NSString stringWithFormat:@"%.0f%%",self.captureThreshold.doubleValue*100];
     if(sender)Debug(@"action voice-changed capture=%.2f threshold=%.2f boost=%d",self.captureVolume.doubleValue,self.captureThreshold.doubleValue,self.boost.state==NSControlStateValueOn);
 }
-- (void)voiceSetup:(id)sender {[self trace:@"action voice-setup"];if(self.client||self.working)return;self.voiceReturn=7;self.step=5;[self show];}
-- (void)prepareShaders:(id)sender {[self trace:@"action prepare-shaders"];if(self.client||self.working)return;self.warmupFinished=NO;self.step=6;[self show];}
+- (void)voiceSetup:(id)sender {[self trace:@"action voice-setup"];if(self.client||self.working)return;self.step=5;[self show];}
 - (void)saveVoice {
     Debug(@"action save-voice");
-    try {auto platform=setup::nativePlatform();setup::assistant::saveVoiceSettings(Path(Support()),[self voiceSettings],*platform);self.step=self.voiceReturn==7?7:6;[self show];}
+    try {auto platform=setup::nativePlatform();setup::assistant::saveVoiceSettings(Path(Support()),[self voiceSettings],*platform);self.step=6;[self show];}
     catch(const std::exception& e){[self message:@"Voice settings could not be saved" detail:Text(e.what())];}
 }
 - (void)refreshMicrophone {
@@ -514,103 +516,13 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
     if(!self.engine)return;
     Debug(@"state meter stopped");[self.engine.inputNode removeTapOnBus:0];[self.engine stop];self.engine=nil;self.meter.level=0;
 }
-- (void)showWarmup {
-    // One client run per shader set; the client hosts the level, builds every shader into its cache and exits.
-    if(!setup::assistant::clientPresent(Contents())){[self label:@"The game client is not included in this build, so its shaders cannot be prepared here." y:165 size:16];self.warmupFinished=YES;self.next.title=@"Continue";return;}
-    [self label:@"Battlefield 2 builds the shaders of a map the first time it loads, which can take minutes. Preparing them now runs the game once per map set in a window; no input is needed. You can skip this and let the game do it when a map first loads." y:196 size:14];
-    if(!self.warming&&!self.warmupFinished){
-        try {_warmupRuns=setup::assistant::warmupRuns(Path(Support()));}catch(const std::exception& e){_warmupRuns.clear();[self label:Text(e.what()) y:150 size:14];}
-        _warmupResults.assign(_warmupRuns.size(),"");
-    }
-    NSMutableArray* rows=[NSMutableArray array];
-    for(size_t i=0;i<_warmupRuns.size();++i){
-        CGFloat y=150-CGFloat(i)*34;NSTextField* title=[self label:Text(_warmupRuns[i].title) y:y size:14];title.frame=NSMakeRect(20,y,230,22);
-        NSTextField* status=[self label:@"" y:y size:14];status.frame=NSMakeRect(250,y,330,22);status.textColor=NSColor.secondaryLabelColor;status.accessibilityLabel=[Text(_warmupRuns[i].title) stringByAppendingString:@" status"];
-        status.stringValue=_warmupResults[i].empty()?(self.warmupFinished?@"Done":@"Not started"):Text(_warmupResults[i]);[rows addObject:status];
-    }
-    self.warmupRows=rows;
-    self.warmupBar=[[NSProgressIndicator alloc] initWithFrame:NSMakeRect(20,72,560,18)];self.warmupBar.indeterminate=NO;self.warmupBar.minValue=0;self.warmupBar.maxValue=1;self.warmupBar.hidden=!self.warming;[self.body addSubview:self.warmupBar];
-    if(!self.warming&&!self.warmupFinished){NSButton* skip=[NSButton buttonWithTitle:@"Skip" target:self action:@selector(skipWarmup:)];skip.frame=NSMakeRect(20,36,100,32);[self.body addSubview:skip];}
-    NSTextField* note=[self label:@"Around one to four minutes per map set, depending on your Mac. Changing the video quality later rebuilds shaders at first load, or run this again from the Ready page." y:4 size:12];note.frame=NSMakeRect(20,4,560,36);note.textColor=NSColor.secondaryLabelColor;
-    self.next.enabled=!self.working&&(_warmupRuns.size()>0||self.warmupFinished)&&!(self.warming&&self.warmupCancelled);
-}
-- (void)skipWarmup:(id)sender {[self trace:@"action skip-warmup"];if(self.warming)return;self.step=7;[self show];}
-- (void)startWarmup {
-    [self trace:@"action start-warmup"];
-    if(self.client||_warmupRuns.empty())return;
-    try {auto platform=setup::nativePlatform();_clientLock=platform->lock(Path(Support())/"Setup/Install.lock");}
-    catch(const std::exception& e){[self message:@"Could not prepare shaders" detail:Text(e.what())];return;}
-    self.warming=YES;self.warmupCancelled=NO;_warmupResults.assign(_warmupRuns.size(),"");[self show];
-    [self runWarmup:0];
-}
-- (void)runWarmup:(NSInteger)index {
-    if(index>=NSInteger(_warmupRuns.size())||self.warmupCancelled){[self finishWarmup];return;}
-    const auto run=_warmupRuns[size_t(index)];NSTextField* row=self.warmupRows[NSUInteger(index)];
-    try {
-        auto launch=setup::assistant::warmupLaunch(Contents(),Path(Support()),run);
-        if(launch.directory!=Path(self.gameRoot))throw std::runtime_error("The active installation changed. Reopen Battlefield 2 to verify it.");
-        NSTask* task=[NSTask new];task.executableURL=[NSURL fileURLWithPath:Text(launch.executable.string())];task.currentDirectoryURL=[NSURL fileURLWithPath:Text(launch.directory.string())];
-        NSMutableArray* args=[NSMutableArray array];for(const auto& arg:launch.arguments)[args addObject:Text(arg)];task.arguments=args;
-        NSMutableDictionary* env=[NSProcessInfo.processInfo.environment mutableCopy];
-        if(testHome)env[@"HOME"]=testHome;
-        env[@"OPENBF2_DATA_ROOT"]=Text(launch.directory.string());env[@"OPENBF2_SUPPORT_ROOT"]=Support();task.environment=env;
-        NSPipe* pipe=[NSPipe pipe];task.standardOutput=pipe;
-        auto progress=std::make_shared<setup::assistant::WarmupProgress>();auto pending=std::make_shared<std::string>();
-        pipe.fileHandleForReading.readabilityHandler=^(NSFileHandle* handle){
-            NSData* data=handle.availableData;
-            if(!data.length){handle.readabilityHandler=nil;return;}
-            pending->append(static_cast<const char*>(data.bytes),data.length);
-            size_t end;bool changed=false;
-            while((end=pending->find('\n'))!=std::string::npos){
-                auto line=pending->substr(0,end);pending->erase(0,end+1);
-                if(setup::assistant::parseWarmupLine(line,*progress)){changed=true;Debug(@"warmup[%ld] %s",(long)index,line.c_str());}
-            }
-            if(!changed)return;
-            const setup::assistant::WarmupProgress copy=*progress;
-            dispatch_async(dispatch_get_main_queue(),^{
-                if(self.step!=6||!self.warming)return;
-                NSDictionary* stages=@{@"start":@"Starting the game",@"profile":@"Loading the profile",@"level loaded":@"Level loaded",@"player joined":@"Player joined",@"join game":@"Joining the game",@"world frame":@"Rendering",@"done":@"Finishing",@"failed start":@"Start failed",@"timeout":@"Timed out"};
-                NSString* stage=stages[Text(copy.stage)] ?: Text(copy.stage.empty()?"Starting…":copy.stage);
-                NSString* text=copy.started?[NSString stringWithFormat:@"%u of %u effects · %@",copy.finished,copy.started,stage]:stage;
-                row.stringValue=text;self.warmupBar.indeterminate=!copy.started;self.warmupBar.doubleValue=copy.started?double(copy.finished)/copy.started:0;
-            });
-        };
-        task.terminationHandler=^(NSTask* child){
-            pipe.fileHandleForReading.readabilityHandler=nil;
-            dispatch_async(dispatch_get_main_queue(),^{
-                Debug(@"state warmup[%ld] stopped status=%d cancelled=%d",(long)index,child.terminationStatus,self.warmupCancelled);
-                self.client=nil;
-                std::string outcome=self.warmupCancelled?"Cancelled":setup::assistant::warmupOutcome(child.terminationStatus);
-                if(child.terminationReason==NSTaskTerminationReasonUncaughtSignal&&!self.warmupCancelled)outcome="The game stopped unexpectedly.";
-                self->_warmupResults[size_t(index)]=outcome.empty()?"Done":outcome;row.stringValue=Text(self->_warmupResults[size_t(index)]);row.textColor=outcome.empty()?NSColor.systemGreenColor:NSColor.secondaryLabelColor;
-                [self runWarmup:index+1];
-            });
-        };
-        NSError* error=nil;if(![task launchAndReturnError:&error])throw std::runtime_error(std::string(error.localizedDescription.UTF8String));
-        self.client=task;row.stringValue=@"Starting…";self.warmupBar.hidden=NO;self.warmupBar.indeterminate=YES;[self.warmupBar startAnimation:nil];Debug(@"state warmup[%ld] started level=%s",(long)index,run.level.c_str());
-    }catch(const std::exception& e){
-        _warmupResults[size_t(index)]=e.what();row.stringValue=Text(e.what());Debug(@"state warmup[%ld] not started: %s",(long)index,e.what());
-        [self runWarmup:index+1];
-    }
-}
-- (void)cancelWarmup {
-    [self trace:@"action cancel-warmup"];
-    if(!self.warming)return;
-    self.warmupCancelled=YES;self.next.enabled=NO;
-    if(self.client){[self.client terminate];for(NSTextField* row in self.warmupRows)if([row.stringValue hasSuffix:@"effects"]||[row.stringValue isEqualToString:@"Starting…"]||[row.stringValue containsString:@" · "])row.stringValue=@"Cancelling…";}
-    else [self finishWarmup];
-}
-- (void)finishWarmup {
-    Debug(@"state warmup finished cancelled=%d",self.warmupCancelled);
-    [self.warmupBar stopAnimation:nil];_clientLock.reset();self.warming=NO;self.warmupFinished=YES;[self show];
-}
 - (void)play {
     [self trace:@"action play"];
     try {
         if(self.client){Debug(@"play ignored: client running");return;}
         auto platform=setup::nativePlatform();_clientLock=platform->lock(Path(Support())/"Setup/Install.lock");
         auto launch=setup::assistant::clientLaunch(Contents(),Path(Support()));
-        if(launch.directory!=Path(self.gameRoot))throw std::runtime_error("The active installation changed. Reopen Battlefield 2 to verify it.");
+        if(launch.directory!=Path(self.gameRoot))throw std::runtime_error("The active installation changed. Reopen OpenBF2 to verify it.");
         NSTask* task=[NSTask new];task.executableURL=[NSURL fileURLWithPath:Text(launch.executable.string())];task.currentDirectoryURL=[NSURL fileURLWithPath:Text(launch.directory.string())];
         NSMutableArray* args=[NSMutableArray array];for(const auto& arg:launch.arguments)[args addObject:Text(arg)];task.arguments=args;
         NSMutableDictionary* env=[NSProcessInfo.processInfo.environment mutableCopy];
@@ -621,7 +533,7 @@ static NSString* Manifest(BOOL deluxe=NO) { return [NSBundle.mainBundle pathForR
         self.client=task;self.next.enabled=NO;Debug(@"state client started");
     }catch(const std::exception& e){_clientLock.reset();[self message:@"Could not start Battlefield 2" detail:Text(e.what())];}
 }
-- (BOOL)windowShouldClose:(NSWindow*)sender {[self trace:@"action close"];[self stopMeter];if(self.client){if(self.warming)[self message:@"Shaders are being prepared" detail:@"Cancel the preparation before closing this window."];else [self message:@"Battlefield 2 is running" detail:@"Quit the game before closing this window."];return NO;}if(self.working){_cancelled=true;Debug(@"state cancellation requested by close");return NO;}[NSApp terminate:nil];return YES;}
+- (BOOL)windowShouldClose:(NSWindow*)sender {[self trace:@"action close"];[self stopMeter];if(self.client){[self message:@"Battlefield 2 is running" detail:@"Quit the game before closing this window."];return NO;}if(self.working){_cancelled=true;Debug(@"state cancellation requested by close");return NO;}[NSApp terminate:nil];return YES;}
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)sender {[self trace:@"action quit"];if(self.client)return NSTerminateCancel;if(self.working){_cancelled=true;Debug(@"state cancellation requested by quit");return NSTerminateCancel;}return NSTerminateNow;}
 @end
 int main(int argc,const char** argv) {
@@ -641,6 +553,8 @@ int main(int argc,const char** argv) {
         auto path=setup::fs::absolute(argv[2]).lexically_normal();auto allowed=setup::fs::canonical(setup::fs::path(SETUP_UI_TEST_ROOT));
         if(path.parent_path()!=allowed||setup::fs::exists(path))return 2;
         setup::fs::create_directory(path);smokeDirectory=Text(path.string());
+        // Render from defaults: never read the owner's real Application Support (voice settings, installation).
+        setup::fs::create_directory(path/"home");testHome=Text((path/"home").string());
     }
     @autoreleasepool {Debug(@"startup test-home=%@ smoke=%d disc-action-test=%d",testHome,smokeDirectory!=nil,discActionTest);NSApplication* app=NSApplication.sharedApplication;[app setActivationPolicy:discActionTest?NSApplicationActivationPolicyProhibited:NSApplicationActivationPolicyRegular];Assistant* assistant=[Assistant new];app.delegate=assistant;[app run];}return 0;
 }

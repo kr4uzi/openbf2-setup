@@ -148,16 +148,16 @@ void writeFile(const fs::path& path, const std::function<void(const Sink&)>& ext
     } catch (...) { stream.close(); fs::remove(temp); throw; }
 }
 
-std::map<std::string,std::pair<size_t,std::string>> selection(const Cabinet& cab,bool disc) {
+std::map<std::string,std::pair<size_t,std::string>> selection(const Cabinet& cab,bool disc,bool expansion=true) {
     std::map<std::string,std::pair<size_t,std::string>> selected;
     for(size_t i=0;i<cab.files.size();++i) {
         const auto& e=cab.files[i];if((e.flags&8)||e.path.empty())continue;
-        for(const auto& g:e.groups) {auto dest=destination(disc,g,e.path);if(!dest.empty())selected[lower(dest)]={i,dest};}
+        for(const auto& g:e.groups) {auto dest=destination(disc,g,e.path);if(!dest.empty()&&(expansion||!disc||!expansionContent(dest)))selected[lower(dest)]={i,dest};}
     }
     return selected;
 }
-void extractCabinet(const Files& container,const std::string& prefix,bool disc,const fs::path& root,Run* run=nullptr) {
-    Cabinet cab(container,prefix);auto selected=selection(cab,disc);
+void extractCabinet(const Files& container,const std::string& prefix,bool disc,const fs::path& root,Run* run=nullptr,bool expansion=true) {
+    Cabinet cab(container,prefix);auto selected=selection(cab,disc,expansion);
     uint64_t total=0;for(const auto& item:selected)total+=cab.files[item.second.first].size;
     if(run){run->begin(disc?"disc":"overlay150",selected.size(),total);if(run->phaseDone())return;}
     // No need to decompress unselected installer features: the complete source
@@ -457,6 +457,7 @@ fs::path install(const InstallOptions& o,Platform& platform) {
     // Validate the supported media by full SHA-256, before staging any payload.
     auto disc=readDisc(o.disc);Cabinet discCab(disc,"");
     auto edition=discEdition(discCab.files);bool deluxe=edition==DiscEdition::Deluxe;
+    const bool expansion=deluxe&&o.specialForces; // Deluxe media may install the base game alone
     check(discCab.files.size()==(deluxe?3162:1727),"unsupported disc cabinet inventory");
     auto p141=readSfx(View(o.patch141)),p150=readSfx(View(o.patch150));
     std::string identities=deluxe?"openbf2-setup-v2\n":"openbf2-setup-v1\n";
@@ -483,9 +484,9 @@ fs::path install(const InstallOptions& o,Platform& platform) {
     }
     if(inputError)std::rethrow_exception(inputError);
     identities+=digest(View(o.manifest),true)+"\n";
-    if(deluxe)identities+="edition=deluxe\n";
+    if(deluxe)identities+=expansion?"edition=deluxe\n":"edition=deluxe-base\n";
     Cabinet full(p150,"disk1/");check(full.files.size()==381,"unsupported cabinet inventory");
-    uint64_t needed=0;for(const auto& item:selection(discCab,true))needed+=discCab.files[item.second.first].size;
+    uint64_t needed=0;for(const auto& item:selection(discCab,true,expansion))needed+=discCab.files[item.second.first].size;
     for(const auto& item:selection(full,false))needed+=full.files[item.second.first].size;
     needed+=uint64_t(2)*1024*1024*1024; // RTP working set + filesystem reserve.
     if(!fs::exists(run.transaction))check(platform.availableSpace(support)>=needed,"Insufficient free space for staging and patch reserve");
@@ -519,7 +520,7 @@ fs::path install(const InstallOptions& o,Platform& platform) {
         // Intent was flushed before the generation rename; resume normal work.
     }
     auto game=run.transaction/"game";secureDirectory(game);
-    extractCabinet(disc,"",true,game,&run);
+    extractCabinet(disc,"",true,game,&run,expansion);
     // The 1.50 installer preserves the original DVD renderer under this alias.
     run.begin("preserveRenderer",1,2115072);
     if(!run.phaseDone()) {
@@ -529,7 +530,7 @@ fs::path install(const InstallOptions& o,Platform& platform) {
     }
     std::set<std::string> replacements;for(const auto& item:selection(full,false))replacements.insert(item.first);
     check(patch141(p141,game,run.transaction/"patch141.tsv",replacements,&run)==0,"Required 1.41 record failed; see patch141.tsv");
-    if(deluxe)check(patch141(p141,game,run.transaction/"patch141-xp1.tsv",replacements,&run,true)==0,"Required Special Forces 1.41 record failed; see patch141-xp1.tsv");
+    if(expansion)check(patch141(p141,game,run.transaction/"patch141-xp1.tsv",replacements,&run,true)==0,"Required Special Forces 1.41 record failed; see patch141-xp1.tsv");
     extractCabinet(p150,"disk1/",false,game,&run);
     verifyManifest(game,o.manifest,o.control);run.cancel();
     // Flush all installed directories before publishing a same-volume generation.

@@ -27,16 +27,16 @@ check() {
   [[ -d "$build" ]] || { echo "$label: build directory was not created" >&2; exit 1; }
 }
 # Relative BUILD_DIR (the OpenBF2 CI case) and relative OUTPUT.dmg.
-check 'relative build dir' "$fixture/work/rel-build" "$fixture/work/out/Battlefield-2.dmg" \
-  ../client out/Battlefield-2.dmg rel-build
-check 'dotted build dir' "$fixture/work/dotted" "$fixture/work/out/Battlefield-2.dmg" \
-  ../client out/Battlefield-2.dmg ./nested/../dotted
+check 'relative build dir' "$fixture/work/rel-build" "$fixture/work/out/OpenBF2.dmg" \
+  ../client out/OpenBF2.dmg rel-build
+check 'dotted build dir' "$fixture/work/dotted" "$fixture/work/out/OpenBF2.dmg" \
+  ../client out/OpenBF2.dmg ./nested/../dotted
 # Default BUILD_DIR sits beside the output, absolute.
-check 'default build dir' "$fixture/work/out/openbf2-setup-build" "$fixture/work/out/Battlefield-2.dmg" \
-  ../client out/Battlefield-2.dmg
+check 'default build dir' "$fixture/work/out/openbf2-setup-build" "$fixture/work/out/OpenBF2.dmg" \
+  ../client out/OpenBF2.dmg
 # Absolute arguments are unchanged (after symlink resolution).
-check 'absolute' "$fixture/abs-build" "$fixture/abs/Battlefield-2.dmg" \
-  "$fixture/client" "$fixture/abs/Battlefield-2.dmg" "$fixture/abs-build"
+check 'absolute' "$fixture/abs-build" "$fixture/abs/OpenBF2.dmg" \
+  "$fixture/client" "$fixture/abs/OpenBF2.dmg" "$fixture/abs-build"
 # A missing client directory is still an error.
 if (cd "$fixture/work" && SETUP_RELEASE_PRINT_PATHS=1 /bin/bash "$script" ../missing out/x.dmg b >/dev/null 2>&1); then
   echo 'accepted a missing client directory' >&2; exit 1

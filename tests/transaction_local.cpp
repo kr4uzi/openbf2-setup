@@ -23,6 +23,35 @@ struct FailPublication : setup::Platform {
 int main(int argc,char** argv){
     try {
         namespace fs=setup::fs;auto scratch=fs::canonical(SETUP_TEST_ROOT);
+        if(argc==7&&std::string(argv[1])=="--deluxe-base") {
+            // Owner Deluxe media installed without Special Forces: cancel once during
+            // disc staging, refuse the transaction for an install with Special Forces,
+            // resume, and check the published generation against the base manifest.
+            auto support=fs::absolute(argv[5]).lexically_normal();
+            check(support.parent_path()==scratch&&!fs::exists(support),"SUPPORT must be a new direct child of the scratch root");
+            std::atomic<bool> cancelled{false};auto platform=setup::nativePlatform();
+            setup::InstallOptions options{argv[2],argv[3],argv[4],support,argv[6],{}};options.specialForces=false;options.control.cancelled=&cancelled;
+            options.control.progress=[&](const setup::Progress& p){if(p.phase=="disc"&&p.completedFiles>=100)cancelled=true;};
+            bool stopped=false;try{setup::install(options,*platform);}catch(const std::exception& e){stopped=std::string(e.what())=="Cancelled; setup can resume";}
+            check(stopped,"cancellation during the base-only disc phase was not honoured");
+            check(fs::exists(support/"Setup/work/Inputs.txt"),"transaction journal missing after cancellation");
+            setup::InstallOptions withExpansion=options;withExpansion.specialForces=true;withExpansion.control={};
+            bool refused=false;try{setup::install(withExpansion,*platform);}catch(const std::exception& e){refused=std::string(e.what())=="Resume inputs changed; remove only Setup/work to start again";}
+            check(refused,"the Special Forces choice did not invalidate the base-only transaction");
+            cancelled=false;options.control.progress={};
+            auto root=setup::install(options,*platform);
+            check(!fs::exists(support/"Setup/work")&&fs::exists(support/"Setup/Current.txt"),"base-only install not published cleanly");
+            check(!fs::exists(root/"SupportXP1/config.xml")&&!fs::exists(root/"mods/xpack/Levels")&&!fs::exists(root/"mods/xpack/Common_client.zip"),"Special Forces disc content installed although unchecked");
+            size_t xpack=0;if(fs::exists(root/"mods/xpack"))for(const auto& e:fs::recursive_directory_iterator(root/"mods/xpack"))if(e.is_regular_file())++xpack;
+            check(xpack==19,"mods/xpack must hold exactly the 19 files of the 1.50 overlay");
+            std::string receipt;bool xp1Report=false;
+            for(const auto& e:fs::directory_iterator(support/"Setup")){auto name=e.path().filename().string();if(name.rfind("Receipt-",0)==0)receipt=read(e.path());if(name.rfind("Patch141-XP1-",0)==0)xp1Report=true;}
+            check(receipt.find("\nedition=deluxe-base\n")!=std::string::npos&&receipt.find("\nedition=deluxe\n")==std::string::npos,"receipt does not record the base-only Deluxe installation");
+            check(!xp1Report,"XP1 patch report written for a base-only install");
+            setup::verifyManifest(root,argv[6]);
+            fs::remove_all(support);
+            std::cout<<"Deluxe media without Special Forces: cancel/refuse/resume passed; generation verified against the base manifest, 19 overlay xpack files, deluxe-base receipt, no XP1 report\n";return 0;
+        }
         if(argc==7&&std::string(argv[1])=="--cancel-resume") {
             // Owner-media cancel/resume: cancel during disc staging, again during the
             // 1.41 patch, then resume to a verified generation in a fresh support root.

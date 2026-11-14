@@ -177,6 +177,9 @@ int main(int argc, char** argv) {
         save(game/"a",{'a','b','c'});setup::fs::remove(game/"extra");
         std::atomic<bool> cancelled{true};setup::Control ctrl;ctrl.cancelled=&cancelled;
         rejects([&]{setup::verifyManifest(game,manifest,ctrl);},"verification ignored cancellation");
+        // Special Forces disc content is identified by destination, case-insensitively.
+        check(setup::expansionContent("mods/xpack/Objects_client.zip")&&setup::expansionContent("Mods/XPack/Levels/Warlord/client.zip")&&setup::expansionContent("SupportXP1/config.xml"),"expansion destinations not recognised");
+        check(!setup::expansionContent("mods/bf2/Objects_client.zip")&&!setup::expansionContent("mods/xpackish/x")&&!setup::expansionContent("Support/ereg-dict-en_US.xml")&&!setup::expansionContent("RendDX9.dll"),"base destinations treated as expansion");
         auto platform=setup::nativePlatform();auto lock=platform->lock(root/"lock");
         rejects([&]{auto second=platform->lock(root/"lock");},"concurrent setup lock accepted");lock.reset();
         {auto again=platform->lock(root/"lock");check(true,"setup lock was not released");}

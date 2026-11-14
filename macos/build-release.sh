@@ -49,7 +49,7 @@ cmake -S "$repo" -B "$build" -DCMAKE_BUILD_TYPE=Release \
   -DSETUP_CLIENT_ARTIFACT="$client" -DSETUP_CLIENT_ALLOW_THIN=OFF
 echo "== build"
 cmake --build "$build" -j"$jobs"
-app="$build/macos/Battlefield 2.app"
+app="$build/macos/OpenBF2.app"
 for item in bf2_client libdice_py.dylib libaidll.dylib; do
   /usr/bin/cmp -s "$client/$item" "$app/Contents/MacOS/$item" || fail "embedded $item differs from the artifact"
 done

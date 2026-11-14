@@ -5,6 +5,10 @@
 
 namespace setup {
 // English disc feature destinations, checked against both owner inventories.
+bool expansionContent(const std::string& destination) {
+    auto path=lower(destination);
+    return path.rfind("mods/xpack/",0)==0||path.rfind("supportxp1/",0)==0;
+}
 std::string discDestination(const std::string& group,const std::string& path) {
     if(group.empty()||group.front()=='<'||path.empty())return {};
     auto begins=[](const std::string& text,const std::string& prefix){return text.rfind(prefix,0)==0;};

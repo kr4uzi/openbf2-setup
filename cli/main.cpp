@@ -17,9 +17,10 @@ int main(int argc,char** argv) {
     std::signal(SIGINT,cancel);
     try {
         if(argc==4 && std::string(argv[1])=="extract-disc") {setup::exportDisc(argv[2],argv[3],control());return 0;}
-        if(argc==7 && std::string(argv[1])=="install") {
+        if((argc==7||(argc==8&&std::string(argv[7])=="--no-special-forces")) && std::string(argv[1])=="install") {
             auto platform=setup::nativePlatform();
-            auto root=setup::install({argv[2],argv[3],argv[4],argv[5],argv[6],control()},*platform);
+            setup::InstallOptions options{argv[2],argv[3],argv[4],argv[5],argv[6],control()};options.specialForces=argc==7;
+            auto root=setup::install(options,*platform);
             std::cout << "Published " << root << '\n';return 0;
         }
         if(argc==4 && std::string(argv[1])=="verify") {setup::verifyManifest(argv[2],argv[3],control());return 0;}
@@ -36,6 +37,6 @@ int main(int argc,char** argv) {
             setup::View input(argv[2]);auto files=std::string(argv[1])=="iso"?setup::readIso(input):setup::readSfx(input);
             for(const auto& f:files)std::cout<<f.first<<'\t'<<f.second.size()<<'\n';return 0;
         }
-        std::cerr<<"Usage:\n  bf2_setup install DISC PATCH141 PATCH150 SUPPORT_ROOT MANIFEST\n  bf2_setup extract-disc DISC NEW_OUTPUT\n  bf2_setup verify GAME MANIFEST\n  bf2_setup prototype ISO PATCH141 PATCH150 SCRATCH REFERENCE ACCEPTANCE\n  bf2_setup compare GAME REFERENCE ACCEPTANCE\n  bf2_setup iso|sfx|records|hash INPUT\n";return 2;
+        std::cerr<<"Usage:\n  bf2_setup install DISC PATCH141 PATCH150 SUPPORT_ROOT MANIFEST [--no-special-forces]\n  bf2_setup extract-disc DISC NEW_OUTPUT\n  bf2_setup verify GAME MANIFEST\n  bf2_setup prototype ISO PATCH141 PATCH150 SCRATCH REFERENCE ACCEPTANCE\n  bf2_setup compare GAME REFERENCE ACCEPTANCE\n  bf2_setup iso|sfx|records|hash INPUT\n";return 2;
     } catch(const std::exception& e) {std::cerr<<"Setup incomplete: "<<e.what()<<'\n';return 1;}
 }

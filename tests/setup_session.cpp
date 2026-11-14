@@ -103,6 +103,11 @@ int main(int argc,char** argv){
         check(session::currentEdition(support)==setup::DiscEdition::BF2,"v1 edition compatibility");
         write(support/"Setup/Receipt-1234.txt","openbf2-setup-v2\nedition=deluxe\n");
         check(session::currentEdition(support)==setup::DiscEdition::Deluxe,"Deluxe receipt detection");
+        write(support/"Setup/Receipt-1234.txt","openbf2-setup-v2\nedition=deluxe-base\n");
+        check(session::currentEdition(support)==setup::DiscEdition::DeluxeBase,"Deluxe-base receipt detection");
+        {bool sfDemanded=false;try{session::clientLaunch(contents,support);}catch(const std::exception& e){sfDemanded=std::string(e.what()).find("Special Forces")!=std::string::npos;}check(!sfDemanded,"Deluxe-base launch demanded a Special Forces key");}
+        check(std::string(session::manifestName(setup::DiscEdition::BF2))=="content-150"&&std::string(session::manifestName(setup::DiscEdition::Deluxe))=="content-deluxe-150"&&std::string(session::manifestName(setup::DiscEdition::DeluxeBase))=="content-deluxe-base-150","manifest names");
+        write(support/"Setup/Receipt-1234.txt","openbf2-setup-v2\nedition=deluxe\n");
         rejects([&]{session::clientLaunch(contents,support);},"Deluxe launch without SF key accepted");
         write(support/"Registry.con",both);
         check(!session::storedKey(support)&&!session::storedKey(support,true),"legacy Deluxe placeholders accepted");
@@ -158,38 +163,6 @@ int main(int argc,char** argv){
             fs::remove(voiceFile);fs::remove_all(voiceSupport/"Profiles");fs::create_directory_symlink(root,voiceSupport/"Profiles");
             rejects([&]{session::saveVoiceSettings(voiceSupport,defaults,*platform);},"symlinked Profiles directory written");
             rejects([&]{session::profilesExist(voiceSupport);},"symlinked Profiles directory scanned");
-        }
-        // Shader warm-up: arguments, profile lookup, progress parsing, outcomes.
-        {
-            session::WarmupRun day{"Battlefield 2 maps","strike_at_karkand","mods/bf2"},night{"Special Forces night maps","devils_perch","mods/xpack"};
-            auto arguments=session::warmupArguments(day,"");
-            check(arguments==std::vector<std::string>{"+modPath","mods/bf2","+warmupLevel","strike_at_karkand"},"day warm-up arguments");
-            arguments=session::warmupArguments(night,"Default");
-            check(arguments==std::vector<std::string>{"+modPath","mods/xpack","+warmupLevel","devils_perch","+playerName","Default"},"night warm-up arguments with profile");
-            session::WarmupRun bad{"x","../menu","mods/bf2"};rejects([&]{session::warmupArguments(bad,"");},"level with path characters accepted");
-            auto warmSupport=root/"warm";fs::create_directories(warmSupport/"Setup");fs::create_directories(warmSupport/"Profiles");
-            check(session::defaultProfileName(warmSupport).empty(),"missing global.con yields a profile");
-            write(warmSupport/"Profiles/global.con","GlobalSettings.setDefaultUser \"\"\nGlobalSettings.setNamePrefix \"\"\n");
-            check(session::defaultProfileName(warmSupport).empty(),"empty default user yields a profile");
-            write(warmSupport/"Profiles/global.con","GlobalSettings.setNamePrefix \"\"\nGlobalSettings.setDefaultUser \"Default\"\n");
-            check(session::defaultProfileName(warmSupport)=="Default","default user not read");
-            write(warmSupport/"Setup/Current.txt","GameData/1.50-1\n");
-            check(session::warmupRuns(warmSupport).size()==1&&session::warmupRuns(warmSupport)[0].level=="strike_at_karkand","base edition warm-up runs");
-            write(warmSupport/"Setup/Current.txt","GameData/1.50-1\nReceipt-1.txt\n");write(warmSupport/"Setup/Receipt-1.txt","openbf2-setup-v2\nedition=deluxe\n");
-            auto runs=session::warmupRuns(warmSupport);
-            check(runs.size()==2&&runs[1].level=="devils_perch"&&runs[1].mod=="mods/xpack","Deluxe warm-up runs");
-            session::WarmupProgress progress;
-            check(!session::parseWarmupLine("Loading level",progress),"non-warm-up line parsed");
-            check(session::parseWarmupLine("warmup: start strike_at_karkand",progress)&&progress.stage=="start","start line");
-            check(session::parseWarmupLine("warmup: profile (none, defaults)",progress)&&progress.stage=="profile","profile line");
-            check(session::parseWarmupLine("warmup: effects 812/1397",progress)&&progress.finished==812&&progress.started==1397,"effects line");
-            check(session::parseWarmupLine("warmup: effects 9/3",progress)&&progress.finished==812,"inverted effects count accepted");
-            check(session::parseWarmupLine("warmup: level loaded 61.2 s",progress)&&progress.stage=="level loaded","level loaded line");
-            check(session::parseWarmupLine("warmup: done effects 1397/1397 failed 0 63.4 s",progress)&&progress.stage=="done"&&progress.finished==1397&&progress.started==1397,"done line");
-            check(session::parseWarmupLine("warmup: failed start strike_at_karkand",progress)&&progress.stage=="failed start","failed start line");
-            check(session::parseWarmupLine("warmup: timeout effects 5/9 3600.0 s",progress)&&progress.stage=="timeout","timeout line");
-            check(session::warmupOutcome(0).empty()&&!session::warmupOutcome(2).empty()&&!session::warmupOutcome(3).empty()&&!session::warmupOutcome(4).empty()&&session::warmupOutcome(9).find("9")!=std::string::npos,"warm-up outcomes");
-            rejects([&]{session::warmupLaunch(contents,warmSupport,day);},"warm-up launch without a key accepted");
         }
         auto invalid=root/"invalid-media";write(invalid,"invalid input");
         rejects([&]{session::validateDisc(invalid);},"wrong disc accepted");

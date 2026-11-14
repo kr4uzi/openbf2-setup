@@ -109,3 +109,35 @@ archives otherwise agree between the two manifests; their remaining shared
 identity differences are inert SafeDisc language DLLs and support dictionaries.
 Desktop key-row/paste/error/progress checks, mounted physical media, native SF
 runtime behavior and Apple-silicon execution remain desktop checks.
+
+## Deluxe media without Special Forces (2026-11-14)
+
+The CD-key page shows an "Install Special Forces" checkbox in front of the
+Special Forces key row on Deluxe media, checked by default. Unchecked, the
+expansion key row is disabled and not required, the Special Forces key is
+neither validated nor written to `Registry.con`, and the installer takes the
+base-game path from the Deluxe disc: the xpack disc content (every destination
+under `mods/xpack/` and `SupportXP1/`) is not selected and the XP1 1.41 records
+are not applied. The 1.50 overlay is unchanged, so its own 19 `mods/xpack`
+files and two `SupportXP1` files are installed exactly as on a regular disc.
+The receipt records `edition=deluxe-base`; on reopen the app verifies against
+`core/content-deluxe-base-150.tsv` and asks for the base key only. The CLI
+equivalent is
+`bf2_setup install ... core/content-deluxe-base-150.tsv --no-special-forces`.
+
+The result is the base game, but not byte-for-byte the regular-disc contract,
+because the Deluxe disc is a later baseline. Against the 1,755-file regular
+contract the 1,749-file base-only contract lacks eight files that only the
+regular disc carries (`mods/bf2/locale`, six `pb/htm` pages and the regular
+arcade installer), differs in 32 files (the preserved Deluxe renderer
+`RendDX9x2.dll`, 21 SafeDisc language DLLs and ten `Support` registration
+dictionaries), and adds two Deluxe-disc extras in shared groups
+(`pb/pbsvnew.dll` and the Deluxe arcade installer). All game archives, levels
+and executables agree. The contract was derived from the Deluxe contract by
+removing the xpack disc content and confirmed by a fresh strict install from the
+owner's Deluxe ISO (`tests/transaction_local.cpp --deluxe-base`).
+
+The Special Forces choice is part of the transaction identity: a cancelled
+base-only install cannot be resumed with the expansion enabled, or the reverse.
+Adding Special Forces to an existing base-only installation is not offered; it
+needs a new installation from the Deluxe disc with the box checked.
