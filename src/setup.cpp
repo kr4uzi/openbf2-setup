@@ -104,7 +104,7 @@ task<void> Setup::Ready(const Installation& installation)
 	while (true) {
 		// looked up every time: the user may just have put a mod into the library, or taken one out
 		auto mods = m_Store.Mods(installation);
-		if (!std::ranges::contains(mods, selected, &Mod::directory))
+		if (std::ranges::find(mods, selected, &Mod::directory) == mods.end())
 			selected = mods.empty() ? "bf2" : mods.front().directory;
 
 		m_Window.ShowReady(m_Client.Present(), mods, selected);

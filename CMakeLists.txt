@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 # has to be set before project(): afterwards the cache entry exists (empty) and the host version is used instead.
 # 13.3 is the first macOS whose libc++ has everything C++23 the sources use
 set(CMAKE_OSX_DEPLOYMENT_TARGET 13.3 CACHE STRING "Minimum macOS")
-project(OpenBF2Setup VERSION 0.1.0 LANGUAGES CXX)
+project(OpenBF2Setup VERSION 0.2.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)

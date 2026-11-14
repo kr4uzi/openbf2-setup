@@ -25,8 +25,9 @@ Play requires a separately supplied native client artifact.
 
 ## Build offline
 
-Prerequisites already available on the builder: CMake 3.24+, C++23 compiler,
-zlib development library, Boost headers (1.86 or newer, for the app and its
+Prerequisites already available on the builder: CMake 3.24+, a C++23 compiler
+(the sources use the C++20 library; verified with Apple clang 17
+and Boost 1.92), zlib development library, Boost headers (1.86 or newer, for the app and its
 application checks), Cargo with the locked dependencies cached. macOS also
 needs Command Line Tools and preinstalled `aarch64-apple-darwin` and
 `x86_64-apple-darwin` Rust targets. Builds never install or download dependencies.
