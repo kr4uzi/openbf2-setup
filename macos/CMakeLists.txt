@@ -29,7 +29,7 @@ if(SETUP_CLIENT_ARTIFACT)
     DEPENDS OpenBF2 VERBATIM)
 else()
   add_custom_target(bf2_setup_client ALL
-    COMMAND "${CMAKE_COMMAND}" -E rm -f "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/MacOS/bf2_client" "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/MacOS/libdice_py.dylib" "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/MacOS/libaidll.dylib"
+    COMMAND "${CMAKE_COMMAND}" -E rm -f "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/MacOS/bf2_client" "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/MacOS/libdice_py.dylib" "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/MacOS/libaidll.dylib" "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/Resources/Setup/client-artifact.sha256"
     COMMAND /bin/bash "${CMAKE_CURRENT_SOURCE_DIR}/sign-bundle.sh" "$<TARGET_BUNDLE_DIR:OpenBF2>"
     DEPENDS OpenBF2 VERBATIM)
 endif()

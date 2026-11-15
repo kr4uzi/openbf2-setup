@@ -46,4 +46,9 @@ done
 for item in bf2_client libdice_py.dylib libaidll.dylib; do
   /bin/cp "$source_dir/$item" "$destination/$item"
 done
+# What was embedded, by content: the build signs the copies afterwards, which rewrites their bytes, so a
+# release check compares the artifact against this record (sealed with the bundle) instead of the files.
+record="$destination/../Resources/Setup/client-artifact.sha256"
+/bin/mkdir -p "$(dirname "$record")"
+(cd "$source_dir" && /usr/bin/shasum -a 256 bf2_client libdice_py.dylib libaidll.dylib) > "$record"
 echo "Embedded bf2_client, libdice_py.dylib and libaidll.dylib ($required_archs; source unchanged)."

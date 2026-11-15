@@ -51,9 +51,11 @@ cmake -S "$repo" -B "$build" -DCMAKE_BUILD_TYPE=Release \
 echo "== build"
 cmake --build "$build" -j"$jobs"
 app="$build/macos/OpenBF2.app"
-for item in bf2_client libdice_py.dylib libaidll.dylib; do
-  /usr/bin/cmp -s "$client/$item" "$app/Contents/MacOS/$item" || fail "embedded $item differs from the artifact"
-done
+# The build signs the embedded client ad hoc, which rewrites each Mach-O, so the files cannot be compared
+# byte for byte. embed-client.sh records the hashes of what it copied; the artifact must match that record.
+record="$app/Contents/Resources/Setup/client-artifact.sha256"
+[[ -f "$record" ]] || fail "the build did not record the embedded client ($record)"
+(cd "$client" && /usr/bin/shasum -a 256 --status -c "$record") || fail 'the embedded client is not the given artifact'
 echo "== test"
 # -u clears the opt-in media/key tests so CI never needs proprietary inputs.
 env -u SETUP_TEST_ISO -u BF2_TEST_KEY -u BF2SF_TEST_KEY \

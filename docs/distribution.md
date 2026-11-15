@@ -18,7 +18,10 @@ artifact/
 ```
 
 CMake's `bf2_setup_client` target copies **only these files** into `Contents/MacOS`,
-alongside the assistant. Build the default target or `bf2_setup_client`; building
+alongside the assistant, and records their SHA-256 in
+`Contents/Resources/Setup/client-artifact.sha256`; `build-release.sh` checks the
+artifact against that record, because the embedded copies are signed afterwards
+and no longer match the artifact byte for byte. Build the default target or `bf2_setup_client`; building
 only `OpenBF2` does not run the import. This matches the client's existing
 `@loader_path` rpath and `@rpath/libaidll.dylib` loading. Each artifact is checked
 as executable/dylib Mach-O with both arm64 and x86_64, without symlinks, absolute
