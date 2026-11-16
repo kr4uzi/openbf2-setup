@@ -1,7 +1,29 @@
 #include "launch.h"
-
 #include <algorithm>
 #include <sstream>
+#include <stdexcept>
+
+setup::ClientLayout setup::macClientLayout(const std::filesystem::path& contents)
+{
+	return {contents / "MacOS/bf2_client", {contents / "MacOS/libdice_py.dylib", contents / "MacOS/libaidll.dylib"}};
+}
+
+setup::ClientLayout setup::linuxClientLayout(const std::filesystem::path& root)
+{
+	return {root / "bin/bf2_client", {root / "lib/libdice_py.so", root / "lib/libaidll.so",
+		root / "lib/libdxvk_d3d9.so.0", root / "lib/libSDL3.so.0", root / "lib/libopenal.so.1"}};
+}
+
+std::filesystem::path setup::linuxDataHome(const std::filesystem::path& home, const std::string& xdg)
+{
+	if (!xdg.empty() && std::filesystem::path{xdg}.is_absolute())
+		// Resolve existing symlinks before '..', matching the engine's filesystem traversal.
+		return std::filesystem::weakly_canonical(std::filesystem::path{xdg});
+	if (!home.is_absolute())
+		throw std::invalid_argument{"An absolute home directory is required."};
+	return home / ".local/share";
+}
+
 using namespace setup;
 
 namespace {

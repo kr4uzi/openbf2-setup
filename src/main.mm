@@ -204,7 +204,7 @@ int main(int argc, const char** argv)
 		auto worker = Worker{};
 		auto installer = Installer{ worker, support, manifests };
 		auto store = Store{ support };
-		auto client = Client{ contents, support, home };
+		auto client = Client{ macClientLayout(contents), support, home };
 		// tests never touch the microphone or its permission prompt
 		auto microphone = Microphone{ !discTest };
 		auto application = Setup{ window, installer, store, client, microphone };

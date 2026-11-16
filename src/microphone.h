@@ -6,7 +6,7 @@
 #include <memory>
 
 namespace setup {
-	enum class MicrophoneAccess { undetermined, granted, denied };
+	enum class MicrophoneAccess { undetermined, granted, denied, not_required };
 
 	class Microphone
 	{
@@ -27,6 +27,8 @@ namespace setup {
 		// calls `level` with the loudest sample (0 to 1) of every buffer, on the thread of the window.
 		// false if there is no input device
 		bool Start(std::function<void(double)> level);
+		// Asynchronous capture failure: invoked on the UI thread; retry calls Start again.
+		void OnError(std::function<void()> error);
 		void Stop();
 	};
 }

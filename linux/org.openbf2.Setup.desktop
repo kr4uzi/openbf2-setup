@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=OpenBF2
+Comment=Install and play Battlefield 2
+Exec=OpenBF2
+Icon=org.openbf2.Setup
+Terminal=false
+Categories=Game;
+Actions=Launcher;
+
+[Desktop Action Launcher]
+Name=Launcher and settings
+Exec=OpenBF2 --launcher

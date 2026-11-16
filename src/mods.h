@@ -36,6 +36,7 @@ namespace setup {
 	// what a mod.desc has between <tag> and </tag>, e.g. its title
 	std::string mod_value(const std::string& description, const std::string& tag);
 	// the text of a key in a localization file of the game (.utxt: UTF-16 with a byte order mark,
-	// one "KEY  text" per line), as UTF-8. empty if the file does not have the key
+	// one "KEY  text" per line, with retail text wrapped in doubled ESC delimiters),
+	// as UTF-8 without the delimiters. empty if the file does not have the key
 	std::string localized(const std::string& utxt, const std::string& key);
 }

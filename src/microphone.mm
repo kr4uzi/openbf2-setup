@@ -9,6 +9,8 @@
 #include <boost/asio/use_awaitable.hpp>
 using namespace setup;
 
+void Microphone::OnError(std::function<void()>) {}
+
 struct Microphone::Impl
 {
 	bool allowed;

@@ -473,6 +473,35 @@ int main()
 		check(g_Machine.microphone_status == MicrophoneStatus::skipped && g_Machine.levels.empty(), "the microphone was used");
 	});
 
+	run("closing with a pending patch check", [](FakeMachine& machine) {
+		machine.script = { click(Page::welcome), { Kind::disc_chosen, "bf2.iso" }, click(Page::disc),
+			{ Kind::patch141_chosen, "patch141.exe" }, { Kind::close } };
+	}, [] {
+		check(!called("install") && !g_Machine.saved_keys, "closing started an install");
+	});
+
+	run("Linux microphone retries without a permission prompt", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.microphone = MicrophoneAccess::not_required;
+		machine.failures["start-microphone"] = 1;
+		machine.script = { { Kind::voice_setup }, { Kind::microphone }, click(Page::voice), quit() };
+	}, [] {
+		check(std::ranges::count(g_Machine.calls, "start-microphone") == 2, "capture was not retried");
+		check(!called("request-microphone") && !called("open-system-settings"), "Linux retry opened permission settings");
+		check(g_Machine.microphone_status == MicrophoneStatus::ready && !g_Machine.metering, "retry or stop failed");
+	});
+
+	run("voice setup can be skipped after capture failure", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.microphone = MicrophoneAccess::not_required;
+		machine.input_device = false;
+		machine.script = { { Kind::voice_setup }, { Kind::voice_skip }, quit() };
+	}, [] {
+		check(!g_Machine.saved_voice && !g_Machine.metering, "skip saved defaults or left capture running");
+	});
+
 	std::cout << checks << " checks of the setup application passed\n";
 	return 0;
 }

@@ -250,8 +250,14 @@ std::string setup::localized(const std::string& utxt, const std::string& key)
 			end = text.size();
 
 		// the key is the first word of its line
-		if (text.compare(line, key.size(), key) == 0 && line + key.size() < end && (text[line + key.size()] == ' ' || text[line + key.size()] == '\t'))
-			return ::trim(text.substr(line + key.size(), end - line - key.size()));
+		if (text.compare(line, key.size(), key) == 0 && line + key.size() < end && (text[line + key.size()] == ' ' || text[line + key.size()] == '\t')) {
+			auto value = ::trim(text.substr(line + key.size(), end - line - key.size()));
+			// Retail .utxt values are enclosed in doubled U+001B (ESC) delimiters.
+			// They are file syntax, not part of the title displayed by either frontend.
+			if (value.size() >= 4 && value.starts_with("\x1b\x1b") && value.ends_with("\x1b\x1b"))
+				value = ::trim(value.substr(2, value.size() - 4));
+			return value;
+		}
 
 		line = end + 1;
 	}

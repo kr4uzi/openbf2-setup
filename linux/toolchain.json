@@ -1,0 +1,9 @@
+{
+  "baseline": "ubuntu-22.04",
+  "glibc": "2.35",
+  "architecture": "x86_64",
+  "cpu": "x86-64",
+  "gcc": "15.2.0",
+  "rust": "1.90.0",
+  "boost": "1.89.0"
+}

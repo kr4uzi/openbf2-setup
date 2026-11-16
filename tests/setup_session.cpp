@@ -95,7 +95,7 @@ int main(int argc,char** argv){
             auto game=root/"mods-game";
             for(auto level:{"mods/bf2/Levels/Dalian_plant/Info","mods/xpack/Levels/Ghost_Town/info","mods/Community/levels/one/info","mods/borrowed","mods/nolevels/levels/empty","mods/.hidden/levels/x/info","mods/nodesc/levels/x/info"})fs::create_directories(game/level);
             fs::create_directories(game/"mods/bf2/Localization/English");
-            write(game/"mods/bf2/Localization/English/English.utxt",utf16("ID_LANGUAGE   English\r\nMODDESC_BF2_TITLE_LONG   wrong\r\nMODDESC_BF2_TITLE             Battlefield 2\r\n"));
+            write(game/"mods/bf2/Localization/English/English.utxt",utf16("ID_LANGUAGE   English\r\nMODDESC_BF2_TITLE_LONG   wrong\r\nMODDESC_BF2_TITLE             \x1b\x1b" "Battlefield 2" "\x1b\x1b\r\n"));
             write(game/"mods/bf2/Mod.desc","<mod>\n\t<title> MODDESC_BF2_TITLE </title>\n</mod>\n");write(game/"mods/bf2/Levels/Dalian_plant/Info/Dalian_plant.desc","");
             write(game/"mods/xpack/mod.desc","<mod><title> MODDESC_XP_TITLE </title><parentmod> bf2 </parentmod></mod>");write(game/"mods/xpack/Levels/Ghost_Town/info/ghost_town.desc","");
             write(game/"mods/Community/mod.desc","<mod><TITLE>A Community Mod</TITLE></mod>");write(game/"mods/Community/levels/one/info/one.desc","");
@@ -129,6 +129,9 @@ int main(int argc,char** argv){
             check(setup::find_mods(game,setup::DiscEdition::BF2,library).size()==3,"a foreign link was offered as a mod");
             fs::remove(game/"mods/elsewhere");
             check(setup::localized(utf16("A  one\r\nAB  two\r\n"),"AB")=="two"&&setup::localized(utf16("A  one\r\n"),"B").empty(),"localization key lookup");
+            check(setup::localized(utf16("MODDESC_XP_TITLE  \x1b\x1b" "Battlefield 2: Special Forces" "\x1b\x1b\r\n"),"MODDESC_XP_TITLE")=="Battlefield 2: Special Forces","retail title delimiters leaked into mod name");
+            check(setup::localized(utf16("A  \x1b\x1b" "Caf\xe9 [Mod] + Extras" "\x1b\x1b\r\n"),"A")=="Café [Mod] + Extras","title cleanup damaged Unicode or punctuation");
+            check(setup::localized(utf16("A  \x1b\x1b\x1b\x1b\r\n"),"A").empty(),"empty delimited localization value not empty");
             // The launcher's own options file.
             check(session::loadLaunch(support)==setup::LaunchOptions{},"launch options before any were saved");
             {

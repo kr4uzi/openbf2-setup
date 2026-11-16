@@ -1,5 +1,9 @@
 # Native client artifact contract
 
+This page describes the unchanged macOS bundle contract. The explicit shared
+`ClientLayout` also supports the [Linux artifact contract](linux-distribution.md),
+whose libraries live in `lib/` instead of `Contents/MacOS`.
+
 *For:* Maintainers and the OpenBF2 engine side. *Covers:* the contract for the embedded native client: the files, the CI entry point, and everything the launcher does with the client at run time (arguments, environment, files, locks).
 
 The setup app (`OpenBF2.app`, which is also the launcher) embeds the OpenBF2 macOS client at build
@@ -91,7 +95,8 @@ do. The setup app follows it as described here.
   `mod.desc` and at least one level (`levels/<name>/info/<name>.desc`, or a
   non-empty `<importlevels>`); `xpack` only for an edition which installed
   Special Forces. The name shown is `<title>` of `mod.desc`, resolved through the
-  English localization files if it is a key. The choices are kept in
+  English localization files if it is a key. Retail localization values use
+  doubled ESC delimiters; these are removed from the displayed title. The choices are kept in
   `Setup/Launch.txt` (`name=value` lines, `mod=` first; see `src/launch.h`); no
   file of the game is written for them.
 - The usual start of an installed game goes straight into the client, without

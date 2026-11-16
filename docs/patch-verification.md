@@ -20,14 +20,21 @@ An impossible size fails immediately. A file with either known size is hashed,
 so a renamed other-slot file can be identified precisely, and a same-size
 modified executable cannot pass by matching a header or name.
 
-Each AppKit patch selector starts its own worker when a file is chosen or dropped.
-SHA-256 streams in 1 MiB chunks and displays a progress bar and percentage in the
-selector, including for the 2 GB 1.5 executable. The main thread only updates UI.
+The AppKit and Qt patch selectors use the same shared worker and verification
+code when a file is chosen or dropped. SHA-256 streams in 1 MiB chunks; progress
+is posted to the UI every 8 MiB and at completion, including for the 2 GB 1.5
+executable. The main thread only updates UI.
 Choosing another file cancels the old read between chunks; a revision token
 prevents stale success, progress or errors from authorizing the new selection.
 Continue is enabled only after both selected files pass their own slot check.
 Installation rehashes inputs before any payload staging and enforces the same
 pins, protecting against file changes after selection. EXEs are never run.
+
+Both platforms use the portable implementation in `src/digest.cpp`; neither
+frontend selects a different hash algorithm or skips parts of the input. Build
+interactive previews with optimizations (`RelWithDebInfo` or `Release`). An
+unoptimized `Debug` build can spend substantially longer hashing the same file;
+both platform release scripts already request `Release`.
 
 Synthetic unit checks cover accepted pins, both wrong-slot diagnoses, unknown
 sizes, wrong sizes, same-size wrong hashes, real streaming rejection of a sparse

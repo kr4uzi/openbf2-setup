@@ -23,13 +23,13 @@ namespace {
 
 struct Client::Impl
 {
-	std::filesystem::path contents;
+	ClientLayout layout;
 	std::filesystem::path support;
 	std::filesystem::path home;
 };
 
-Client::Client(std::filesystem::path contents, std::filesystem::path support, std::filesystem::path home)
-	: m_Impl{ std::make_unique<Impl>(std::move(contents), std::move(support), std::move(home)) }
+Client::Client(ClientLayout layout, std::filesystem::path support, std::filesystem::path home)
+	: m_Impl{ std::make_unique<Impl>(std::move(layout), std::move(support), std::move(home)) }
 {
 }
 
@@ -37,14 +37,14 @@ Client::~Client() = default;
 
 bool Client::Present() const
 {
-	return assistant::clientPresent(m_Impl->contents);
+	return assistant::clientPresent(m_Impl->layout);
 }
 
 task<int> Client::Run(const Installation& installation, LaunchOptions options)
 {
 	auto platform = nativePlatform();
 	auto lock = platform->lock(m_Impl->support / "Setup/Install.lock");
-	auto launch = assistant::clientLaunch(m_Impl->contents, m_Impl->support, options);
+	auto launch = assistant::clientLaunch(m_Impl->layout, m_Impl->support, options);
 	if (launch.directory != installation.game)
 		throw std::runtime_error{ "The active installation changed. Reopen OpenBF2 to verify it." };
 

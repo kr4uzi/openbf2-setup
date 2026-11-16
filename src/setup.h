@@ -37,6 +37,7 @@ namespace setup {
 		// the options as the launcher page last loaded or saved them: only a change is written
 		LaunchOptions m_Saved;
 		bool m_Unverified = false;
+		unsigned m_PendingPatchChecks = 0;
 
 	public:
 		Setup(Window& window, Installer& installer, Store& store, Client& client, Microphone& microphone);

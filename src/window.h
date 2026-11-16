@@ -23,7 +23,7 @@ namespace setup {
 	{
 		// activated: the user came back to the application from another one, where they may have changed files.
 		// options_edited: any change on the launcher page, the lock included
-		enum class Kind { next, back, voice_setup, verify, options_edited, mods_folder, microphone, disc_chosen, patch141_chosen, patch150_chosen, keys_edited, activated, close };
+		enum class Kind { next, back, voice_setup, voice_skip, verify, options_edited, mods_folder, microphone, disc_chosen, patch141_chosen, patch150_chosen, keys_edited, activated, close };
 
 		Kind kind;
 		// the file of the three *_chosen kinds
@@ -41,7 +41,7 @@ namespace setup {
 
 	enum class KeyStatus { incomplete, invalid, valid, not_installed };
 	enum class PatchStatus { checking, verified, failed };
-	enum class MicrophoneStatus { skipped, ask, denied, ready, missing };
+	enum class MicrophoneStatus { skipped, ask, denied, ready, missing, capture_error };
 
 	class Window
 	{
@@ -60,8 +60,8 @@ namespace setup {
 
 		// every click, drop and edit ends up here, one at a time and in the order it happened
 		task<Event> WaitForEvent();
-		// the Option key was down when the application started: the user wants the pages, not the game
-		bool OptionKeyHeld() const;
+		// macOS Option key; Linux --launcher (also used by the desktop action).
+		bool LauncherRequested() const;
 
 		// each page replaces the one before. the file wells and the key fields keep what the user gave them,
 		// so going back and forth loses nothing

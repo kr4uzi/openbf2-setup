@@ -55,6 +55,7 @@ namespace {
 		case Kind::activated:
 			return true;
 		case Kind::microphone:
+		case Kind::voice_skip:
 			return page == Page::voice;
 		case Kind::disc_chosen:
 			return !g_Machine.busy && page == Page::disc;
@@ -69,6 +70,7 @@ namespace {
 	}
 }
 
+#ifndef SETUP_REAL_WINDOW
 struct Window::Impl {};
 
 Window::Window(boost::asio::io_context&)
@@ -76,6 +78,8 @@ Window::Window(boost::asio::io_context&)
 }
 
 Window::~Window() = default;
+
+Page Window::Shown() const { return g_Machine.pages.empty() ? Page::welcome : g_Machine.pages.back(); }
 
 void Window::Run()
 {
@@ -151,7 +155,7 @@ void Window::ShowVoice(const assistant::VoiceSettings&, bool)
 	g_Machine.microphone_status.reset();
 }
 
-bool Window::OptionKeyHeld() const
+bool Window::LauncherRequested() const
 {
 	return g_Machine.option_key_held;
 }
@@ -244,6 +248,8 @@ void Window::Reveal(const std::filesystem::path& directory)
 	g_Machine.mods.insert(g_Machine.mods.end(), g_Machine.dropped_mods.begin(), g_Machine.dropped_mods.end());
 	g_Machine.dropped_mods.clear();
 }
+
+#endif
 
 Installer::Installer(Worker& worker, std::filesystem::path support, std::filesystem::path manifests)
 	: m_Worker{ worker }, m_Support{ std::move(support) }, m_Manifests{ std::move(manifests) }
@@ -390,7 +396,7 @@ bool Store::ProfilesExist() const
 
 struct Client::Impl {};
 
-Client::Client(std::filesystem::path, std::filesystem::path, std::filesystem::path)
+Client::Client(ClientLayout, std::filesystem::path, std::filesystem::path)
 {
 }
 
@@ -448,6 +454,11 @@ void Microphone::OpenSystemSettings()
 
 bool Microphone::Start(std::function<void(double)> level)
 {
+	g_Machine.calls.push_back("start-microphone");
+	if (g_Machine.failures["start-microphone"] > 0) {
+		--g_Machine.failures["start-microphone"];
+		return false;
+	}
 	if (!g_Machine.input_device)
 		return false;
 
@@ -460,3 +471,5 @@ void Microphone::Stop()
 {
 	g_Machine.metering = false;
 }
+
+void Microphone::OnError(std::function<void()>) {}

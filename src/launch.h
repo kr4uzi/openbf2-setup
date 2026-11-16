@@ -2,8 +2,18 @@
 
 #include <string>
 #include <vector>
+#include <filesystem>
 
 namespace setup {
+	// Absolute paths into an immutable application, independent of the writable generation.
+	struct ClientLayout
+	{
+		std::filesystem::path executable;
+		std::vector<std::filesystem::path> required;
+	};
+	ClientLayout macClientLayout(const std::filesystem::path& contents);
+	ClientLayout linuxClientLayout(const std::filesystem::path& root);
+	std::filesystem::path linuxDataHome(const std::filesystem::path& home, const std::string& xdg);
 	// how the game is started: the choices of the options page. they only ever go on the command line of the
 	// client, like retail's shortcut did; no file of the game is written for them
 	struct LaunchOptions

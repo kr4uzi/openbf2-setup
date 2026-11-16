@@ -17,9 +17,8 @@ namespace setup {
 		std::unique_ptr<Impl> m_Impl;
 
 	public:
-		// contents is the Contents directory of the application bundle. home is the home directory the support
-		// root was derived from: the client derives its own from it, so both look at the same files
-		Client(std::filesystem::path contents, std::filesystem::path support, std::filesystem::path home);
+		// home is the home directory the support root was derived from.
+		Client(ClientLayout layout, std::filesystem::path support, std::filesystem::path home);
 		~Client();
 
 		bool Present() const;

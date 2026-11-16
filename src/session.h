@@ -31,14 +31,16 @@ VoiceSettings loadVoiceSettings(const fs::path& support);
 void saveVoiceSettings(const fs::path& support, const VoiceSettings&, Platform&);
 // True once the client has created a profile directory under Profiles/.
 bool profilesExist(const fs::path& support);
-bool clientPresent(const fs::path& contents);
+bool clientPresent(const ClientLayout& layout);
+inline bool clientPresent(const fs::path& contents) { return clientPresent(macClientLayout(contents)); }
 struct Launch {
     fs::path executable, directory, support;
     std::vector<std::string> arguments;
 };
 // The mod of the options (or of +modPath in an override) must be a directory below mods/ of the
 // current generation; an override without +modPath leaves the mod to the client.
-Launch clientLaunch(const fs::path& contents, const fs::path& support, const LaunchOptions& options);
+Launch clientLaunch(const ClientLayout& layout, const fs::path& support, const LaunchOptions& options);
+inline Launch clientLaunch(const fs::path& contents, const fs::path& support, const LaunchOptions& options) { return clientLaunch(macClientLayout(contents), support, options); }
 Launch clientLaunch(const fs::path& contents, const fs::path& support, const std::string& mod = "bf2");
 // The launcher's own choices (Setup/Launch.txt, see launch.h); the game's files are never
 // written for them. An unreadable or missing file gives the defaults.

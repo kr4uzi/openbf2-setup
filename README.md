@@ -1,13 +1,20 @@
 # OpenBF2 Setup
 
 Standalone native Battlefield 2 setup: a portable C++17 ISO/DVD, cabinet, SFX
-and RTPatch pipeline, a diagnostic CLI, and a minimal macOS AppKit assistant.
+and RTPatch pipeline, a diagnostic CLI, and native macOS AppKit and Linux Qt 6 Widgets assistants.
 No Wine, Python interpreter, Rust runtime, game content or patch payload is
 required in the distributed app. Users supply their own supported English DVD
 or ISO (regular BF2 or BF2 Deluxe with Special Forces) and the official
 **1.0 → 1.41 → 1.50** patch chain.
 
-The app is `OpenBF2.app`, intended for drag-and-drop into Applications. It is
+On Linux, run `bin/OpenBF2`; `--launcher` opens settings and `--install-desktop`
+adds a user menu entry. Data lives in `$XDG_DATA_HOME/OpenBF2`, falling back to
+`~/.local/share/OpenBF2`. See [Linux builds and distribution](docs/linux-distribution.md)
+and the [validation record](docs/linux-validation.md). The Linux release scripts
+require a separately built glibc 2.35 engine/SDK; a certified release package is
+not yet available.
+
+On macOS the app is `OpenBF2.app`, intended for drag-and-drop into Applications. It is
 both the installer and the launcher: with no installation it runs the setup
 wizard, afterwards it starts the game right away, with no window.
 Hold the Option (⌥) key while opening the app to get its launcher page instead,
@@ -68,7 +75,7 @@ application checks), Cargo with the locked dependencies cached. macOS also
 needs Command Line Tools and preinstalled `aarch64-apple-darwin` and
 `x86_64-apple-darwin` Rust targets. Builds never install or download dependencies.
 
-For this owner session all output must stay in the authorized scratch root:
+Use a separate directory for build and test output:
 
 ```sh
 scratch=/path/outside/the/repo/openbf2-setup-build   # all build and test output stays here
@@ -98,8 +105,15 @@ alone; the DMG script still rejects such a bundle. Build all targets or
 On other hosts, configure/build the same core and CLI with CMake. Rust's host
 triple is detected; Apple frameworks and AppKit are selected only on macOS.
 POSIX and Windows adapters implement locking and durable publication in
-`src/posix.cpp` and `src/windows.cpp`. Windows/Linux compilation and runtime are not yet validated. The
-Windows UI remains future work. See [third-party provenance](third_party/README.md)
+`src/posix.cpp` and `src/windows.cpp`. Linux also builds the Qt frontend when
+Qt 6 Widgets and SDL3 are installed; use `-DSETUP_BUILD_APP=OFF` for core/CLI only.
+Linux supports the same `-DSETUP_CLIENT_ARTIFACT=DIR` CMake option, using the
+`bin/`, `lib/`, `share/` artifact layout. Builds and installs embed that artifact;
+release packaging also supplies the matching Qt runtime. See the
+[Linux artifact/build contract](docs/linux-distribution.md#development-build)
+for prerequisites, the explicit development override and release commands.
+Linux checks and remaining runtime acceptance are recorded separately. Windows
+compilation/runtime and its UI remain future work. See [third-party provenance](third_party/README.md)
 for the pinned owner-fork source and alternate checkout option.
 
 ## Reading the code

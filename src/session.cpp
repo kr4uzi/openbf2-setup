@@ -149,15 +149,18 @@ bool storedKey(const fs::path& support,bool sf) {
     noLinks(support/"Registry.con");
     return fs::exists(support/"Registry.con")&&registryHasKey(read(support/"Registry.con"),sf);
 }
-bool clientPresent(const fs::path& contents) {
-    for(auto name:{"bf2_client","libdice_py.dylib","libaidll.dylib"}){
-        auto path=contents/"MacOS"/name;
-        if(fs::is_symlink(fs::symlink_status(path))||!fs::is_regular_file(path))return false;
+bool clientPresent(const ClientLayout& layout) {
+    if(!layout.executable.is_absolute())return false;
+    auto files=layout.required;
+    files.push_back(layout.executable);
+    for(const auto& path:files){
+        std::error_code error;
+        if(fs::is_symlink(fs::symlink_status(path,error))||error||!fs::is_regular_file(path,error)||error)return false;
     }
-    return ::access((contents/"MacOS/bf2_client").c_str(),X_OK)==0;
+    return ::access(layout.executable.c_str(),X_OK)==0;
 }
-Launch clientLaunch(const fs::path& contents,const fs::path& support,const LaunchOptions& options) {
-    require(clientPresent(contents),"The native client or its libraries are missing from this build.");
+Launch clientLaunch(const ClientLayout& layout,const fs::path& support,const LaunchOptions& options) {
+    require(clientPresent(layout),"The native client or its libraries are missing from this build.");
     require(storedKey(support),"Enter your CD key before playing.");
     if(currentEdition(support)==DiscEdition::Deluxe)require(storedKey(support,true),"Enter your Special Forces CD key before playing.");
     auto generation=currentGeneration(support);
@@ -170,7 +173,7 @@ Launch clientLaunch(const fs::path& contents,const fs::path& support,const Launc
         auto directory=generation/"mods"/mod;std::error_code unreadable;
         require(fs::is_directory(directory)&&(!fs::is_symlink(fs::symlink_status(directory))||fs::read_symlink(directory,unreadable)==mod_library(support)/mod),"The selected mod is not installed.");
     }
-    return {contents/"MacOS/bf2_client",generation,support,arguments};
+    return {layout.executable,generation,support,arguments};
 }
 Launch clientLaunch(const fs::path& contents,const fs::path& support,const std::string& mod) {
     LaunchOptions options;options.mod=mod;options.skip_movies=false;options.fullscreen=false;

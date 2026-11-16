@@ -788,6 +788,7 @@ namespace {
 	case MicrophoneStatus::ready:
 		self.micStatus.stringValue = @"Microphone ready. Speak to test your level.";
 		break;
+	case MicrophoneStatus::capture_error:
 	case MicrophoneStatus::missing:
 		self.micStatus.stringValue = @"No microphone was found. You can still save your settings.";
 		break;
@@ -1058,7 +1059,7 @@ task<Event> Window::WaitForEvent()
 	co_return co_await m_Impl->events.async_receive(boost::asio::use_awaitable);
 }
 
-bool Window::OptionKeyHeld() const
+bool Window::LauncherRequested() const
 {
 	return m_Impl->optionHeld;
 }

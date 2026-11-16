@@ -12,3 +12,4 @@
 *.openbf2-part
 /notes/
 *.sparseimage
+__pycache__/

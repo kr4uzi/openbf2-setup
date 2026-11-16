@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.openbf2.Setup</id>
+  <name>OpenBF2</name>
+  <summary>Install and launch Battlefield 2 from your own media</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description><p>A native installer and launcher for OpenBF2. Requires a supported Battlefield 2 DVD or ISO, the official patches, and your CD key.</p></description>
+  <launchable type="desktop-id">org.openbf2.Setup.desktop</launchable>
+  <url type="homepage">https://github.com/kr4uzi/openbf2-setup</url>
+</component>

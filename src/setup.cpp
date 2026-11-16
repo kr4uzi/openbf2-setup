@@ -11,6 +11,7 @@
 #include <boost/asio/detached.hpp>
 #include <boost/asio/experimental/parallel_group.hpp>
 #include <boost/asio/this_coro.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/asio/use_awaitable.hpp>
 using namespace setup;
 
@@ -43,6 +44,7 @@ Setup::Setup(Window& window, Installer& installer, Store& store, Client& client,
 
 task<int> Setup::Launch()
 {
+	std::exception_ptr failure;
 	try {
 		auto installation = co_await FindInstallation();
 		if (!installation)
@@ -51,7 +53,7 @@ task<int> Setup::Launch()
 			// the game data is there but Registry.con is not: only the keys are asked for
 			co_await EnterMissingKeys(installation->edition == DiscEdition::Deluxe);
 		}
-		else if (!m_Unverified && !m_Window.OptionKeyHeld() && m_Client.Present() && !m_Store.LoadLaunch().always_show) {
+		else if (!m_Unverified && !m_Window.LauncherRequested() && m_Client.Present() && !m_Store.LoadLaunch().always_show) {
 			// the usual start of an installed game: no window, straight into the game, and the application goes
 			// with it once the game was played and quit. the Option key, or the choice to see the launcher every
 			// time, lead to the pages instead; so does game data which did not pass the quick check
@@ -66,8 +68,20 @@ task<int> Setup::Launch()
 	}
 	catch (const WindowClosed&) {
 	}
+	catch (...) { failure = std::current_exception(); }
+
+	// Detached hash checks still own worker callbacks into this application. Cancel and join them
+	// before the window, installer and application can be destroyed.
+	m_Closing = true;
+	for (auto& patch : m_Patches) if (patch.cancelled) *patch.cancelled = true;
+	auto timer = boost::asio::steady_timer{co_await boost::asio::this_coro::executor};
+	while (m_PendingPatchChecks) {
+		timer.expires_after(std::chrono::milliseconds{5});
+		co_await timer.async_wait(boost::asio::use_awaitable);
+	}
 
 	m_Microphone.Stop();
+	if (failure) std::rethrow_exception(failure);
 	co_return 0;
 }
 
@@ -299,12 +313,15 @@ task<bool> Setup::ChoosePatches()
 		// the check takes a while (2 GB of SHA-256) and runs beside the page, so the other patch can be
 		// chosen meanwhile. it enables Continue once both are verified
 		auto slot = event.kind == Event::Kind::patch141_chosen ? PatchSlot::Patch141 : PatchSlot::Patch150;
+		++m_PendingPatchChecks;
 		boost::asio::co_spawn(co_await boost::asio::this_coro::executor, CheckPatch(slot, event.path), boost::asio::detached);
 	}
 }
 
 task<void> Setup::CheckPatch(PatchSlot slot, std::filesystem::path path)
 {
+	struct Finished { unsigned& count; ~Finished() { --count; } } finished{m_PendingPatchChecks};
+	if (m_Closing) co_return;
 	auto& patch = m_Patches[slot == PatchSlot::Patch141 ? 0 : 1];
 	if (patch.cancelled)
 		*patch.cancelled = true;
@@ -312,7 +329,7 @@ task<void> Setup::CheckPatch(PatchSlot slot, std::filesystem::path path)
 	auto cancelled = std::make_shared<std::atomic<bool>>(false);
 	patch = Patch{ path, false, cancelled };
 	m_Window.SetPatch(slot, PatchStatus::checking);
-	m_Window.EnableNext(false);
+	if (m_Window.Shown() == Page::patches) m_Window.EnableNext(false);
 
 	auto failure = std::string{};
 	try {
@@ -331,7 +348,7 @@ task<void> Setup::CheckPatch(PatchSlot slot, std::filesystem::path path)
 
 	patch.verified = failure.empty();
 	m_Window.SetPatch(slot, patch.verified ? PatchStatus::verified : PatchStatus::failed);
-	m_Window.EnableNext(m_Patches[0].verified && m_Patches[1].verified);
+	if (m_Window.Shown() == Page::patches) m_Window.EnableNext(m_Patches[0].verified && m_Patches[1].verified);
 	if (!patch.verified)
 		m_Window.Message("Check your patch file", failure);
 }
@@ -427,6 +444,7 @@ task<std::optional<Installation>> Setup::Install()
 task<void> Setup::VoiceSetup()
 {
 	m_Window.ShowVoice(m_Store.LoadVoice(), m_Store.ProfilesExist());
+	m_Microphone.OnError([this] { m_Window.SetMicrophone(MicrophoneStatus::capture_error); });
 	ShowMicrophone();
 	while (true) {
 		auto event = co_await NextEvent();
@@ -434,10 +452,17 @@ task<void> Setup::VoiceSetup()
 			// asked once by the system. after a refusal only the user can change it, in the system settings
 			if (m_Microphone.Access() == MicrophoneAccess::undetermined)
 				co_await m_Microphone.Request();
-			else
+			else if (m_Microphone.Access() == MicrophoneAccess::denied)
 				m_Microphone.OpenSystemSettings();
+			else
+				m_Microphone.Stop();
 
 			ShowMicrophone();
+		}
+
+		if (event.kind == Event::Kind::voice_skip) {
+			m_Microphone.Stop();
+			co_return;
 		}
 
 		if (event.kind != Event::Kind::next)
@@ -469,6 +494,7 @@ void Setup::ShowMicrophone()
 		m_Window.SetMicrophone(MicrophoneStatus::denied);
 		break;
 	case MicrophoneAccess::granted:
+	case MicrophoneAccess::not_required:
 		auto started = m_Microphone.Start([this](double peak) { m_Window.SetLevel(peak); });
 		m_Window.SetMicrophone(started ? MicrophoneStatus::ready : MicrophoneStatus::missing);
 		break;
