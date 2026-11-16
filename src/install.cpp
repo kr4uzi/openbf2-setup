@@ -282,8 +282,8 @@ Files tree(const fs::path& root) {
 }
 }
 
-int compare(const fs::path& output, const fs::path& reference, const fs::path& acceptance) {
-    auto allowed = fs::canonical(fs::path(OPENBF2_SETUP_SCRATCH));
+int compare(const fs::path& output, const fs::path& reference, const fs::path& acceptance, const fs::path& scratchRoot) {
+    auto allowed = fs::canonical(scratchRoot);
     auto reportDir = fs::canonical(output.parent_path());
     auto relative=reportDir.lexically_relative(allowed);
     check(!relative.empty() && !relative.is_absolute() && *relative.begin()!=".." &&
@@ -592,10 +592,10 @@ fs::path install(const InstallOptions& o,Platform& platform) {
     return publish(generation,token);
 }
 
-int prototype(const Options& o) {
+int prototype(const Options& o, const fs::path& scratchRoot) {
     // The prototype is intentionally incapable of installing into Applications,
     // a reference tree or a user's live Application Support directory.
-    auto allowed = fs::canonical(fs::path(OPENBF2_SETUP_SCRATCH));
+    auto allowed = fs::canonical(scratchRoot);
     auto parent = fs::canonical(o.output.parent_path());
     check(parent == allowed && !fs::exists(o.output) && !fs::is_symlink(fs::symlink_status(o.output)),
           "output must be a new direct child of SETUP_SCRATCH");
@@ -615,7 +615,7 @@ int prototype(const Options& o) {
     for(const auto& item:selection(full,false))replacements.insert(item.first);
     auto failures = patch141(p141, root, o.output / "patch141.tsv",replacements);
     extractCabinet(p150, "disk1/", false, root);
-    auto compared = compare(root, o.reference, o.acceptance);
+    auto compared = compare(root, o.reference, o.acceptance, scratchRoot);
     std::cout << "Prototype complete; installation is NOT published. Patch errors=" << failures << '\n';
     return failures || compared ? 1 : 0;
 }

@@ -35,7 +35,7 @@ def replace_file(source, target):
         Path(temporary).unlink(missing_ok=True)
 
 
-def embed(source, destination, development=False):
+def embed(source, destination, development=False, roots=()):
     package.require(not destination.is_symlink(), "Destination must be a real directory")
     destination = destination.resolve()
     record = target_path(destination, package.EMBEDDED)
@@ -54,7 +54,7 @@ def embed(source, destination, development=False):
         paths = package.artifact_files(source, "engine")
         if not development:
             package.toolchain_metadata(package.metadata(source, "engine-artifact.json"))
-        package.audit(source, engine=True, development=development)
+        package.audit(source, engine=True, development=development, roots=roots)
         inventory = {path.relative_to(source).as_posix(): package.digest(path) for path in paths}
 
     # Validate every overwrite/removal before changing anything. The inventory only
@@ -97,8 +97,11 @@ def main():
     parser.add_argument("--source", default="", help="Empty removes only previously embedded files")
     parser.add_argument("--destination", required=True, type=Path)
     parser.add_argument("--allow-development", action="store_true")
+    package.add_build_root_options(parser)
     args = parser.parse_args()
-    embed(Path(args.source) if args.source else None, args.destination, args.allow_development)
+    package.external_roots_file(args.build_roots_file, [args.destination] + ([args.source] if args.source else []))
+    roots = package.build_roots(args.build_root, args.build_roots_file)
+    embed(Path(args.source) if args.source else None, args.destination, args.allow_development, roots)
 
 
 if __name__ == "__main__":

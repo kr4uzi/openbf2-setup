@@ -17,7 +17,7 @@ server. Builds use Release optimization for interactive verification performance
 
 ## Automated results
 
-The complete Linux CTest suite passed **10 tests**, with the optional
+The complete Linux CTest suite passed **11 tests**, with the optional
 `key_checks_owner` test skipped because no keys were provided. The suite covers:
 
 - Core installation services, session state and the shared application workflow.
@@ -27,12 +27,16 @@ The complete Linux CTest suite passed **10 tests**, with the optional
   asynchronous exit handling, installation locking and diagnostic permissions.
 - Desktop-entry quoting, read-only application directories, relocation and
   preservation of synthetic user data.
-- Twelve packaging cases covering ELF dependencies, runtime paths, libc
+- Sixteen packaging cases covering ELF dependencies, runtime paths, libc
   requirements, inventories, shared-library conflicts, SDK identity and
   artifact ownership.
 - Four client embedding cases covering the actual CMake build/install hooks,
   `--prefix`, `DESTDIR`, artifact replacement/removal, read-only inputs,
-  invalid replacements and rejection of development release inputs.
+  invalid replacements, producer build-root propagation and rejection of
+  development release inputs.
+- A Release application/CLI check proving that the configured diagnostic scratch
+  path is absent from the graphical app while the CLI still enforces its scratch
+  restrictions and produces a successful synthetic comparison report.
 
 Packaging tests were rerun successfully after adding read-only input assembly.
 The Qt checks also passed an earlier AddressSanitizer run; the full final suite
@@ -43,6 +47,20 @@ Both frontends use the same SHA-256 implementation. A synthetic 64 MiB benchmark
 confirmed that optimized builds substantially improve hashing throughput over
 Debug builds. This measures hash computation, not full patch verification or
 storage performance.
+
+## Release path audit regressions
+
+Release-mode ELF fixtures cover legitimate SDL/ALSA `/tmp` runtime templates,
+explicit source/build directory leaks, directory-prefix boundaries, producer
+roots-file validation and rejection before assembly. Absolute loader paths and
+path-valued dependencies remain prohibited independently of the roots list.
+
+The path check also passed on actual staged SDL3 and ALSA libraries containing
+those runtime templates, without the development override. Full ELF inspection
+still rejected those libraries because their GLIBC requirements exceed 2.35.
+This validates the corrected path check, not the suitability of the development
+libraries for a baseline release. Production SDK and real-library release
+acceptance remain outstanding.
 
 ## Real client artifact checks
 

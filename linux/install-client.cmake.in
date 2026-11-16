@@ -1,3 +1,5 @@
 execute_process(COMMAND "@Python3_EXECUTABLE@" "@client_embed_script@"
   --source "@SETUP_CLIENT_ARTIFACT@" --destination "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}" @client_development@
+  --build-root "@CMAKE_SOURCE_DIR@" --build-root "@CMAKE_BINARY_DIR@"
+  --build-roots-file "@SETUP_ARTIFACT_BUILD_ROOTS_FILE@"
   COMMAND_ERROR_IS_FATAL ANY)

@@ -7,7 +7,7 @@ portable=$(realpath "$1")
 output=$(realpath -m "$2")
 work=$(realpath -m "$3")
 [[ ! -e "$output" && ! -e "$work" ]] || { echo 'Output/work path already exists' >&2; exit 1; }
-python3 "$repo/linux/package.py" validate-release "$portable"
+python3 "$repo/linux/package.py" validate-release "$portable" --build-root "$repo" --build-root "$work" --build-roots-file "${SETUP_ARTIFACT_BUILD_ROOTS_FILE:-}"
 # A runtime is intentionally not included in the .flatpak file. Builders need both
 # SDK and Platform installed in their user installation before this offline command.
 flatpak info --user org.freedesktop.Platform/x86_64/25.08 >/dev/null

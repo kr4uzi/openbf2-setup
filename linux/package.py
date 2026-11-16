@@ -50,6 +50,45 @@ def command(*args):
     return subprocess.check_output(args, text=True, env={**os.environ, "LC_ALL": "C"})
 
 
+def build_roots(roots=(), filename=None):
+    roots = list(roots)
+    if filename:
+        recorded = json.loads(Path(filename).read_text())
+        require(isinstance(recorded, list) and recorded, "Build roots file must contain a nonempty JSON array")
+        roots.extend(recorded)
+    result = set()
+    for root in roots:
+        require(isinstance(root, str) and Path(root).is_absolute() and not any(c in root for c in "\0\n\r\t"),
+                "Build roots must be absolute directory paths")
+        normalized = os.path.normpath(root)
+        require(normalized not in ("/", "//"), "The filesystem root is not a build directory")
+        result.add(root.rstrip("/"))
+        result.add(normalized)
+    return tuple(sorted(result))
+
+
+def audit_build_paths(path, roots):
+    # Runtime templates such as /tmp/SDL-tray-XXXXXX and /tmp/alsa-dmix-...
+    # are valid. Only concrete source/build/SDK prefixes supplied by the builder
+    # identify build leaks; directory names alone cannot distinguish the two.
+    if roots:
+        strings = command("strings", "-a", str(path))
+        for root in roots:
+            require(not re.search(re.escape(root) + r"(?=/|$)", strings, re.MULTILINE), f"Build/source directory embedded in ELF: {path}")
+
+
+def add_build_root_options(parser):
+    parser.add_argument("--build-root", action="append", default=[], help="Concrete absolute source/build/SDK directory to reject; repeatable")
+    parser.add_argument("--build-roots-file", default="", help="Local JSON array of build roots (never packaged)")
+
+
+def external_roots_file(filename, artifacts):
+    if filename:
+        path = Path(filename).resolve()
+        require(not any(path.is_relative_to(Path(root).resolve()) for root in artifacts),
+                "Build roots file must stay outside artifact/application directories")
+
+
 def files(root):
     require(root.is_dir() and not root.is_symlink(), f"Not a real artifact directory: {root}")
     for path in sorted(root.rglob("*")):
@@ -102,7 +141,7 @@ def artifact_files(root, kind):
     return paths
 
 
-def check_inputs(engine, runtime):
+def check_inputs(engine, runtime, roots=()):
     engine_meta = metadata(engine, "engine-artifact.json")
     runtime_meta = metadata(runtime, "runtime-artifact.json")
     toolchain_metadata(engine_meta)
@@ -112,11 +151,12 @@ def check_inputs(engine, runtime):
     for path in artifact_files(runtime, "runtime"):
         name = path.relative_to(runtime)
         require(name not in engine_files or engine_files[name] == digest(path), f"Conflicting dependency: {name}")
-    audit(engine, engine=True)
+        elf(path, roots=roots)
+    audit(engine, engine=True, roots=roots)
     return engine_meta, runtime_meta
 
 
-def elf(path, development=False):
+def elf(path, development=False, roots=()):
     with path.open("rb") as stream:
         if stream.read(4) != b"\x7fELF":
             return None
@@ -136,8 +176,7 @@ def elf(path, development=False):
     notes = command("readelf", "-nW", str(path))
     if not development:
         require(not re.search(r"ISA needed:.*x86-64-v[234]", notes), f"Nonbaseline CPU ISA: {path}")
-        strings = command("strings", "-a", str(path))
-        require(not re.search(r"/(?:home|build|workspace|tmp)/[^\s]+", strings), f"Absolute build path embedded in ELF: {path}")
+        audit_build_paths(path, roots)
     needed = re.findall(r"\(NEEDED\).*\[([^\]]+)\]", dynamic)
     require(all("/" not in name for name in needed), f"Absolute/path DT_NEEDED: {path}")
     paths = re.findall(r"\((?:RUNPATH|RPATH)\).*\[([^\]]*)\]", dynamic)
@@ -146,7 +185,7 @@ def elf(path, development=False):
     return {"needed": needed, "rpaths": [entry for group in paths for entry in group.split(":")], "soname": soname, "versions": needs}
 
 
-def audit(root, engine=False, development=False):
+def audit(root, engine=False, development=False, roots=()):
     paths = list(files(root))
     require(all(path.relative_to(root).parts[0] in ("bin", "lib", "share") for path in paths), "Artifact files must be under bin/, lib/ or share/")
     required = CLIENT + DYNAMIC_AUDIO if engine else CLIENT + DYNAMIC_AUDIO + APP + PLUGINS
@@ -156,7 +195,7 @@ def audit(root, engine=False, development=False):
         require(any((root / "lib/qt6/plugins/platforms" / name).is_file() for name in ("libqwayland-generic.so", "libqwayland.so")), "Missing Qt Wayland platform plugin")
     for name in ("bin/bf2_client",) if engine else ("bin/bf2_client", "bin/OpenBF2"):
         require(os.access(root / name, os.X_OK), f"Not executable: {name}")
-    binaries = {path: info for path in paths if (info := elf(path, development)) is not None}
+    binaries = {path: info for path in paths if (info := elf(path, development, roots)) is not None}
     for name in (CLIENT + DYNAMIC_AUDIO if engine else CLIENT + DYNAMIC_AUDIO + ("bin/OpenBF2",) + PLUGINS):
         require(root / name in binaries, f"Required binary is not ELF: {name}")
     for path, info in binaries.items():
@@ -195,12 +234,12 @@ def copy_tree(source, destination):
         shutil.copy2(file, target)
 
 
-def assemble(args):
+def assemble(args, roots=()):
     app, engine, runtime, output = (Path(value).resolve() for value in (args.app, args.engine, args.runtime, args.output))
     require(not output.exists(), f"Output exists: {output}")
     require(not any(output.is_relative_to(source) for source in (app, engine, runtime)), "Output must be outside inputs")
     reject_development(app)
-    engine_meta, runtime_meta = check_inputs(engine, runtime)
+    engine_meta, runtime_meta = check_inputs(engine, runtime, roots)
     lock = toolchain_metadata(engine_meta)
     require(re.fullmatch(r"[0-9a-f]{40}", args.setup_revision), "Invalid setup revision")
     output.mkdir(parents=True)
@@ -209,7 +248,7 @@ def assemble(args):
     # Normalize only the staging copy; absolute paths in source artifacts are an error,
     # not something to silently hide by patching them away.
     for path in files(output):
-        info = elf(path)
+        info = elf(path, roots=roots)
         if info is None:
             continue
         require(all(value == "$ORIGIN" or value.startswith("$ORIGIN/") for value in info["rpaths"]), f"Build-machine RPATH in input: {path}")
@@ -221,7 +260,7 @@ def assemble(args):
             subprocess.run(["patchelf", "--set-rpath", rpath, str(path)], check=True)
         finally:
             path.chmod(mode)
-    audit(output)
+    audit(output, roots=roots)
     metadata_dir = output / "share/openbf2"
     # Input provenance retains the source checksums; final checksums describe patched ELF bytes.
     record = {"schema": 1, "setup_revision": args.setup_revision, "engine_revision": engine_meta["revision"],
@@ -245,9 +284,9 @@ def reject_development(root):
         require(json.loads(record.read_text()).get("development") is False, "Development client embedding cannot be released")
 
 
-def validate_release(root):
+def validate_release(root, roots=()):
     reject_development(root)
-    audit(root)
+    audit(root, roots=roots)
     record = json.loads((root / "share/openbf2/release.json").read_text())
     require(record.get("schema") == 1 and record.get("architecture") == "x86_64" and record.get("glibc") == "2.35", "Not a baseline release")
     toolchain_metadata(record)
@@ -263,10 +302,10 @@ def validate_release(root):
     require(recorded == actual, "Release checksum/inventory mismatch")
 
 
-def archive(root, output):
+def archive(root, output, roots=()):
     require(not output.exists(), f"Output exists: {output}")
     require(not output.is_relative_to(root), "Archive output must be outside the application")
-    validate_release(root)
+    validate_release(root, roots=roots)
     # A tar.gz is also the fallback when AppImage mounting is unavailable.
     with tarfile.open(output, "w:gz", format=tarfile.PAX_FORMAT) as tar:
         tar.add(root, arcname="OpenBF2")
@@ -286,20 +325,25 @@ def main():
     for name in ("app", "engine", "runtime", "output", "setup-revision"):
         build.add_argument("--" + name, required=True)
     pack = commands.add_parser("archive"); pack.add_argument("root", type=Path); pack.add_argument("output", type=Path)
+    for subparser in (check, release, runtime, inputs, build, pack):
+        add_build_root_options(subparser)
     args = parser.parse_args()
+    external_roots_file(args.build_roots_file, [getattr(args, name) for name in ("root", "app", "engine", "runtime")
+                                               if hasattr(args, name) and isinstance(getattr(args, name), (str, Path))])
+    roots = build_roots(args.build_root, args.build_roots_file)
     if args.command == "audit":
-        audit(args.root.resolve(), args.engine); print("ELF architecture, libc baseline, runtime paths and closure passed")
+        audit(args.root.resolve(), args.engine, roots=roots); print("ELF architecture, libc baseline, runtime paths and closure passed")
     elif args.command == "assemble":
-        assemble(args)
+        assemble(args, roots)
     elif args.command == "check-inputs":
-        check_inputs(args.engine, args.runtime); print("Engine/runtime inventories, SDK identity and engine ELF audit passed")
+        check_inputs(args.engine, args.runtime, roots); print("Engine/runtime inventories, SDK identity and ELF audit passed")
     elif args.command == "validate-release":
-        validate_release(args.root.resolve()); print("Release ELF audit and checksum inventory passed")
+        validate_release(args.root.resolve(), roots); print("Release ELF audit and checksum inventory passed")
     elif args.command == "audit-runtime":
-        info = elf(args.file)
+        info = elf(args.file, roots=roots)
         require(info is not None and not info["rpaths"] and all(name in HOST for name in info["needed"]), "AppImage runtime must have no private library dependencies or search paths")
     else:
-        archive(args.root.resolve(), args.output.resolve())
+        archive(args.root.resolve(), args.output.resolve(), roots)
 
 
 if __name__ == "__main__":

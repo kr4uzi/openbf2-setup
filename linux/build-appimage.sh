@@ -13,8 +13,9 @@ work=$(realpath -m "$3")
 [[ ! -e "$output" && ! -e "$work" ]] || { echo 'Output/work path already exists' >&2; exit 1; }
 printf '%s  %s\n' "$APPIMAGETOOL_SHA256" "$APPIMAGETOOL" | sha256sum -c -
 printf '%s  %s\n' "$APPIMAGE_RUNTIME_SHA256" "$APPIMAGE_RUNTIME" | sha256sum -c -
-python3 "$repo/linux/package.py" audit-runtime "$APPIMAGE_RUNTIME"
-python3 "$repo/linux/package.py" validate-release "$portable"
+audit_paths=(--build-root "$repo" --build-root "$work" --build-roots-file "${SETUP_ARTIFACT_BUILD_ROOTS_FILE:-}")
+python3 "$repo/linux/package.py" audit-runtime "$APPIMAGE_RUNTIME" "${audit_paths[@]}"
+python3 "$repo/linux/package.py" validate-release "$portable" "${audit_paths[@]}"
 mkdir -p "$work/OpenBF2.AppDir" "$(dirname "$output")"
 cp -a "$portable/." "$work/OpenBF2.AppDir/"
 cp "$repo/linux/AppRun" "$work/OpenBF2.AppDir/AppRun"

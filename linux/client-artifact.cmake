@@ -1,6 +1,7 @@
 # Match macOS: an optional read-only client artifact, copied on every build.
 find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
 set(SETUP_CLIENT_ARTIFACT "" CACHE PATH "Local Linux engine artifact (bin/, lib/, share/; read-only)")
+set(SETUP_ARTIFACT_BUILD_ROOTS_FILE "" CACHE FILEPATH "Local JSON list of engine/SDK source and build directories to reject in release artifacts")
 option(SETUP_CLIENT_ALLOW_DEVELOPMENT "Developer builds only: allow newer libc/CPU and debug paths without release metadata" OFF)
 set(client_development)
 if(SETUP_CLIENT_ALLOW_DEVELOPMENT)
@@ -10,6 +11,8 @@ set(client_embed_script "${CMAKE_CURRENT_LIST_DIR}/embed-client.py")
 add_custom_target(bf2_setup_client
   COMMAND "${Python3_EXECUTABLE}" "${client_embed_script}"
     --source "${SETUP_CLIENT_ARTIFACT}" --destination "${CMAKE_BINARY_DIR}" ${client_development}
+    --build-root "${CMAKE_SOURCE_DIR}" --build-root "${CMAKE_BINARY_DIR}"
+    --build-roots-file "${SETUP_ARTIFACT_BUILD_ROOTS_FILE}"
   VERBATIM)
 add_dependencies(OpenBF2 bf2_setup_client)
 # cmake --install must apply the same selection, including clearing stale files

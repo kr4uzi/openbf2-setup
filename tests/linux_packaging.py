@@ -73,6 +73,36 @@ class Packaging(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Absolute build path|runtime path"):
             package.audit(self.root)
 
+    def with_strings(self, path, values):
+        source = Path(self.temp.name) / "paths.c"
+        source.write_text("const char *paths[] = {" + ",".join(json.dumps(value) for value in values) + "};\n")
+        subprocess.run(["cc", "-shared", "-nostdlib", str(source), "-o", str(path), "-Wl,-rpath,$ORIGIN"], check=True)
+
+    def test_runtime_templates_and_similar_prefixes_are_allowed(self):
+        self.with_strings(self.root / "lib/libSDL3.so.0", ["/tmp/SDL-tray-XXXXXX", "/tmp/alsa-dmix-%i-%li-%li",
+                          "/build/foobar/file.cpp", "/build/foo-other/file.cpp", "/build/foo extra/file.cpp"])
+        package.audit(self.root, roots=("/build/foo", "/tmp/source build"))
+
+    def test_explicit_build_paths_rejected(self):
+        for value in ("/build/foo", "/build/foo/file.cpp", "/tmp/source build/src/file.cpp"):
+            with self.subTest(value=value):
+                self.with_strings(self.root / "lib/libSDL3.so.0", [value])
+                with self.assertRaisesRegex(ValueError, "Build/source directory embedded"):
+                    package.audit(self.root, roots=("/build/foo", "/tmp/source build"))
+
+    def test_roots_file_validation(self):
+        filename = Path(self.temp.name) / "roots.json"
+        filename.write_text(json.dumps(["/build/foo/", "/tmp/source build"]))
+        self.assertEqual(package.build_roots(["/build/foo"], filename), ("/build/foo", "/tmp/source build"))
+        for invalid in ([], {}, "relative", ["relative"], ["/"], ["//"], ["/tmp/invalid\0root"], [7]):
+            filename.write_text(json.dumps(invalid))
+            with self.assertRaises(ValueError):
+                package.build_roots(filename=filename)
+        with self.assertRaises(FileNotFoundError):
+            package.build_roots(filename=filename.with_name("missing.json"))
+        with self.assertRaisesRegex(ValueError, "outside artifact"):
+            package.external_roots_file(filename, [Path(self.temp.name)])
+
     def test_escape_runtime_path(self):
         subprocess.run(["patchelf", "--set-rpath", "$ORIGIN/../../outside", str(self.root / "bin/OpenBF2")], check=True)
         with self.assertRaisesRegex(ValueError, "escapes application"):
@@ -169,6 +199,14 @@ class Packaging(unittest.TestCase):
         write_metadata(args.engine)
         with self.assertRaisesRegex(ValueError, "replace setup files"):
             package.assemble(args)
+
+    def test_runtime_build_roots_checked_before_assembly(self):
+        args = self.inputs()
+        self.with_strings(args.runtime / package.PLUGINS[0], ["/build/qt-source/src/plugin.cpp"])
+        write_metadata(args.runtime, "runtime")
+        with self.assertRaisesRegex(ValueError, "Build/source directory embedded"):
+            package.assemble(args, roots=("/build/qt-source",))
+        self.assertFalse(args.output.exists())
 
     def test_development_embedding_cannot_be_released(self):
         args = self.inputs()

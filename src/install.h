@@ -39,8 +39,9 @@ void exportDisc(const fs::path& disc, const fs::path& output, const Control& = {
 struct Options {
     fs::path iso, patch141, patch150, output, reference, acceptance;
 };
+/// Diagnostics receive the CLI's configured scratch root; the core embeds no developer paths.
 /// Writes only a fresh private scratch tree. Returns nonzero for any incomplete phase.
-int prototype(const Options& options);
+int prototype(const Options& options, const fs::path& scratchRoot);
 /// Enumerates both complete trees and hashes every regular file; never supplies source bytes.
-int compare(const fs::path& output, const fs::path& reference, const fs::path& acceptance);
+int compare(const fs::path& output, const fs::path& reference, const fs::path& acceptance, const fs::path& scratchRoot);
 }

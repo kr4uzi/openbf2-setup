@@ -25,8 +25,8 @@ int main(int argc,char** argv) {
         }
         if(argc==4 && std::string(argv[1])=="verify") {setup::verifyManifest(argv[2],argv[3],control());return 0;}
         if(argc==3 && std::string(argv[1])=="hash") {std::cout<<setup::sha256(setup::View(argv[2]))<<'\n';return 0;}
-        if(argc==8 && std::string(argv[1])=="prototype") return setup::prototype({argv[2],argv[3],argv[4],argv[5],argv[6],argv[7]});
-        if(argc==5 && std::string(argv[1])=="compare") return setup::compare(argv[2],argv[3],argv[4]);
+        if(argc==8 && std::string(argv[1])=="prototype") return setup::prototype({argv[2],argv[3],argv[4],argv[5],argv[6],argv[7]}, OPENBF2_SETUP_SCRATCH);
+        if(argc==5 && std::string(argv[1])=="compare") return setup::compare(argv[2],argv[3],argv[4], OPENBF2_SETUP_SCRATCH);
         if(argc==3 && std::string(argv[1])=="records") {
             auto files=setup::readSfx(setup::View(argv[2]));auto bytes=files.at("disk1/bf2/patch.rtp").all();
             auto p=obf2_rtp_open(bytes.data(),bytes.size());if(!p)throw std::runtime_error(obf2_rtp_error());

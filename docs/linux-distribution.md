@@ -92,6 +92,11 @@ reconfiguring with `-DSETUP_CLIENT_ARTIFACT=` removes only files listed in the
 previous embedding inventory. Unrelated files remain; modified embedded files
 cause an error rather than being silently replaced. Inputs are read-only.
 
+Embedding checks the setup source/build directories for leaked paths. Supply
+`-DSETUP_ARTIFACT_BUILD_ROOTS_FILE=/build-inputs/roots.json` to also check the
+engine and SDK producer directories. This local JSON file stays outside both
+the input artifacts and application directories; it is never copied into them.
+
 For local engine testing only, add `-DSETUP_CLIENT_ALLOW_DEVELOPMENT=ON`.
 This permits a newer libc/CPU and embedded debug paths without release metadata.
 It still requires the complete engine layout, x86-64 ELFs, relative loader paths,
@@ -192,14 +197,34 @@ the release compatibility requirement.
 The engine build can check its handoff before building setup:
 
 ```sh
-python3 linux/package.py check-inputs --engine /artifacts/engine --runtime /artifacts/runtime
+python3 linux/package.py check-inputs --engine /artifacts/engine --runtime /artifacts/runtime \
+  --build-roots-file /build-inputs/roots.json
 ```
+
+The producer generates `roots.json` as a nonempty JSON array of the concrete
+absolute source, build and SDK directories used to compile its inputs, for example:
+
+```json
+["/build/engine/source", "/build/engine/output", "/build/sdk/source", "/build/sdk/output"]
+```
+
+Use the actual compiler-visible paths, including any path aliases used during
+the build. Do not list a general parent such as `/tmp`. The audit rejects each
+listed directory and its descendants, while permitting unrelated runtime paths
+such as `/tmp/SDL-tray-XXXXXX` and `/tmp/alsa-dmix-%i-%li-%li`. A directory named
+`/build/foobar` does not match `/build/foo`. The roots file is local build input,
+not published provenance. Missing or invalid producer roots fail release assembly.
+Standalone `package.py` commands also accept repeatable `--build-root PATH`;
+without roots they perform ELF/ABI/loader checks but cannot detect unknown source
+directory literals. Absolute RPATHs and path-valued dependencies remain rejected
+regardless of the supplied roots.
 
 ```sh
 export SETUP_CLIENT_ARTIFACT=/artifacts/engine
 export SETUP_RUNTIME_ARTIFACT=/artifacts/runtime
 export SETUP_SDK_PREFIX=/opt/openbf2-sdk
 export SETUP_BOOST_ROOT=/opt/boost-1.89.0
+export SETUP_ARTIFACT_BUILD_ROOTS_FILE=/build-inputs/roots.json
 linux/build-release.sh /output/OpenBF2-linux-x86_64.tar.gz /scratch/new-release
 ```
 
@@ -213,6 +238,13 @@ GLIBC versions and bundled providers, including GLIBCXX/CXXABI. The audit does
 not execute untrusted binaries (`ldd` is not used). It checks ELF CPU properties;
 build provenance and fixed compiler flags remain necessary because not every
 binary declares every instruction extension in its ELF notes.
+
+The release entry point adds setup's source/build/SDK directories to the supplied
+producer roots and passes them through input validation, embedding, assembly and
+archive validation. The diagnostic CLI retains its configured scratch restriction;
+the graphical application does not contain that scratch directory literal.
+AppImage and Flatpak wrappers accept the same environment variable to repeat the
+producer-root checks when wrapping an already validated portable tree.
 
 The installed `bin/qt.conf` selects `../lib/qt6/plugins` through a relative prefix.
 `share/openbf2/release.json` records engine/setup revisions, toolchain, SDK identity and input

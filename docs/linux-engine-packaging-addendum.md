@@ -45,10 +45,13 @@ bundle libc or host GPU drivers, retain build-machine paths, or use
 1. Build the engine and runtime artifacts using the agreed SDK.
 2. Check out a published, pinned setup commit containing Linux support. Earlier
    setup releases may only support macOS.
-3. Validate the handoff before compiling setup:
+3. Write a local JSON array of the actual engine/SDK source and build directories
+   to `/build-inputs/roots.json`, outside the input artifacts. Include all paths
+   used by the compiler; this file is not published. Validate the handoff:
 
    ```sh
-   python3 linux/package.py check-inputs --engine /artifacts/engine --runtime /artifacts/runtime
+   python3 linux/package.py check-inputs --engine /artifacts/engine --runtime /artifacts/runtime \
+     --build-roots-file /build-inputs/roots.json
    ```
 
 4. Prepare the cached Cargo inputs and SDK development prefix, then invoke:
@@ -58,6 +61,7 @@ bundle libc or host GPU drivers, retain build-machine paths, or use
    export SETUP_RUNTIME_ARTIFACT=/artifacts/runtime
    export SETUP_SDK_PREFIX=/opt/openbf2-sdk
    export SETUP_BOOST_ROOT=/opt/boost-1.89.0
+   export SETUP_ARTIFACT_BUILD_ROOTS_FILE=/build-inputs/roots.json
    linux/build-release.sh /output/OpenBF2-linux-x86_64.tar.gz /scratch/new-release
    ```
 

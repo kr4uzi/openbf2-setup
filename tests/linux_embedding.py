@@ -48,8 +48,11 @@ class Embedding(unittest.TestCase):
         (project / "CMakeLists.txt").write_text(
             'cmake_minimum_required(VERSION 3.24)\nproject(EmbedCheck NONE)\n'
             'add_custom_target(OpenBF2 ALL)\n' + f'include("{module}")\n')
+        roots_file = self.root / "producer-roots.json"
+        roots_file.write_text(json.dumps(["/builder/engine", "/builder/sdk"]))
         def configure(source):
-            subprocess.run(["cmake", "-G", "Ninja", "-S", str(project), "-B", str(self.destination), f"-DSETUP_CLIENT_ARTIFACT={source}"], check=True, stdout=subprocess.DEVNULL)
+            subprocess.run(["cmake", "-G", "Ninja", "-S", str(project), "-B", str(self.destination), f"-DSETUP_CLIENT_ARTIFACT={source}",
+                            f"-DSETUP_ARTIFACT_BUILD_ROOTS_FILE={roots_file}"], check=True, stdout=subprocess.DEVNULL)
         def build():
             subprocess.run(["cmake", "--build", str(self.destination), "--target", "OpenBF2"], check=True, stdout=subprocess.DEVNULL)
         before = {p.relative_to(self.engine): package.digest(p) for p in package.files(self.engine)}
@@ -70,6 +73,16 @@ class Embedding(unittest.TestCase):
             path.chmod(path.stat().st_mode | 0o200)
         changed = self.engine / "lib/libaidll.so"
         changed.chmod(0o755)
+        original = changed.read_bytes()
+        changed.write_bytes(original + b"\0/builder/engine/source.cpp\0")
+        write_metadata(self.engine)
+        for command in (["cmake", "--build", str(self.destination), "--target", "OpenBF2"],
+                        ["cmake", "--install", str(self.destination), "--prefix", str(prefix)]):
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Build/source directory embedded", result.stdout + result.stderr)
+        self.assertEqual(old_hash, package.digest(self.destination / "lib/libaidll.so"))
+        changed.write_bytes(original)
         with changed.open("ab") as stream:
             stream.write(b"updated client")
         write_metadata(self.engine)
