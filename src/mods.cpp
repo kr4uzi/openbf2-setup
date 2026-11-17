@@ -34,7 +34,7 @@ namespace {
 		return std::nullopt;
 	}
 
-	std::string read(const std::filesystem::path& file)
+	std::string read_text(const std::filesystem::path& file)
 	{
 		// a description or a localization file of many megabytes is not one
 		auto error = std::error_code{};
@@ -161,7 +161,7 @@ namespace {
 				if (entry.is_symlink() || ::lowercase(entry.path().extension().string()) != ".utxt")
 					continue;
 
-				if (auto text = localized(::read(entry.path()), written); !text.empty())
+				if (auto text = localized(::read_text(entry.path()), written); !text.empty())
 					return text;
 			}
 		}
@@ -212,7 +212,7 @@ std::vector<Mod> setup::find_mods(const std::filesystem::path& game, DiscEdition
 		if (!file || name.starts_with('.') || (::lowercase(name) == "xpack" && edition != DiscEdition::Deluxe))
 			continue;
 
-		auto description = ::read(*file);
+		auto description = ::read_text(*file);
 		if (::has_levels(entry.path(), description))
 			mods.push_back(Mod{ name, ::title(game, entry.path(), description) });
 	}
