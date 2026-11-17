@@ -106,6 +106,8 @@ int main(int argc,char** argv){
             using setup::Mod;
             check(setup::find_mods(game,setup::DiscEdition::BF2)==std::vector<Mod>{{"bf2","Battlefield 2"},{"Community","A Community Mod"},{"borrowed","UNKNOWN_KEY"}},"mods of a regular installation");
             check(setup::find_mods(game,setup::DiscEdition::DeluxeBase).size()==3,"Special Forces offered without being installed");
+            check(setup::find_mods(game,setup::DiscEdition::CompleteBase).size()==3,"Complete base edition offered Special Forces");
+            check(setup::find_mods(game,setup::DiscEdition::Complete).size()==4,"Complete Edition omitted Special Forces");
             check(setup::find_mods(game,setup::DiscEdition::Deluxe)==std::vector<Mod>{{"bf2","Battlefield 2"},{"xpack","Battlefield 2: Special Forces"},{"Community","A Community Mod"},{"borrowed","UNKNOWN_KEY"}},"mods of a Deluxe installation");
             fs::remove(game/"mods/xpack/Levels/Ghost_Town/info/ghost_town.desc");
             check(setup::find_mods(game,setup::DiscEdition::Deluxe).size()==3,"Special Forces stub without levels offered");
@@ -175,6 +177,12 @@ int main(int argc,char** argv){
         check(!session::clientPresent(contents),"nonexecutable client present");fs::permissions(contents/"MacOS/bf2_client",fs::perms::owner_all);
         rejects([&]{session::clientLaunch(contents,support);},"launch accepted legacy format-only key");
         check(session::currentEdition(support)==setup::DiscEdition::BF2,"v1 edition compatibility");
+        write(support/"Setup/Receipt-1234.txt","openbf2-setup-v3\nedition=complete\n");
+        check(session::currentEdition(support)==setup::DiscEdition::Complete,"Complete Edition receipt detection");
+        check(std::string(session::manifestName(setup::DiscEdition::Complete))=="content-complete-150","Complete Edition manifest selection");
+        write(support/"Setup/Receipt-1234.txt","openbf2-setup-v3\nedition=complete-base\n");
+        check(session::currentEdition(support)==setup::DiscEdition::CompleteBase,"Complete Edition base receipt detection");
+        check(std::string(session::manifestName(setup::DiscEdition::CompleteBase))=="content-150","Complete Edition base manifest selection");
         write(support/"Setup/Receipt-1234.txt","openbf2-setup-v2\nedition=deluxe\n");
         check(session::currentEdition(support)==setup::DiscEdition::Deluxe,"Deluxe receipt detection");
         write(support/"Setup/Receipt-1234.txt","openbf2-setup-v2\nedition=deluxe-base\n");

@@ -209,7 +209,7 @@ std::vector<Mod> setup::find_mods(const std::filesystem::path& game, DiscEdition
 
 		auto name = entry.path().filename().string();
 		auto file = ::child(entry.path(), "mod.desc");
-		if (!file || name.starts_with('.') || (::lowercase(name) == "xpack" && edition != DiscEdition::Deluxe))
+		if (!file || name.starts_with('.') || (::lowercase(name) == "xpack" && !hasSpecialForces(edition)))
 			continue;
 
 		auto description = ::read_text(*file);

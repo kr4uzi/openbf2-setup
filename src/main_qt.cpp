@@ -60,7 +60,8 @@ int smoke(Window& window, const std::filesystem::path& output) {
 	std::filesystem::create_directories(output); window.StayHidden();
 	window.ShowWelcome(); window.Snapshot(output / "0-welcome.png");
 	window.ShowDisc(); window.Snapshot(output / "1-disc.png");
-	window.ShowPatches(); window.Snapshot(output / "2-patches.png");
+	window.ShowPatches(); window.EnableNext(false); window.Snapshot(output / "2-patches.png");
+	window.ShowPatches(true); window.SetPatch(PatchSlot::Patch141, PatchStatus::verified); window.EnableNext(false); window.Snapshot(output / "2-complete-patches.png");
 	window.ShowKeys(true, true); window.Snapshot(output / "3-keys.png");
 	window.ShowInstall(); window.SetProgress({"patch141", "mods/bf2", 50, 100, 1, 2}); window.Snapshot(output / "4-install.png");
 	window.ShowVoice({}, false); window.SetMicrophone(MicrophoneStatus::skipped); window.SetLevel(.35); window.Snapshot(output / "5-voice.png");

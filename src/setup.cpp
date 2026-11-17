@@ -51,7 +51,7 @@ task<int> Setup::Launch()
 			installation = co_await InstallGame();
 		else if (!m_Store.HasKeys(installation->edition)) {
 			// the game data is there but Registry.con is not: only the keys are asked for
-			co_await EnterMissingKeys(installation->edition == DiscEdition::Deluxe);
+			co_await EnterMissingKeys(hasSpecialForces(installation->edition));
 		}
 		else if (!m_Unverified && !m_Window.LauncherRequested() && m_Client.Present() && !m_Store.LoadLaunch().always_show) {
 			// the usual start of an installed game: no window, straight into the game, and the application goes
@@ -125,7 +125,7 @@ task<Installation> Setup::InstallGame()
 			step = co_await ChoosePatches() ? Step::keys : Step::disc;
 			break;
 		case Step::keys:
-			if (!co_await EnterKeys(m_Media.edition == DiscEdition::Deluxe, true)) {
+			if (!co_await EnterKeys(hasSpecialForces(m_Media.edition), true)) {
 				step = Step::patches;
 				break;
 			}
@@ -299,8 +299,19 @@ task<bool> Setup::ChooseDisc()
 
 task<bool> Setup::ChoosePatches()
 {
-	m_Window.ShowPatches();
+	const bool included = m_Media.edition == DiscEdition::Complete;
+	auto& first = m_Patches[0];
+	if (first.included != included || (included && first.path != m_Media.disc)) {
+		if (first.cancelled) *first.cancelled = true;
+		first = {};
+	}
+	m_Window.ShowPatches(included);
+	if (first.verified) m_Window.SetPatch(PatchSlot::Patch141, PatchStatus::verified);
 	m_Window.EnableNext(m_Patches[0].verified && m_Patches[1].verified);
+	if (included && !first.verified) {
+		++m_PendingPatchChecks;
+		boost::asio::co_spawn(co_await boost::asio::this_coro::executor, CheckPatch(PatchSlot::Patch141, m_Media.disc, true), boost::asio::detached);
+	}
 	while (true) {
 		auto event = co_await NextEvent();
 		if (event.kind == Event::Kind::back)
@@ -308,6 +319,8 @@ task<bool> Setup::ChoosePatches()
 		else if (event.kind == Event::Kind::next && m_Patches[0].verified && m_Patches[1].verified)
 			co_return true;
 		else if (event.kind != Event::Kind::patch141_chosen && event.kind != Event::Kind::patch150_chosen)
+			continue;
+		if (included && event.kind == Event::Kind::patch141_chosen)
 			continue;
 
 		// the check takes a while (2 GB of SHA-256) and runs beside the page, so the other patch can be
@@ -318,7 +331,7 @@ task<bool> Setup::ChoosePatches()
 	}
 }
 
-task<void> Setup::CheckPatch(PatchSlot slot, std::filesystem::path path)
+task<void> Setup::CheckPatch(PatchSlot slot, std::filesystem::path path, bool included)
 {
 	struct Finished { unsigned& count; ~Finished() { --count; } } finished{m_PendingPatchChecks};
 	if (m_Closing) co_return;
@@ -327,7 +340,7 @@ task<void> Setup::CheckPatch(PatchSlot slot, std::filesystem::path path)
 		*patch.cancelled = true;
 
 	auto cancelled = std::make_shared<std::atomic<bool>>(false);
-	patch = Patch{ path, false, cancelled };
+	patch = Patch{ path, false, cancelled, included };
 	m_Window.SetPatch(slot, PatchStatus::checking);
 	if (m_Window.Shown() == Page::patches) m_Window.EnableNext(false);
 
@@ -336,7 +349,7 @@ task<void> Setup::CheckPatch(PatchSlot slot, std::filesystem::path path)
 		co_await m_Installer.CheckPatch(path, slot, cancelled, [this, slot, cancelled](double fraction) {
 			if (!*cancelled)
 				m_Window.SetPatch(slot, PatchStatus::checking, fraction);
-		});
+		}, included);
 	}
 	catch (const std::exception& e) {
 		failure = e.what();
@@ -408,8 +421,8 @@ bool Setup::ShowKeyStatus(bool deluxe)
 task<std::optional<Installation>> Setup::Install()
 {
 	auto keys = m_Window.Keys();
-	auto specialForces = m_Media.edition == DiscEdition::Deluxe && keys.install_special_forces;
-	m_Media.patch141 = m_Patches[0].path;
+	auto specialForces = hasSpecialForces(m_Media.edition) && keys.install_special_forces;
+	m_Media.patch141 = m_Patches[0].included ? std::filesystem::path{} : m_Patches[0].path;
 	m_Media.patch150 = m_Patches[1].path;
 
 	m_Window.ShowInstall();
@@ -436,7 +449,7 @@ task<std::optional<Installation>> Setup::Install()
 	if (title == "Setup paused")
 		failure += "\nYour previous installation is retained. Choose Install to retry or resume.";
 
-	m_Window.ShowKeys(m_Media.edition == DiscEdition::Deluxe, true);
+	m_Window.ShowKeys(hasSpecialForces(m_Media.edition), true);
 	m_Window.Message(title, failure);
 	co_return std::nullopt;
 }

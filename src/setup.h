@@ -22,6 +22,7 @@ namespace setup {
 			std::filesystem::path path;
 			bool verified = false;
 			std::shared_ptr<std::atomic<bool>> cancelled;
+			bool included = false;
 		};
 
 		Window& m_Window;
@@ -77,7 +78,7 @@ namespace setup {
 		// false, and the user told, if changed options could not be written to Setup/Launch.txt
 		bool SaveOptions();
 
-		task<void> CheckPatch(PatchSlot slot, std::filesystem::path path);
+		task<void> CheckPatch(PatchSlot slot, std::filesystem::path path, bool included = false);
 		bool ShowKeyStatus(bool deluxe);
 		void ShowMicrophone();
 

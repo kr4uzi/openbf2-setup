@@ -7,9 +7,10 @@
 
 namespace setup {
 struct InstallOptions {
+    // Complete Edition always uses its included 1.41 patch; patch141 may be empty.
     fs::path disc, patch141, patch150, supportRoot, manifest;
     Control control;
-    // Deluxe media only: false installs the base game alone (DeluxeBase receipt,
+    // Expansion media: false installs the base game alone (a Base receipt,
     // no xpack disc content, no XP1 patch records). Ignored for regular discs.
     bool specialForces = true;
 };

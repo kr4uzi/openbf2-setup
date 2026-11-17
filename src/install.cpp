@@ -151,18 +151,29 @@ void writeFile(const fs::path& path, const std::function<void(const Sink&)>& ext
     } catch (...) { stream.close(); fs::remove(temp); throw; }
 }
 
-std::map<std::string,std::pair<size_t,std::string>> selection(const Cabinet& cab,bool disc,bool expansion=true) {
+std::map<std::string,std::pair<size_t,std::string>> selection(const Cabinet& cab,bool disc,bool expansion=true,bool standaloneSf=false) {
     std::map<std::string,std::pair<size_t,std::string>> selected;
     for(size_t i=0;i<cab.files.size();++i) {
         const auto& e=cab.files[i];if((e.flags&8)||e.path.empty())continue;
-        for(const auto& g:e.groups) {auto dest=destination(disc,g,e.path);if(!dest.empty()&&(expansion||!disc||!expansionContent(dest)))selected[lower(dest)]={i,dest};}
+        for(const auto& g:e.groups) {
+            auto dest=standaloneSf?specialForcesDestination(g,e.path):destination(disc,g,e.path);
+            if(dest.empty()||(!expansion&&disc&&expansionContent(dest)))continue;
+            auto key=lower(dest);auto previous=selected.find(key);
+            // The dedicated cursor component is the SF source used by XP1's
+            // history; the generic Menu component also carries an older copy.
+            if(standaloneSf&&g=="Xpack Menu"&&previous!=selected.end()) {
+                const auto& groups=cab.files[previous->second.first].groups;
+                if(std::find(groups.begin(),groups.end(),"Xpack Cursors")!=groups.end())continue;
+            }
+            selected[key]={i,dest};
+        }
     }
     return selected;
 }
-void extractCabinet(const Files& container,const std::string& prefix,bool disc,const fs::path& root,Run* run=nullptr,bool expansion=true) {
-    Cabinet cab(container,prefix);auto selected=selection(cab,disc,expansion);
+void extractCabinet(const Files& container,const std::string& prefix,bool disc,const fs::path& root,Run* run=nullptr,bool expansion=true,bool standaloneSf=false) {
+    Cabinet cab(container,prefix);auto selected=selection(cab,disc,expansion,standaloneSf);
     uint64_t total=0;for(const auto& item:selected)total+=cab.files[item.second.first].size;
-    if(run){run->begin(disc?"disc":"overlay150",selected.size(),total);if(run->phaseDone())return;}
+    if(run){run->begin(standaloneSf?"disc-xp1":disc?"disc":"overlay150",selected.size(),total);if(run->phaseDone())return;}
     // No need to decompress unselected installer features: the complete source
     // identities are verified before writes. Every installed payload keeps MD5.
     struct Job {size_t index;std::string relative;fs::path path;};std::vector<Job> jobs;
@@ -183,6 +194,7 @@ void extractCabinet(const Files& container,const std::string& prefix,bool disc,c
                     if(e.offset||(e.links&1))cab.extract(job.index,emit);
                     else {
                         auto loose=container.find(lower(job.relative));
+                        if(standaloneSf&&loose==container.end()&&std::find(e.groups.begin(),e.groups.end(),"eReg")!=e.groups.end())loose=container.find(lower("Support/"+e.path));
                         if(disc&&loose==container.end()&&std::find(e.groups.begin(),e.groups.end(),"eReg - XP1")!=e.groups.end())loose=container.find(lower("Support_XP1/"+e.path));
                         if(disc&&loose==container.end()&&std::find(e.groups.begin(),e.groups.end(),"Support - English")!=e.groups.end())loose=container.find(lower("Support/English/"+e.path));
                         check(disc&&loose!=container.end(),"unresolved external cabinet file: "+job.relative);
@@ -201,7 +213,7 @@ void extractCabinet(const Files& container,const std::string& prefix,bool disc,c
     std::cout<<(disc?"disc":"1.50")<<": "<<selected.size()<<" paths verified\n"<<std::flush;
 }
 
-size_t patch141(const Files& container, const fs::path& root, const fs::path& report, const std::set<std::string>& replacements = {}, Run* run = nullptr, bool xp1 = false) {
+size_t patch141(const Files& container, const fs::path& root, const fs::path& report, const std::set<std::string>& replacements = {}, Run* run = nullptr, bool xp1 = false, bool complete = false) {
     const auto& source=container.at(xp1?"disk1/xp1/patch.rtp":"disk1/bf2/patch.rtp");
     struct Reader {const View* source;Run* run;} reader{&source,run};
     auto read=[](void* context,size_t offset,uint8_t* output,size_t length)->int {
@@ -239,6 +251,13 @@ size_t patch141(const Files& container, const fs::path& root, const fs::path& re
         RtpBytes result{};
         int status = obf2_rtp_apply(patch.get(), i, source.data(), source.size(), present, &result);
         if (status < 0) {
+            // Complete's original SF Fonts_server.zip is absent from the RTP
+            // source history, whose terminal action deletes it. Retire only
+            // this exact disc file; unknown source bytes still fail below.
+            if(complete&&xp1&&relative=="mods/xpack/fonts_server.zip"&&present&&obf2_rtp_terminal(patch.get(),i)==1&&
+               digest(View(path),true)=="0dedc24a5652c70b76ef0a543566a77a21ea75dd0691fb681ef8ae6b39c6c48b") {
+                fs::remove(path);++deleted;log<<"retired-complete-disc-file\t"<<relative<<'\n';if(run)run->record(relative,path,true);continue;
+            }
             // This exact retail manifest has a metadata-only historical MODIFY
             // followed by DELETE. Its missing bytes cannot be reconstructed.
             // Remove only the cryptographically identified DVD manifest; do not
@@ -357,7 +376,7 @@ int64_t modified(const fs::path& path) {return int64_t(fs::last_write_time(path)
 std::string verificationStamp(const fs::path& game,const fs::path& manifest) {
     std::string text;
     for(const auto& e:readManifest(manifest)) {
-        auto path=game/e.path;check(fs::is_regular_file(fs::symlink_status(path)),"stamp of a missing file: "+e.path);
+        auto path=stagingPath(game,e.path);check(fs::is_regular_file(fs::symlink_status(path)),"stamp of a missing file: "+e.path);
         text+=e.path+"\t"+std::to_string(fs::file_size(path))+"\t"+std::to_string(modified(path))+"\n";
     }
     return text;
@@ -373,7 +392,7 @@ bool stampMatches(const fs::path& game,const fs::path& manifest,const std::strin
         auto expected=readManifest(manifest);
         if(recorded.size()!=expected.size())return false;
         for(const auto& e:expected) {
-            auto path=game/e.path;auto found=recorded.find(lower(e.path));
+            auto path=stagingPath(game,e.path);auto found=recorded.find(lower(e.path));
             if(found==recorded.end()||found->second.first!=e.size||!fs::is_regular_file(fs::symlink_status(path)))return false;
             if(clientSettings(e.path))continue;
             if(fs::file_size(path)!=e.size||modified(path)!=found->second.second)return false;
@@ -494,29 +513,37 @@ void exportDisc(const fs::path& source,const fs::path& output,const Control& con
 }
 fs::path install(const InstallOptions& o,Platform& platform) {
     Run run;run.control=o.control;run.platform=&platform;
+    auto disc=readDisc(o.disc);auto contents=discContents(disc);
+    auto edition=contents.edition;bool deluxe=edition==DiscEdition::Deluxe,complete=edition==DiscEdition::Complete;
+    const bool expansion=hasSpecialForces(edition)&&o.specialForces;
     // Refuse source/output overlap before creating a single directory.
     auto support=fs::absolute(o.supportRoot).lexically_normal();
     auto inside=[](const fs::path& a,const fs::path& b){auto r=a.lexically_relative(b);return !r.empty()&&!r.is_absolute()&&*r.begin()!="..";};
-    for(const auto& input:{o.disc,o.patch141,o.patch150,o.manifest}) {
+    std::vector<fs::path> inputPaths{o.disc,o.patch150,o.manifest};
+    if(!complete)inputPaths.push_back(o.patch141);
+    for(const auto& input:inputPaths) {
         auto path=fs::canonical(input);check(!inside(path,support)&&!inside(support,path),"input/output overlap");
     }
     secureDirectory(support/"Setup");secureDirectory(support/"GameData");
     auto lock=platform.lock(support/"Setup/Install.lock");
     run.transaction=support/"Setup/work";
     // Validate the supported media by full SHA-256, before staging any payload.
-    auto disc=readDisc(o.disc);Cabinet discCab(disc,"");
-    auto edition=discEdition(discCab.files);bool deluxe=edition==DiscEdition::Deluxe;
-    const bool expansion=deluxe&&o.specialForces; // Deluxe media may install the base game alone
-    check(discCab.files.size()==(deluxe?3162:1727),"unsupported disc cabinet inventory");
-    auto p141=readSfx(View(o.patch141)),p150=readSfx(View(o.patch150));
-    std::string identities=deluxe?"openbf2-setup-v2\n":"openbf2-setup-v1\n";
+    Cabinet discCab(contents.base,"");
+    auto patch141Input=complete?includedPatch141(disc):View(o.patch141);
+    auto p141=readSfx(patch141Input),p150=readSfx(View(o.patch150));
+    std::string identities=complete?"openbf2-setup-v3\n":deluxe?"openbf2-setup-v2\n":"openbf2-setup-v1\n";
     struct Input {std::string name,expected;View view;};std::vector<Input> inputs;
     if(fs::is_directory(o.disc)) {
-        inputs.push_back({"DVD data1.hdr",deluxe?"ae4800c392fa1bf730cbc90823b40ae772fe6b82ba28f15b48333c3cd002a350":"bf2ffc9c72c119c79639df5138c1a3bac2f7df78ae0adb9a124796e1665c5377",disc.at("data1.hdr")});
-        inputs.push_back({"DVD data1.cab",deluxe?"27a1a23e868b434517d39c9e68531442ed7674d15e802a0122ffb064bffa78e1":"6ac0645f56d4107b78c4f4c66658a19dff0630f72c0fc13ae86cf9f430f40181",disc.at("data1.cab")});
-        inputs.push_back({"DVD data2.cab",deluxe?"7bd10eb4a3740973171d38a952cc2c51bee8818ce923085d466f1cf9295a75b4":"6061bbfa63ed6e6cb98d90dd3cedd1db80a94b85e40bd556449a59e6c94448dc",disc.at("data2.cab")});
-    } else inputs.push_back({"DVD image",deluxe?"7b462933353f89f5a7d7282987be61062a92d248fec125050039ba440765e99e":"2116a6b7107fdf1054e3fd86282f5db02b60c01658d7a4ca13e953d747b95854",View(o.disc)});
-    inputs.push_back({"Patch 1.41",expectedPatch(PatchSlot::Patch141).hash,View(o.patch141)});
+        inputs.push_back({"DVD data1.hdr",deluxe?"ae4800c392fa1bf730cbc90823b40ae772fe6b82ba28f15b48333c3cd002a350":"bf2ffc9c72c119c79639df5138c1a3bac2f7df78ae0adb9a124796e1665c5377",contents.base.at("data1.hdr")});
+        inputs.push_back({"DVD data1.cab",deluxe?"27a1a23e868b434517d39c9e68531442ed7674d15e802a0122ffb064bffa78e1":"6ac0645f56d4107b78c4f4c66658a19dff0630f72c0fc13ae86cf9f430f40181",contents.base.at("data1.cab")});
+        inputs.push_back({"DVD data2.cab",deluxe?"7bd10eb4a3740973171d38a952cc2c51bee8818ce923085d466f1cf9295a75b4":"6061bbfa63ed6e6cb98d90dd3cedd1db80a94b85e40bd556449a59e6c94448dc",contents.base.at("data2.cab")});
+        if(complete) {
+            inputs.push_back({"Special Forces data1.hdr","966a5bb19fb68a3d01286a27415dfbcf088f39b979224b236f8f157eaa14b6bd",contents.specialForces.at("data1.hdr")});
+            inputs.push_back({"Special Forces data1.cab","3318718c107a1b8699bebb02fe40a1e64e5c0449c394e47ee07c2631834a3803",contents.specialForces.at("data1.cab")});
+            inputs.push_back({"Special Forces data2.cab","4cc17a91ae7a391262bbb620d81231fc82c396f0cfc367013f5971cafc67bc0f",contents.specialForces.at("data2.cab")});
+        }
+    } else inputs.push_back({"DVD image",complete?"cf77875795c4d75f3c802e6cbaa75111c9887b730e743aafd3c63aef706f799d":deluxe?"7b462933353f89f5a7d7282987be61062a92d248fec125050039ba440765e99e":"2116a6b7107fdf1054e3fd86282f5db02b60c01658d7a4ca13e953d747b95854",View(o.disc)});
+    inputs.push_back({"Patch 1.41",expectedPatch(PatchSlot::Patch141).hash,patch141Input});
     inputs.push_back({"Patch 1.50",expectedPatch(PatchSlot::Patch150).hash,View(o.patch150)});
     uint64_t inputBytes=0;for(const auto& input:inputs)inputBytes+=input.view.size();run.begin("inputs",inputs.size(),inputBytes);
     std::vector<std::future<std::string>> hashes;
@@ -534,8 +561,10 @@ fs::path install(const InstallOptions& o,Platform& platform) {
     if(inputError)std::rethrow_exception(inputError);
     identities+=digest(View(o.manifest),true)+"\n";
     if(deluxe)identities+=expansion?"edition=deluxe\n":"edition=deluxe-base\n";
+    if(complete)identities+=expansion?"edition=complete\n":"edition=complete-base\n";
     Cabinet full(p150,"disk1/");check(full.files.size()==381,"unsupported cabinet inventory");
     uint64_t needed=0;for(const auto& item:selection(discCab,true,expansion))needed+=discCab.files[item.second.first].size;
+    if(complete&&expansion) {Cabinet sf(contents.specialForces,"");for(const auto& item:selection(sf,true,true,true))needed+=sf.files[item.second.first].size;}
     for(const auto& item:selection(full,false))needed+=full.files[item.second.first].size;
     needed+=uint64_t(2)*1024*1024*1024; // RTP working set + filesystem reserve.
     if(!fs::exists(run.transaction))check(platform.availableSpace(support)>=needed,"Insufficient free space for staging and patch reserve");
@@ -569,7 +598,8 @@ fs::path install(const InstallOptions& o,Platform& platform) {
         // Intent was flushed before the generation rename; resume normal work.
     }
     auto game=run.transaction/"game";secureDirectory(game);
-    extractCabinet(disc,"",true,game,&run,expansion);
+    extractCabinet(contents.base,"",true,game,&run,expansion);
+    if(complete&&expansion)extractCabinet(contents.specialForces,"",true,game,&run,true,true);
     // The 1.50 installer preserves the original DVD renderer under this alias.
     run.begin("preserveRenderer",1,2115072);
     if(!run.phaseDone()) {
@@ -579,7 +609,7 @@ fs::path install(const InstallOptions& o,Platform& platform) {
     }
     std::set<std::string> replacements;for(const auto& item:selection(full,false))replacements.insert(item.first);
     check(patch141(p141,game,run.transaction/"patch141.tsv",replacements,&run)==0,"Required 1.41 record failed; see patch141.tsv");
-    if(expansion)check(patch141(p141,game,run.transaction/"patch141-xp1.tsv",replacements,&run,true)==0,"Required Special Forces 1.41 record failed; see patch141-xp1.tsv");
+    if(expansion)check(patch141(p141,game,run.transaction/"patch141-xp1.tsv",replacements,&run,true,complete)==0,"Required Special Forces 1.41 record failed; see patch141-xp1.tsv");
     extractCabinet(p150,"disk1/",false,game,&run);
     verifyManifest(game,o.manifest,o.control);run.cancel();
     // Flush all installed directories before publishing a same-volume generation.

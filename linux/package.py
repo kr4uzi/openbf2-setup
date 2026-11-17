@@ -17,7 +17,7 @@ CLIENT = ("bin/bf2_client", "lib/libdice_py.so", "lib/libaidll.so",
           "lib/libdxvk_d3d9.so.0", "lib/libSDL3.so.0", "lib/libopenal.so.1")
 DYNAMIC_AUDIO = ("lib/libpulse.so.0", "lib/libasound.so.2")
 APP = ("bin/OpenBF2", "bin/qt.conf", "share/openbf2/setup/content-150.tsv",
-       "share/openbf2/setup/content-deluxe-150.tsv", "share/openbf2/setup/content-deluxe-base-150.tsv",
+       "share/openbf2/setup/content-deluxe-150.tsv", "share/openbf2/setup/content-deluxe-base-150.tsv", "share/openbf2/setup/content-complete-150.tsv",
        "share/icons/hicolor/256x256/apps/org.openbf2.Setup.png")
 PLUGINS = ("lib/qt6/plugins/platforms/libqxcb.so", "lib/qt6/plugins/platforms/libqoffscreen.so",
            "lib/qt6/plugins/wayland-shell-integration/libxdg-shell.so",

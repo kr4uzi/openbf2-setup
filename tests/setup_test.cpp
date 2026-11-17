@@ -133,6 +133,43 @@ int main()
 		check(g_Machine.client_runs == 1, "Play did not start the game once");
 	});
 
+	for (bool specialForces : {true, false}) run("Complete Edition supplies 1.41", [=](FakeMachine& machine) {
+		machine.script = {
+			click(Page::welcome), {Kind::disc_chosen, "complete.iso"}, click(Page::disc),
+			{Kind::patch150_chosen, "patch150.exe"}, click(Page::patches),
+			{Kind::keys_edited, {}, {key, specialForces ? special_forces_key : "", specialForces}},
+			click(Page::keys), click(Page::voice), quit()
+		};
+	}, [=] {
+		check(g_Machine.included141 && called("check-patch141"), "included 1.41 was not shown and verified");
+		check(g_Machine.installed_media && g_Machine.installed_media->patch141.empty(), "included patch became an external file selection");
+		check(g_Machine.installed->edition == (specialForces ? DiscEdition::Complete : DiscEdition::CompleteBase), "wrong Complete Edition receipt");
+		check(g_Machine.installed_special_forces == specialForces && g_Machine.messages.empty(), "Complete Edition did not install with the chosen features");
+	});
+
+	run("changing away from Complete Edition needs an external 1.41 patch", [](FakeMachine& machine) {
+		machine.script = {
+			click(Page::welcome), {Kind::disc_chosen, "complete.iso"}, click(Page::disc),
+			{Kind::patch150_chosen, "patch150.exe"}, click(Page::patches),
+			{Kind::back}, {Kind::back}, {Kind::disc_chosen, "bf2.iso"}, click(Page::disc),
+			{Kind::close, {}, {}, [](const FakeMachine& m){ return page(m)==Page::patches; }}
+		};
+	}, [] {
+		check(!g_Machine.included141 && !g_Machine.next_enabled, "included verification leaked to a different disc");
+		check(!called("install"), "installation started without an external 1.41 patch");
+	});
+
+	run("included 1.41 failure blocks Continue", [](FakeMachine& machine) {
+		machine.failures["check-patch141"] = 1;
+		machine.script = {
+			click(Page::welcome), {Kind::disc_chosen, "complete.iso"}, click(Page::disc),
+			{Kind::patch150_chosen, "patch150.exe"},
+			{Kind::close, {}, {}, [](const FakeMachine& m){ return !m.messages.empty() && m.patches.contains(PatchSlot::Patch150) && m.patches.at(PatchSlot::Patch150)==PatchStatus::verified; }}
+		};
+	}, [] {
+		check(!g_Machine.next_enabled && told("Check your patch file"), "bad included patch was accepted");
+	});
+
 	run("deluxe disc with both keys", [](FakeMachine& machine) {
 		machine.script = until_install("deluxe.iso", { key, special_forces_key, true });
 		append(machine.script, { click(Page::keys), click(Page::voice), quit() });

@@ -4,8 +4,11 @@ Standalone native Battlefield 2 setup: a portable C++17 ISO/DVD, cabinet, SFX
 and RTPatch pipeline, a diagnostic CLI, and native macOS AppKit and Linux Qt 6 Widgets assistants.
 No Wine, Python interpreter, Rust runtime, game content or patch payload is
 required in the distributed app. Users supply their own supported English DVD
-or ISO (regular BF2 or BF2 Deluxe with Special Forces) and the official
-**1.0 → 1.41 → 1.50** patch chain.
+or ISO (regular BF2, Deluxe or Complete Edition) and the official
+**1.0 → 1.41 → 1.50** patch chain. Complete Edition supplies 1.41 on its disc:
+setup selects and verifies it automatically, showing **Included on disc**.
+Only 1.50 needs to be selected separately for that edition; it includes Euro
+Force and Armored Fury.
 
 On Linux, run `bin/OpenBF2`; `--launcher` opens settings and `--install-desktop`
 adds a user menu entry. Data lives in `$XDG_DATA_HOME/OpenBF2`, falling back to
@@ -25,7 +28,7 @@ verification, which takes a moment; when that comparison fails or no record
 exists, the launcher page opens with a note instead, and the full check of every
 file runs only from its button.
 First launch walks through Welcome → DVD/ISO → patches → CD key → installation
-→ voice setup → Play. Deluxe shows an "Install Special Forces" checkbox (on by default) and a
+→ voice setup → Play. Deluxe and Complete Edition show an "Install Special Forces" checkbox (on by default) and a
 second Special Forces key row; unchecked, only the base game is installed from the Deluxe disc and no expansion key is
 asked for or stored (see [disc editions](docs/disc-editions.md)). Both key rows use the independently
 reconstructed [retail local CD-key check](docs/cdkey-check.md); Install requires
@@ -58,13 +61,14 @@ never written to.
 | `CustomMods/` | your own mods, linked into the generation's `mods/` at every start |
 | `mods/`, `FxNative/`, `logocache/`, … | the client's caches |
 
-Three editions exist. A regular disc installs 1,755 files. A Deluxe disc with
+Five installed variants exist. A regular disc installs 1,755 files. A Deluxe disc with
 "Install Special Forces" checked installs 3,030 files, with Special Forces
 playable as the `xpack` mod. A Deluxe disc with the box unchecked installs the
-base game alone, 1,749 files, and asks for no expansion key. Every edition has a
-`mods/xpack` folder of 19 files (391 MB) because patch 1.50 ships that subset to
-every Battlefield 2, as it did in retail; it has no levels and is not offered as
-a mod. Details and evidence: [disc editions](docs/disc-editions.md).
+base game alone, 1,749 files, and asks for no expansion key. Complete Edition
+installs 3,058 files with Special Forces, or the regular 1,755-file contract
+without it. Patch 1.50 supplies a 19-file `mods/xpack` subset even without SF;
+that subset has no levels and is not offered as a mod. Details and evidence:
+[disc editions](docs/disc-editions.md).
 
 ## Build offline
 
@@ -215,14 +219,15 @@ metadata, never a CD key.
 
 The supported input hashes, resolved patch outcomes and intentional differences
 are documented in [correctness](docs/research/correctness.md). The contracts cover the
-observed English BF2 and Deluxe discs and the two pinned official patches.
+observed English BF2, Deluxe and Complete Edition discs and the two pinned official patches.
 Other editions/locales and exact Windows installer side effects are unvalidated.
 
 ## App and DMG
 
 The app is built at `build/macos/OpenBF2.app`. Mounted DVD folders and ISO
 files both work through the same cabinet pipeline; the app never mounts an ISO.
-Drag-and-drop and Choose are available for the disc and both patches. Each key row has five visible text
+Drag-and-drop and Choose are available for the disc and external patches;
+Complete Edition's included 1.41 is automatic. Each key row has five visible text
 fields supporting whole-key paste, auto-advance and backspace within that row. Progress/cancellation
 run through the C++ callbacks on a worker thread, with UI updates on the main
 thread.

@@ -135,6 +135,18 @@ task<int> exercise(Window& window, std::filesystem::path root) {
 	window.ShowPatches(); window.Choose(Kind::patch141_chosen, "first.exe"); window.Choose(Kind::patch141_chosen, "replacement.exe");
 	check((co_await window.WaitForEvent()).path == "first.exe", "first patch selection"); check((co_await window.WaitForEvent()).path == "replacement.exe", "patch replacement order");
 	window.SetPatch(PatchSlot::Patch141, PatchStatus::checking, .5); window.SetPatch(PatchSlot::Patch141, PatchStatus::verified);
+	window.ShowPatches(true);
+	QWidget* includedWell = nullptr;
+	for (auto top : QApplication::topLevelWidgets()) if ((includedWell = top->findChild<QWidget*>("patch141Well"))) break;
+	check(includedWell && !includedWell->acceptDrops(), "included patch accepts a replacement drop");
+	check(!includedWell->findChild<QPushButton*>()->isEnabled(), "included patch still asks for a file");
+	bool includedLabel = false;
+	for (auto label : includedWell->findChildren<QLabel*>()) includedLabel |= label->text().contains("Included on disc");
+	check(includedLabel, "included patch source is not shown");
+	window.Choose(Kind::patch141_chosen, "ignored.exe"); window.Choose(Kind::patch150_chosen, "second.exe");
+	check((co_await window.WaitForEvent()).path == "second.exe", "included patch can be replaced");
+	window.ShowPatches(false);
+	check(includedWell->acceptDrops() && includedWell->findChild<QPushButton*>()->isEnabled(), "manual patch selection did not return");
 	window.ShowKeys(true, true); window.PasteKey(KeyEdition::BF2, "abcd-1234-efgh-5678-ijkl");
 	check((co_await window.WaitForEvent()).kind == Kind::keys_edited, "key edit event");
 	check(window.Keys().key == "ABCD1234EFGH5678IJKL", "grouped key paste");

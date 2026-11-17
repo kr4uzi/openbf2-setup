@@ -143,6 +143,8 @@ DiscEdition currentEdition(const fs::path& support) {
     auto lines="\n"+metadata;
     if(lines.find("\nedition=deluxe\n")!=std::string::npos)return DiscEdition::Deluxe;
     if(lines.find("\nedition=deluxe-base\n")!=std::string::npos)return DiscEdition::DeluxeBase;
+    if(lines.find("\nedition=complete\n")!=std::string::npos)return DiscEdition::Complete;
+    if(lines.find("\nedition=complete-base\n")!=std::string::npos)return DiscEdition::CompleteBase;
     return DiscEdition::BF2;
 }
 bool storedKey(const fs::path& support,bool sf) {
@@ -162,7 +164,7 @@ bool clientPresent(const ClientLayout& layout) {
 Launch clientLaunch(const ClientLayout& layout,const fs::path& support,const LaunchOptions& options) {
     require(clientPresent(layout),"The native client or its libraries are missing from this build.");
     require(storedKey(support),"Enter your CD key before playing.");
-    if(currentEdition(support)==DiscEdition::Deluxe)require(storedKey(support,true),"Enter your Special Forces CD key before playing.");
+    if(hasSpecialForces(currentEdition(support)))require(storedKey(support,true),"Enter your Special Forces CD key before playing.");
     auto generation=currentGeneration(support);
     auto arguments=launch_arguments(options);
     require(!arguments.empty(),"The command line is empty.");

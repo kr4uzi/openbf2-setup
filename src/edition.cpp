@@ -56,9 +56,44 @@ DiscEdition discEdition(const std::vector<Entry>& entries) {
     return DiscEdition::Deluxe;
 }
 DiscEdition detectDisc(const fs::path& path) {
-    Cabinet cab(readDisc(path),"");auto edition=discEdition(cab.files);
+    return discContents(readDisc(path)).edition;
+}
+std::string specialForcesDestination(const std::string& group,const std::string& path) {
+    if(path.empty())return {};
+    static const std::map<std::string,std::string> roots{
+        {"Python_Xpack","python_xpack"}, {"Xpack Cursors","mods/xpack/Menu"},
+        {"Xpack Menu","mods/xpack/Menu/External"}, {"Xpack MenuObjects","mods/xpack/Objects"},
+        {"Movies - xpack - English","mods/xpack/Movies"}, {"Xpack - IntroMovie","mods/xpack/Movies"},
+        {"eReg","SupportXP1"}, {"Support - English","SupportXP1"}};
+    auto it=roots.find(group);
+    if(it!=roots.end())return safePath(it->second+"/"+path);
+    return group.rfind("Mods - xpack",0)==0?discDestination(group,path):std::string{};
+}
+View includedPatch141(const Files& files) {
+    auto patch=files.find("installers/bf2 patch 1.41.exe");
+    if(patch==files.end())throw std::runtime_error("The Complete Edition's included 1.41 patch is missing.");
+    return patch->second;
+}
+DiscContents discContents(const Files& files) {
+    if(files.count("installers/bf2/data1.hdr")) {
+        auto component=[&](const std::string& prefix){
+            Files result;for(const auto& [name,view]:files)if(name.rfind(prefix,0)==0)result.emplace(name.substr(prefix.size()),view);
+            return result;
+        };
+        DiscContents result{DiscEdition::Complete,component("installers/bf2/"),component("installers/sf/")};
+        Cabinet base(result.base,""),sf(result.specialForces,"");
+        if(base.files.size()!=1727||sf.files.size()!=1508||discEdition(base.files)!=DiscEdition::BF2)
+            throw std::runtime_error("This Complete Edition is not supported.");
+        // Reuse the expansion completeness checks with the combined inventories.
+        auto combined=base.files;combined.insert(combined.end(),sf.files.begin(),sf.files.end());
+        if(discEdition(combined)!=DiscEdition::Deluxe)
+            throw std::runtime_error("Incomplete Special Forces content on this disc.");
+        includedPatch141(files);
+        return result;
+    }
+    Cabinet cab(files,"");auto edition=discEdition(cab.files);
     if(cab.files.size()!=(edition==DiscEdition::Deluxe?3162:1727))throw std::runtime_error("This DVD edition is not supported.");
-    return edition;
+    return {edition,files,{}};
 }
 }
 
@@ -67,6 +102,7 @@ const char* manifestName(DiscEdition edition) {
     switch(edition){
         case DiscEdition::Deluxe:return "content-deluxe-150";
         case DiscEdition::DeluxeBase:return "content-deluxe-base-150";
+        case DiscEdition::Complete:return "content-complete-150";
         default:return "content-150";
     }
 }

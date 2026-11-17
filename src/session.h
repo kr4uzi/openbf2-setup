@@ -14,7 +14,7 @@ void saveKeys(const fs::path& support, const std::string& key, const std::string
 void saveKey(const fs::path& support, const std::string& key, Platform&);
 fs::path currentGeneration(const fs::path& support);
 bool storedKey(const fs::path& support, bool specialForces = false);
-// BF2, Deluxe, or DeluxeBase (Deluxe media installed without Special Forces).
+// The installed edition, including base-only Deluxe and Complete installations.
 DiscEdition currentEdition(const fs::path& support);
 // Voice chat defaults, the one file retail's BF2VoiceSetup writes
 // (Profiles/BattleCommoDefaultUserSettings.con). The client reads it only

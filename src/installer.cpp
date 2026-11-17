@@ -51,7 +51,7 @@ task<DiscEdition> Installer::CheckDisc(std::filesystem::path disc)
 	});
 }
 
-task<void> Installer::CheckPatch(std::filesystem::path patch, PatchSlot slot, std::shared_ptr<std::atomic<bool>> cancelled, std::function<void(double)> progress)
+task<void> Installer::CheckPatch(std::filesystem::path patch, PatchSlot slot, std::shared_ptr<std::atomic<bool>> cancelled, std::function<void(double)> progress, bool included)
 {
 	auto executor = co_await boost::asio::this_coro::executor;
 	auto control = Control{};
@@ -66,14 +66,14 @@ task<void> Installer::CheckPatch(std::filesystem::path patch, PatchSlot slot, st
 	};
 
 	co_await m_Worker.Run([&] {
-		verifyPatch(View{ patch }, slot, control);
+		verifyPatch(included ? includedPatch141(readDisc(patch)) : View{ patch }, slot, control);
 	});
 }
 
 task<Installation> Installer::Install(Media media, bool specialForces, std::function<void(const Progress&)> progress)
 {
 	auto executor = co_await boost::asio::this_coro::executor;
-	auto edition = media.edition == DiscEdition::Deluxe && !specialForces ? DiscEdition::DeluxeBase : media.edition;
+	auto edition = installedEdition(media.edition, specialForces);
 	auto options = InstallOptions{ media.disc, media.patch141, media.patch150, m_Support, ::manifest(m_Manifests, edition), {}, specialForces };
 	m_Cancelled = false;
 	options.control.cancelled = &m_Cancelled;

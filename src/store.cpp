@@ -23,7 +23,7 @@ bool Store::ValidKey(KeyEdition edition, const std::string& key) const
 
 bool Store::HasKeys(DiscEdition edition) const
 {
-	return assistant::storedKey(m_Support) && (edition != DiscEdition::Deluxe || assistant::storedKey(m_Support, true));
+	return assistant::storedKey(m_Support) && (!hasSpecialForces(edition) || assistant::storedKey(m_Support, true));
 }
 
 void Store::SaveKeys(const KeyEntry& keys)

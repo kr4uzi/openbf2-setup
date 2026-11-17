@@ -35,7 +35,7 @@ namespace setup {
 		};
 
 		// what the machine looks like
-		std::map<std::string, DiscEdition> discs{ { "bf2.iso", DiscEdition::BF2 }, { "deluxe.iso", DiscEdition::Deluxe } };
+		std::map<std::string, DiscEdition> discs{ { "bf2.iso", DiscEdition::BF2 }, { "deluxe.iso", DiscEdition::Deluxe }, { "complete.iso", DiscEdition::Complete } };
 		std::string patch141 = "patch141.exe";
 		std::string patch150 = "patch150.exe";
 		std::set<std::string> valid_keys{ "AAAAAAAAAAAAAAAAAAAA" };
@@ -84,6 +84,7 @@ namespace setup {
 		std::string busy_label;
 		bool back = false;
 		bool deluxe_keys = false;
+		bool included141 = false;
 		bool next_enabled = false;
 		// the launcher page: its list of mods, the options it started with, what the user edited and the
 		// command line at its bottom

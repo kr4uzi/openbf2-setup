@@ -11,6 +11,7 @@ one level up.
 | `correctness.md` | the supported input hashes, every resolved patch record and the intentional differences from a Windows reference installation | a verification fails on a file you believe is correct |
 | `validation.md` | the validation runs of 2026-11-10: host, commands, results | you need to know what was tested and how |
 | `edition-criteria.md`, `edition-deluxe-only.tsv`, `edition-shared-changed.tsv` | how a Deluxe disc is told from a regular one: cabinet groups, destinations and the exact rule | the edition detection misjudges a disc |
+| `complete-edition.md` | nested Complete Edition components, included 1.41, booster coverage and SF patch differences | Complete Edition detection or installation is reviewed |
 | `deluxe-xp1-records.tsv` | the disposition of all 108 Special Forces 1.41 patch records | a Deluxe installation reports a patch record failure |
 | `patch-skip-verification.md` | why 1.41 records whose target the 1.50 patch replaces in full are skipped, and the strict verification of that rule | the patch policy is questioned |
 | `cdkey-helper-analysis.md` | the historical static look at the disc's key helper, superseded by the reconstructed check in `../cdkey-check.md` | the provenance of the key check is reviewed |

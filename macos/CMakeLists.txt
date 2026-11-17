@@ -9,7 +9,7 @@ set_target_properties(OpenBF2 PROPERTIES OUTPUT_NAME "OpenBF2" MACOSX_BUNDLE_INF
 target_compile_options(OpenBF2 PRIVATE -fobjc-arc)
 target_compile_definitions(OpenBF2 PRIVATE SETUP_UI_TEST_ROOT="${SETUP_SCRATCH}")
 target_link_libraries(OpenBF2 PRIVATE bf2_setup_session bf2_setup_boost "-framework AppKit" "-framework AVFoundation")
-set(content_manifests "${CMAKE_SOURCE_DIR}/core/content-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-deluxe-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-deluxe-base-150.tsv")
+set(content_manifests "${CMAKE_SOURCE_DIR}/core/content-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-deluxe-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-deluxe-base-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-complete-150.tsv")
 set_source_files_properties(${content_manifests} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/Setup)
 target_sources(OpenBF2 PRIVATE ${content_manifests})
 # The app icon: an original drawing (macos/icon/make-icon.swift regenerates it), no game artwork.

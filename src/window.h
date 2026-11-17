@@ -35,7 +35,7 @@ namespace setup {
 	{
 		std::string key;
 		std::string special_forces_key;
-		// the checkbox in front of the second row, Deluxe media only
+		// the checkbox in front of the second row on expansion media
 		bool install_special_forces = true;
 	};
 
@@ -67,7 +67,7 @@ namespace setup {
 		// so going back and forth loses nothing
 		void ShowWelcome();
 		void ShowDisc();
-		void ShowPatches();
+		void ShowPatches(bool included141 = false);
 		void ShowKeys(bool deluxe, bool back);
 		void ShowInstall();
 		void ShowVoice(const assistant::VoiceSettings& settings, bool profilesExist);

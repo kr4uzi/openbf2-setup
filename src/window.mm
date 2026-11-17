@@ -39,7 +39,7 @@ namespace {
 		return s.length ? std::filesystem::path{ s.fileSystemRepresentation } : std::filesystem::path{};
 	}
 
-	NSString* const titles[] = { @"Welcome to Battlefield 2", @"Choose your disc", @"Choose the two patches", @"Enter your CD key", @"Installing Battlefield 2", @"Set up voice chat", @"Battlefield 2" };
+	NSString* const titles[] = { @"Welcome to Battlefield 2", @"Choose your disc", @"Official patches", @"Enter your CD key", @"Installing Battlefield 2", @"Set up voice chat", @"Battlefield 2" };
 	NSString* const next_titles[] = { @"Continue", @"Continue", @"Continue", @"Install", @"Cancel", @"Save", @"Play" };
 }
 
@@ -47,6 +47,7 @@ namespace {
 @interface FileWell : NSView
 @property(nonatomic, copy) NSString* path;
 @property(nonatomic) BOOL enabled;
+@property(nonatomic) BOOL included;
 @property(copy) void (^chosen)(NSString* path);
 @property(strong) NSTextField* label;
 @property(strong) NSButton* choose;
@@ -109,6 +110,15 @@ namespace {
 {
 	_enabled = enabled;
 	self.choose.enabled = enabled;
+}
+
+- (void)setIncluded:(BOOL)included
+{
+	if (_included != included) self.path = nil;
+	_included = included;
+	self.enabled = !included;
+	self.choose.hidden = included;
+	if (included) self.label.stringValue = @"Included on disc — Complete Edition";
 }
 
 - (void)choose:(id)sender
@@ -491,12 +501,13 @@ namespace {
 	[self begin:Page::disc back:YES nextEnabled:YES];
 	self.disc.frame = NSMakeRect(20, 150, 560, 92);
 	[self.body addSubview:self.disc];
-	[self label:@"Choose an English BF2 or BF2 Deluxe DVD or ISO. Deluxe includes Special Forces. Your original files are read only." y:50 height:76 size:14];
+	[self label:@"Choose an English BF2, Deluxe or Complete Edition DVD or ISO. Deluxe and Complete include Special Forces. Your original files are read only." y:50 height:76 size:14];
 }
 
-- (void)showPatches
+- (void)showPatches:(BOOL)included141
 {
 	[self begin:Page::patches back:YES nextEnabled:NO];
+	self.patch141.included = included141;
 	self.patch141.frame = NSMakeRect(20, 165, 560, 92);
 	self.patch150.frame = NSMakeRect(20, 60, 560, 92);
 	[self.body addSubview:self.patch141];
@@ -506,7 +517,7 @@ namespace {
 - (void)setPatch:(PatchSlot)slot status:(PatchStatus)status fraction:(double)fraction
 {
 	FileWell* well = slot == PatchSlot::Patch141 ? self.patch141 : self.patch150;
-	NSString* chosen = well.path ?: @"";
+	NSString* chosen = well.included ? @"Included on disc — Complete Edition" : well.path ?: @"";
 	well.checking.hidden = status != PatchStatus::checking;
 	well.checking.doubleValue = fraction;
 	if (status == PatchStatus::checking)
@@ -708,7 +719,7 @@ namespace {
 	else if (progress.totalFiles)
 		fraction = double(progress.completedFiles) / double(progress.totalFiles);
 
-	NSDictionary<NSString*, NSNumber*>* rows = @{ @"disc": @0, @"preserveRenderer": @0, @"patch141": @1, @"patch141-xp1": @1, @"overlay150": @2, @"verify": @3 };
+	NSDictionary<NSString*, NSNumber*>* rows = @{ @"disc": @0, @"disc-xp1": @0, @"preserveRenderer": @0, @"patch141": @1, @"patch141-xp1": @1, @"overlay150": @2, @"verify": @3 };
 	NSNumber* row = rows[::text(progress.phase)];
 	if (!row) {
 		// the checks of the chosen files, before anything is written
@@ -1076,10 +1087,10 @@ void Window::ShowDisc()
 	[m_Impl->controller showDisc];
 }
 
-void Window::ShowPatches()
+void Window::ShowPatches(bool included141)
 {
 	m_Impl->Forget();
-	[m_Impl->controller showPatches];
+	[m_Impl->controller showPatches:included141];
 }
 
 void Window::ShowKeys(bool deluxe, bool back)

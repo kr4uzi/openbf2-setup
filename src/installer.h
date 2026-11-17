@@ -13,7 +13,7 @@
 #include <optional>
 
 namespace setup {
-	// the disc and the two patches the user chose. edition is what is on the disc (BF2 or Deluxe)
+	// The selected media. Complete Edition supplies patch141 from inside the disc.
 	struct Media
 	{
 		std::filesystem::path disc;
@@ -22,8 +22,7 @@ namespace setup {
 		DiscEdition edition = DiscEdition::BF2;
 	};
 
-	// a verified generation of the game data. edition is what is installed (DeluxeBase: Deluxe media
-	// without Special Forces)
+	// A verified generation; the Base editions omit Special Forces.
 	struct Installation
 	{
 		std::filesystem::path game;
@@ -45,7 +44,7 @@ namespace setup {
 
 		task<DiscEdition> CheckDisc(std::filesystem::path disc);
 		// a check which was replaced by a newer choice is stopped through `cancelled`
-		task<void> CheckPatch(std::filesystem::path patch, PatchSlot slot, std::shared_ptr<std::atomic<bool>> cancelled, std::function<void(double)> progress);
+		task<void> CheckPatch(std::filesystem::path patch, PatchSlot slot, std::shared_ptr<std::atomic<bool>> cancelled, std::function<void(double)> progress, bool included = false);
 
 		// resumes a paused installation of the same media. the generation is published before this returns
 		task<Installation> Install(Media media, bool specialForces, std::function<void(const Progress&)> progress);

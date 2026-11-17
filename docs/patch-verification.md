@@ -30,6 +30,12 @@ Continue is enabled only after both selected files pass their own slot check.
 Installation rehashes inputs before any payload staging and enforces the same
 pins, protecting against file changes after selection. EXEs are never run.
 
+Complete Edition supplies the exact 1.41 executable inside its disc. Both
+frontends show **Included on disc — Complete Edition**, verify it automatically,
+and request only the separate 1.50 file. The included executable receives the
+same complete size/SHA-256 checks. Switching to regular or Deluxe media restores
+the external 1.41 selector. See [Complete Edition](research/complete-edition.md).
+
 Both platforms use the portable implementation in `src/digest.cpp`; neither
 frontend selects a different hash algorithm or skips parts of the input. Build
 interactive previews with optimizations (`RelWithDebInfo` or `Release`). An

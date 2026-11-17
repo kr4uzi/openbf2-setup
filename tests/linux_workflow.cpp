@@ -9,6 +9,7 @@
 using namespace setup;
 int main(int argc, char** argv) {
 	QApplication app(argc, argv); app.setQuitOnLastWindowClosed(false);
+	const bool complete = app.arguments().contains("--complete");
 	g_Machine = FakeMachine{}; g_Machine.microphone_allowed = false;
 	boost::asio::io_context context;
 	Worker worker; Window window(context); window.StayHidden();
@@ -21,10 +22,10 @@ int main(int argc, char** argv) {
 		using Kind = Event::Kind;
 		auto page = window.Shown();
 		if (stage == 0 && page == Page::welcome) { window.Click(Kind::next); ++stage; }
-		else if (stage == 1 && page == Page::disc) { window.Choose(Kind::disc_chosen, "deluxe.iso"); window.Click(Kind::next); ++stage; }
+		else if (stage == 1 && page == Page::disc) { window.Choose(Kind::disc_chosen, complete ? "complete.iso" : "deluxe.iso"); window.Click(Kind::next); ++stage; }
 		else if (stage == 2 && page == Page::patches) {
 			// These arrive before any hash completion. The old selection must lose its result.
-			window.Choose(Kind::patch141_chosen, "wrong.exe"); window.Choose(Kind::patch141_chosen, "patch141.exe");
+			if (!complete) { window.Choose(Kind::patch141_chosen, "wrong.exe"); window.Choose(Kind::patch141_chosen, "patch141.exe"); }
 			window.Choose(Kind::patch150_chosen, "patch150.exe"); ++stage;
 		}
 		else if (stage == 3 && page == Page::patches) window.Click(Kind::next);
@@ -52,7 +53,10 @@ int main(int argc, char** argv) {
 		result = code;
 		if (error) { result = 1; try { std::rethrow_exception(error); } catch (const std::exception& e) { std::cerr << e.what() << '\n'; } }
 		if (!cancelled || !g_Machine.installed || !g_Machine.saved_keys || !g_Machine.installed_special_forces.value_or(false) || g_Machine.client_runs != 1) {
-			std::cerr << "Qt workflow did not complete cancel/resume, Deluxe install and Play\n"; result = 1;
+			std::cerr << "Qt workflow did not complete cancel/resume, expansion install and Play\n"; result = 1;
+		}
+		if (complete && (!g_Machine.installed_media || !g_Machine.installed_media->patch141.empty() || !g_Machine.installed || g_Machine.installed->edition != DiscEdition::Complete)) {
+			std::cerr << "Complete Edition did not use its included patch\n"; result = 1;
 		}
 		driver.stop(); window.Close();
 	});

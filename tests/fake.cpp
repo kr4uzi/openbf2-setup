@@ -129,9 +129,10 @@ void Window::ShowDisc()
 	::show(Page::disc, true);
 }
 
-void Window::ShowPatches()
+void Window::ShowPatches(bool included141)
 {
 	::show(Page::patches, false);
+	g_Machine.included141 = included141;
 }
 
 void Window::ShowKeys(bool deluxe, bool back)
@@ -267,7 +268,7 @@ task<DiscEdition> Installer::CheckDisc(std::filesystem::path disc)
 	co_return known->second;
 }
 
-task<void> Installer::CheckPatch(std::filesystem::path patch, PatchSlot slot, std::shared_ptr<std::atomic<bool>> cancelled, std::function<void(double)> progress)
+task<void> Installer::CheckPatch(std::filesystem::path patch, PatchSlot slot, std::shared_ptr<std::atomic<bool>> cancelled, std::function<void(double)> progress, bool included)
 {
 	::call(slot == PatchSlot::Patch141 ? "check-patch141" : "check-patch150");
 	co_await ::yield();
@@ -275,7 +276,8 @@ task<void> Installer::CheckPatch(std::filesystem::path patch, PatchSlot slot, st
 	co_await ::yield();
 	if (*cancelled)
 		throw std::runtime_error{ "Cancelled; setup can resume" };
-	else if (patch.filename().string() != (slot == PatchSlot::Patch141 ? g_Machine.patch141 : g_Machine.patch150))
+	else if (included ? slot != PatchSlot::Patch141 || !g_Machine.discs.contains(patch.filename().string()) || g_Machine.discs.at(patch.filename().string()) != DiscEdition::Complete
+		: patch.filename().string() != (slot == PatchSlot::Patch141 ? g_Machine.patch141 : g_Machine.patch150))
 		throw std::runtime_error{ "The selected file does not match the official patch." };
 }
 
@@ -292,7 +294,7 @@ task<Installation> Installer::Install(Media media, bool specialForces, std::func
 	::call("install");
 	g_Machine.installed_media = media;
 	g_Machine.installed_special_forces = specialForces;
-	auto edition = media.edition == DiscEdition::Deluxe && !specialForces ? DiscEdition::DeluxeBase : media.edition;
+	auto edition = installedEdition(media.edition, specialForces);
 	g_Machine.installed = Installation{ "GameData/1.50-1", edition };
 	co_return *g_Machine.installed;
 }

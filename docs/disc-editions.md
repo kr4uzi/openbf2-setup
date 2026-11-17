@@ -1,6 +1,6 @@
-# BF2 and Deluxe media
+# BF2, Deluxe and Complete Edition media
 
-*For:* Maintainers, and anyone asking what a given disc installs. *Covers:* the three editions (regular, Deluxe, Deluxe without Special Forces), what each installs, and the evidence behind the manifests.
+*For:* Maintainers, and anyone asking what a given disc installs. *Covers:* regular, Deluxe and Complete Edition media, optional Special Forces, and the evidence behind the manifests.
 
 ## What each disc installs
 
@@ -9,8 +9,18 @@
 | Regular BF2 | regular disc or ISO | 1,755 | not on the disc |
 | Deluxe | Deluxe disc, "Install Special Forces" checked (default) | 3,030 | playable: 213 `mods/xpack` files, 908 MB, eight maps |
 | Deluxe without Special Forces | Deluxe disc, checkbox unchecked | 1,749 | not installed; no expansion key asked |
+| Complete Edition | Complete disc, "Install Special Forces" checked (default) | 3,058 | 217 `mods/xpack` files, eight maps |
+| Complete without Special Forces | Complete disc, checkbox unchecked | 1,755 | not installed; no expansion key asked |
 
-Every edition ends up with a `mods/xpack` folder of 19 files (391 MB): object,
+Complete Edition has separate BF2 and SF cabinets beneath `installers/`, plus
+the exact supported 1.41 executable. Setup verifies and uses that included
+patch automatically; the patch page says **Included on disc — Complete Edition**.
+Patch 1.50 must still be selected and supplies both booster packs. Complete's
+component mappings, identities and final contract are documented in the
+[Complete Edition review](research/complete-edition.md). The CLI accepts `-`
+in the PATCH141 position for Complete Edition.
+
+Even without Special Forces, patch 1.50 supplies 19 `mods/xpack` files (391 MB): object,
 menu and shader archives, scripts, `Mod.desc`. Patch 1.50 ships that subset to
 every Battlefield 2, Deluxe or not, exactly as it did in retail, so a patched
 installation keeps the files the patch's checksums expect. It has no levels, the

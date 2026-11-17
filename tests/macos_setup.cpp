@@ -188,6 +188,10 @@ int main(int argc, char** argv) {
             setup::fs::remove(game/"a");check(!setup::stampMatches(game,manifest,stamp),"a missing file matched");
             save(game/"a",{'a','b','c'});check(!setup::stampMatches(game,manifest,stamp),"a rewritten file matched its old time");
             check(setup::stampMatches(game,manifest,setup::verificationStamp(game,manifest)),"a new stamp does not match");
+            setup::fs::rename(game/"a",game/"A");
+            auto mixedCaseStamp=setup::verificationStamp(game,manifest);
+            check(setup::stampMatches(game,manifest,mixedCaseStamp),"manifest casing broke quick verification");
+            setup::fs::rename(game/"A",game/"a");
             setup::fs::remove(game/"a");setup::fs::create_symlink(root/"manifest.tsv",game/"a");
             rejects([&]{setup::verificationStamp(game,manifest);},"a symlink was stamped");
             setup::fs::remove(game/"a");save(game/"a",{'a','b','c'});

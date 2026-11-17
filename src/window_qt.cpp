@@ -94,6 +94,8 @@ protected:
 
 class FileWell : public QGroupBox {
 	QLabel* path;
+	QPushButton* file;
+	bool included = false;
 public:
 	std::function<void(const std::filesystem::path&)> chosen;
 	QProgressBar* progress;
@@ -106,7 +108,7 @@ public:
 		path->setTextFormat(Qt::PlainText);
 		layout->addWidget(path);
 		auto row = new QHBoxLayout;
-		auto file = new QPushButton(disc ? "Choose DVD / ISO…" : "Choose patch…");
+		file = new QPushButton(disc ? "Choose DVD / ISO…" : "Choose patch…");
 		row->addWidget(file);
 		if (disc && (qEnvironmentVariableIsSet("FLATPAK_ID") || QFileInfo::exists("/.flatpak-info"))) {
 			// The portal requires a file OR directory request. Preserve its access
@@ -141,17 +143,24 @@ public:
 		progress->hide();
 		layout->addWidget(progress);
 	}
+	void automatic(bool value) {
+		if (included != value) { path->setText("Choose a file or drop it here"); status->clear(); progress->hide(); }
+		included = value;
+		file->setVisible(!value); file->setEnabled(!value); setAcceptDrops(!value);
+		if (value) path->setText("Included on disc — Complete Edition");
+	}
+	bool automatic() const { return included; }
 	void select(const QString& selected) {
-		if (!isEnabled()) return;
+		if (!isEnabled() || included) return;
 		path->setText(selected);
 		chosen(std::filesystem::path{selected.toStdString()});
 	}
 	void dragEnterEvent(QDragEnterEvent* event) override {
-		if (isEnabled() && event->mimeData()->urls().size() == 1 && event->mimeData()->urls().first().isLocalFile())
+		if (isEnabled() && !included && event->mimeData()->urls().size() == 1 && event->mimeData()->urls().first().isLocalFile())
 			event->acceptProposedAction();
 	}
 	void dropEvent(QDropEvent* event) override {
-		if (isEnabled() && event->mimeData()->urls().size() == 1 && event->mimeData()->urls().first().isLocalFile()) {
+		if (isEnabled() && !included && event->mimeData()->urls().size() == 1 && event->mimeData()->urls().first().isLocalFile()) {
 			select(event->mimeData()->urls().first().toLocalFile());
 			event->acceptProposedAction();
 		}
@@ -265,10 +274,10 @@ struct Window::Impl {
 		label(welcome, "Game data, profiles and mods stay in your user data folder when you replace this application. A paused installation can be resumed.");
 		welcome->addStretch();
 		auto discs = page();
-		label(discs, "Choose a supported Battlefield 2 or Deluxe DVD folder or ISO image.");
+		label(discs, "Choose a Battlefield 2, Deluxe or Complete Edition DVD folder or ISO image.");
 		disc = well(discs, "Battlefield 2 DVD / ISO", Kind::disc_chosen, true); discs->addStretch();
 		auto patches = page();
-		label(patches, "Both official patches are required. Setup checks each file before continuing.");
+		label(patches, "Setup verifies both patches. Complete Edition supplies 1.41 from its disc; choose 1.5 below.");
 		patch141 = well(patches, "Patch 1.41", Kind::patch141_chosen);
 		patch150 = well(patches, "Patch 1.5", Kind::patch150_chosen); patches->addStretch();
 		auto keys = page();
@@ -432,7 +441,7 @@ task<Event> Window::WaitForEvent() {
 bool Window::LauncherRequested() const { return QApplication::arguments().contains("--launcher"); }
 void Window::ShowWelcome() { m_Impl->show(Page::welcome, "Welcome to OpenBF2", "Continue", false); }
 void Window::ShowDisc() { m_Impl->show(Page::disc, "Your Battlefield 2 disc", "Continue", true); }
-void Window::ShowPatches() { m_Impl->show(Page::patches, "Official patches", "Continue", true); }
+void Window::ShowPatches(bool included141) { m_Impl->show(Page::patches, "Official patches", "Continue", true); m_Impl->patch141->automatic(included141); }
 void Window::ShowKeys(bool deluxe, bool back) {
 	m_Impl->deluxe = deluxe; m_Impl->specialForces->setVisible(deluxe); m_Impl->sfKey->setVisible(deluxe);
 	m_Impl->show(Page::keys, "Your CD keys", back ? "Install" : "Save", back);
@@ -465,7 +474,7 @@ void Window::SetBusy(const std::string& label) { m_Impl->busy = true; m_Impl->pa
 void Window::EnableNext(bool enabled) { m_Impl->next->setEnabled(enabled && !m_Impl->busy); }
 void Window::SetPatch(PatchSlot slot, PatchStatus status, double fraction) {
 	auto well = slot == PatchSlot::Patch141 ? m_Impl->patch141 : m_Impl->patch150;
-	well->status->setText(status == PatchStatus::checking ? "Checking…" : status == PatchStatus::verified ? "Verified" : "Check failed — choose another file to retry");
+	well->status->setText(status == PatchStatus::checking ? "Checking…" : status == PatchStatus::verified ? "Verified official patch" : well->automatic() ? "Check failed — go back and check your disc" : "Check failed — choose another file to retry");
 	well->progress->setVisible(status == PatchStatus::checking); well->progress->setValue(int(std::clamp(fraction, 0.0, 1.0) * 1000));
 }
 KeyEntry Window::Keys() const { return {m_Impl->baseKey->value(), m_Impl->sfKey->value(), m_Impl->specialForces->isChecked()}; }
@@ -481,7 +490,7 @@ void Window::SetProgress(const Progress& progress) {
 	auto done = progress.totalBytes ? progress.completedBytes : progress.completedFiles;
 	auto fraction = total ? std::clamp(double(done) / double(total), 0.0, 1.0) : 0.0;
 	int row = -1;
-	if (progress.phase == "disc" || progress.phase == "preserveRenderer") row = 0;
+	if (progress.phase == "disc" || progress.phase == "disc-xp1" || progress.phase == "preserveRenderer") row = 0;
 	else if (progress.phase == "patch141" || progress.phase == "patch141-xp1") row = 1;
 	else if (progress.phase == "overlay150") row = 2;
 	else if (progress.phase == "verify") row = 3;
