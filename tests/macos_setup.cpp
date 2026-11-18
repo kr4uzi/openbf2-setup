@@ -7,6 +7,7 @@
 #include "rtp_bridge.h"
 #include "digest.h"
 #include <algorithm>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -181,12 +182,16 @@ int main(int argc, char** argv) {
         save(game/"a",{'a','b','c'});setup::fs::remove(game/"extra");
         {
             // The start-up shortcut: sizes and times recorded after a full verification.
+            const auto originalTime=setup::fs::last_write_time(game/"a");
             auto stamp=setup::verificationStamp(game,manifest);
             check(stamp.rfind("a\t3\t",0)==0&&setup::stampMatches(game,manifest,stamp),"fresh stamp does not match its files");
             check(!setup::stampMatches(game,manifest,"")&&!setup::stampMatches(game,manifest,"garbage"),"an empty or broken stamp matched");
             save(game/"a",{'a','b','c','d'});check(!setup::stampMatches(game,manifest,stamp),"a file of another size matched");
             setup::fs::remove(game/"a");check(!setup::stampMatches(game,manifest,stamp),"a missing file matched");
-            save(game/"a",{'a','b','c'});check(!setup::stampMatches(game,manifest,stamp),"a rewritten file matched its old time");
+            save(game/"a",{'a','b','c'});
+            // A fast rewrite can retain the same timestamp on filesystems with coarse clocks.
+            setup::fs::last_write_time(game/"a",originalTime-std::chrono::seconds(5));
+            check(!setup::stampMatches(game,manifest,stamp),"a file with a different modification time matched");
             check(setup::stampMatches(game,manifest,setup::verificationStamp(game,manifest)),"a new stamp does not match");
             setup::fs::rename(game/"a",game/"A");
             auto mixedCaseStamp=setup::verificationStamp(game,manifest);
