@@ -2,6 +2,7 @@
 #include "client.h"
 #include "microphone.h"
 #include "store.h"
+#include "hubtool.h"
 
 #include <algorithm>
 #include <exception>
@@ -18,6 +19,13 @@ using namespace setup;
 namespace {
 	// the user closed the window: every page gives up and Launch returns
 	struct WindowClosed {};
+
+	// a provider file is active, but the kept file is gone or no longer valid: the game would go to the retail
+	// services instead
+	bool missingProvider(const LaunchOptions& options)
+	{
+		return provider_online(options.online) && options.provider.services.empty();
+	}
 
 	// `work` beside a `guard` which watches the window meanwhile. it ends when the work ends, with its result or
 	// its exception, and the guard is cancelled. (the || of the awaitable operators waits for a success, and
@@ -47,13 +55,16 @@ task<int> Setup::Launch()
 	std::exception_ptr failure;
 	try {
 		auto installation = co_await FindInstallation();
+		// a downloaded provider file which no longer holds, before the game may start straight away
+		if (installation)
+			co_await RefreshProvider();
 		if (!installation)
 			installation = co_await InstallGame();
 		else if (!m_Store.HasKeys(installation->edition)) {
 			// the game data is there but Registry.con is not: only the keys are asked for
 			co_await EnterMissingKeys(hasSpecialForces(installation->edition));
 		}
-		else if (!m_Unverified && !m_Window.LauncherRequested() && m_Client.Present() && !m_Store.LoadLaunch().always_show) {
+		else if (!m_Unverified && !m_Window.LauncherRequested() && m_Client.Present() && !m_Store.LoadLaunch().always_show && !missingProvider(m_Store.LoadLaunch())) {
 			// the usual start of an installed game: no window, straight into the game, and the application goes
 			// with it once the game was played and quit. the Option key, or the choice to see the launcher every
 			// time, lead to the pages instead; so does game data which did not pass the quick check
@@ -152,6 +163,23 @@ task<bool> Setup::Launcher(const Installation& installation)
 		case Event::Kind::mods_folder:
 			m_Window.Reveal(m_Store.ModLibrary());
 			break;
+		case Event::Kind::demos_folder:
+			try {
+				m_Window.Reveal(m_Store.DemosFolder(installation));
+			}
+			catch (const std::exception& e) {
+				m_Window.Message("The demos folder could not be opened", e.what());
+			}
+			break;
+		case Event::Kind::bf2hub_installer:
+		case Event::Kind::bf2hub_hosted:
+		case Event::Kind::bf2hub_file:
+		case Event::Kind::other_url:
+		case Event::Kind::other_file:
+			if (!SaveOptions())
+				break;
+			co_await ConfigureProvider(installation, event);
+			break;
 		case Event::Kind::activated:
 			// back from the file manager: the list of mods may have changed, the edits stay
 			ShowLauncher(installation, m_Window.Options());
@@ -211,6 +239,71 @@ task<bool> Setup::VerifyGameData()
 	co_return false;
 }
 
+task<void> Setup::ConfigureProvider(const Installation& installation, const Event& event)
+{
+	using Kind = Event::Kind;
+	auto online = event.kind == Kind::other_url || event.kind == Kind::other_file ? std::string{ "other" } : std::string{ "bf2hub" };
+	auto source = event.kind == Kind::bf2hub_installer ? "automatic" : event.kind == Kind::bf2hub_hosted ? "hosted" : event.kind == Kind::other_url ? "url" : "file";
+	auto url = event.kind == Kind::bf2hub_hosted ? std::string{ bf2hub_hosted_url } : event.kind == Kind::other_url ? event.path.string() : std::string{};
+	auto services = std::optional<ProviderServices>{};
+	auto failure = std::string{}, details = std::string{};
+	// the tool and a download take a while: the page waits
+	if (event.kind != Kind::bf2hub_file && event.kind != Kind::other_file)
+		m_Window.SetBusy(event.kind == Kind::bf2hub_installer ? "Asking BF2Hub…" : "Downloading…");
+	try {
+		if (event.kind == Kind::bf2hub_file || event.kind == Kind::other_file)
+			services = m_Store.ImportProvider(online, event.path);
+		else if (event.kind == Kind::bf2hub_installer) {
+			auto run = co_await m_Installer.ProbeBf2hub(event.path);
+			try {
+				services = m_Store.KeepProvider(online, hubtool_provider(run));
+			}
+			catch (const std::exception&) {
+				details = last_lines(run.err);
+				throw;
+			}
+		}
+		else {
+			if (!valid_provider_url(url))
+				throw std::runtime_error{ "The address is not one a provider file can come from: it must start with https://." };
+			services = m_Store.KeepProvider(online, co_await m_Window.Download(url));
+		}
+	}
+	catch (const std::exception& e) {
+		failure = e.what();
+	}
+
+	ReloadLauncher(installation);
+	if (services) {
+		m_Window.ShowProvider(online, source, url, *services);
+		m_RefreshFailed = false;
+		SaveOptions();
+		m_Window.SetCommandLine(command_line(launch_arguments(m_Window.Options())));
+	}
+	else
+		m_Window.Message(online == "bf2hub" ? "BF2Hub's addresses could not be read" : "The provider file was not accepted", failure, details);
+}
+
+task<void> Setup::RefreshProvider()
+{
+	// a downloaded file which no longer holds is downloaded again; the old one stays in use when that fails
+	auto options = m_Store.LoadLaunch();
+	auto online = options.online;
+	auto url = online == "bf2hub" && options.bf2hub_source == "hosted" ? std::string{ bf2hub_hosted_url }
+		: online == "other" && options.other_source == "url" ? options.other_url : std::string{};
+	auto now = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now());
+	if (url.empty() || (!options.provider.services.empty() && !provider_expired(options.provider, now)))
+		co_return;
+
+	try {
+		m_Store.KeepProvider(online, co_await m_Window.Download(url));
+		m_RefreshFailed = false;
+	}
+	catch (const std::exception&) {
+		m_RefreshFailed = true;
+	}
+}
+
 LaunchOptions Setup::LoadOptions(const Installation& installation)
 {
 	auto options = m_Store.LoadLaunch();
@@ -229,8 +322,15 @@ void Setup::ShowLauncher(const Installation& installation, const LaunchOptions& 
 		note = "The game client is not part of this build.";
 	else if (m_Unverified)
 		note = "The game data has not been verified since it changed.";
+	else if (missingProvider(options))
+		note = "The provider file is missing or no longer valid. Choose it again in Online services.";
+	else if (provider_online(options.online) && provider_expired(options.provider, std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now())))
+		note = m_RefreshFailed ? "The provider file could not be downloaded again; the old one is used."
+			: "The provider file is out of date. Update it in Online services.";
 
 	m_Window.ShowLauncher(options, m_Store.Mods(installation), m_Client.Present(), note);
+	m_Window.SetDemos(m_Store.Demos(installation));
+	m_Window.SetProviders(m_Store.KeptProviders());
 	m_Window.SetCommandLine(command_line(launch_arguments(options)));
 }
 

@@ -20,7 +20,7 @@ An impossible size fails immediately. A file with either known size is hashed,
 so a renamed other-slot file can be identified precisely, and a same-size
 modified executable cannot pass by matching a header or name.
 
-The AppKit and Qt patch selectors use the same shared worker and verification
+The Qt patch selectors (all platforms) use the same shared worker and verification
 code when a file is chosen or dropped. SHA-256 streams in 1 MiB chunks; progress
 is posted to the UI every 8 MiB and at completion, including for the 2 GB 1.5
 executable. The main thread only updates UI.

@@ -1,4 +1,5 @@
 // [CHOSEN, not recovered] Setup policy for the owner-requested macOS port.
+#include "links.h"
 #include "install.h"
 #include "cabinet.h"
 #include "edition.h"
@@ -121,14 +122,14 @@ fs::path stagingPath(const fs::path& root, const std::string& relative) {
     for (const auto& part : fs::path(safePath(relative))) {
         fs::path next = current / part;
         if (fs::exists(current)) {
-            check(fs::is_directory(current) && !fs::is_symlink(fs::symlink_status(current)), "unsafe output directory");
+            check(fs::is_directory(current) && !is_link(fs::symlink_status(current)), "unsafe output directory");
             unsigned count = 0;
             for (const auto& item : fs::directory_iterator(current)) {
                 if (lower(item.path().filename().string()) == lower(part.string())) { next = item.path(); ++count; }
             }
             check(count <= 1, "ambiguous case in output");
         }
-        check(!fs::is_symlink(fs::symlink_status(next)), "symlink in output path");
+        check(!is_link(fs::symlink_status(next)), "symlink in output path");
         current = next;
     }
     return current;
@@ -137,7 +138,7 @@ fs::path stagingPath(const fs::path& root, const std::string& relative) {
 void writeFile(const fs::path& path, const std::function<void(const Sink&)>& extract) {
     fs::create_directories(path.parent_path());
     fs::path temp = path; temp += ".openbf2-part";
-    check(!fs::is_symlink(fs::symlink_status(temp)), "unsafe temporary output");
+    check(!is_link(fs::symlink_status(temp)), "unsafe temporary output");
     if(fs::exists(temp)) {check(fs::is_regular_file(temp), "invalid temporary output");fs::remove(temp);}
     std::ofstream stream(temp, std::ios::binary);
     check(bool(stream), "cannot create staged file");
@@ -288,10 +289,10 @@ size_t patch141(const Files& container, const fs::path& root, const fs::path& re
 }
 
 Files tree(const fs::path& root) {
-    check(fs::is_directory(root) && !fs::is_symlink(fs::symlink_status(root)), "not a regular directory");
+    check(fs::is_directory(root) && !is_link(fs::symlink_status(root)), "not a regular directory");
     Files result;
     for (const auto& e : fs::recursive_directory_iterator(root)) {
-        check(!fs::is_symlink(e.symlink_status()), "symlink in comparison tree");
+        check(!is_link(e.symlink_status()), "symlink in comparison tree");
         if (e.is_directory()) continue;
         check(e.is_regular_file(), "non-regular file in comparison");
         auto relative = safePath(e.path().lexically_relative(root).generic_string());
@@ -306,7 +307,7 @@ int compare(const fs::path& output, const fs::path& reference, const fs::path& a
     auto reportDir = fs::canonical(output.parent_path());
     auto relative=reportDir.lexically_relative(allowed);
     check(!relative.empty() && !relative.is_absolute() && *relative.begin()!=".." &&
-          !fs::is_symlink(fs::symlink_status(reportDir / "comparison.tsv")),
+          !is_link(fs::symlink_status(reportDir / "comparison.tsv")),
           "comparison report must stay under configured developer scratch");
     auto actual = tree(output), expected = tree(reference);
     std::set<std::string> accepted, paths;
@@ -404,12 +405,12 @@ void verifyManifest(const fs::path& game,const fs::path& manifest,const Control&
     auto expected=readManifest(manifest);uint64_t total=0;for(const auto& e:expected)total+=e.size;
     // Inventory first; reject extra files, symlinks and ambiguous case aliases.
     std::map<std::string,fs::path> actual;
-    check(fs::is_directory(game)&&!fs::is_symlink(fs::symlink_status(game)),"missing game data directory");
+    check(fs::is_directory(game)&&!is_link(fs::symlink_status(game)),"missing game data directory");
     for(const auto& e:fs::recursive_directory_iterator(game)) {
         // The launcher links the user's own mods into mods/ of the generation in use. Such a
         // link is not followed; one in the place of shipped content leaves that content missing.
-        if(allowExtraFiles&&fs::is_symlink(e.symlink_status())&&e.path().parent_path()==game/"mods")continue;
-        check(!fs::is_symlink(e.symlink_status()),"symlink in final game data");if(e.is_directory())continue;
+        if(allowExtraFiles&&is_link(e.symlink_status())&&e.path().parent_path()==game/"mods")continue;
+        check(!is_link(e.symlink_status()),"symlink in final game data");if(e.is_directory())continue;
         check(e.is_regular_file(),"nonregular game data");
         check(actual.emplace(lower(safePath(e.path().lexically_relative(game).generic_string())),e.path()).second,"case collision in final game data");
     }
@@ -441,7 +442,7 @@ namespace {
 void secureDirectory(const fs::path& directory) {
     auto absolute=fs::absolute(directory).lexically_normal();fs::path current;
     for(const auto& part:absolute) {
-        current/=part;check(!fs::is_symlink(fs::symlink_status(current)),"symlink in managed directory");
+        current/=part;check(!is_link(fs::symlink_status(current)),"symlink in managed directory");
         if(!fs::exists(current)){fs::create_directory(current);fs::permissions(current,fs::perms::owner_all);}
         check(fs::is_directory(current),"managed path is not a directory");
     }
@@ -459,7 +460,7 @@ namespace {
 void exportDisc(const fs::path& source,const fs::path& output,const Control& control) {
     auto container=readDisc(source);Cabinet cab(container,"");
     auto root=fs::absolute(output).lexically_normal();
-    check(!fs::exists(root)&&!fs::is_symlink(fs::symlink_status(root)),"export requires a fresh output directory");
+    check(!fs::exists(root)&&!is_link(fs::symlink_status(root)),"export requires a fresh output directory");
     // Resolve existing parents before creating anything; refuse symlinks just as
     // the production installer does. No output may overlap the read-only input.
     auto parent=fs::canonical(root.parent_path());
@@ -627,7 +628,7 @@ int prototype(const Options& o, const fs::path& scratchRoot) {
     // a reference tree or a user's live Application Support directory.
     auto allowed = fs::canonical(scratchRoot);
     auto parent = fs::canonical(o.output.parent_path());
-    check(parent == allowed && !fs::exists(o.output) && !fs::is_symlink(fs::symlink_status(o.output)),
+    check(parent == allowed && !fs::exists(o.output) && !is_link(fs::symlink_status(o.output)),
           "output must be a new direct child of SETUP_SCRATCH");
     check(fs::space(allowed).available >= uint64_t(16) * 1024 * 1024 * 1024, "prototype requires 16 GiB free for staging");
     auto iso = readIso(View(o.iso)), p141 = readSfx(View(o.patch141)), p150 = readSfx(View(o.patch150));

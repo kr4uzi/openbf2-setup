@@ -1,3 +1,4 @@
+#include "links.h"
 #include "mods.h"
 
 #include <algorithm>
@@ -27,7 +28,7 @@ namespace {
 	{
 		auto error = std::error_code{};
 		for (const auto& entry : std::filesystem::directory_iterator{ directory, error }) {
-			if (!entry.is_symlink() && ::lowercase(entry.path().filename().string()) == name)
+			if (!is_link(entry) && ::lowercase(entry.path().filename().string()) == name)
 				return entry.path();
 		}
 
@@ -100,7 +101,7 @@ namespace {
 	bool leads_into(const std::filesystem::path& link, const std::filesystem::path& library)
 	{
 		auto error = std::error_code{};
-		auto target = std::filesystem::read_symlink(link, error);
+		auto target = setup::link_target(link, error);
 		return !error && !library.empty() && target.is_absolute() && target.parent_path() == library && target.filename() == link.filename();
 	}
 
@@ -128,7 +129,7 @@ namespace {
 
 		auto error = std::error_code{};
 		for (const auto& entry : std::filesystem::directory_iterator{ *levels, error }) {
-			if (entry.is_symlink() || !entry.is_directory())
+			if (is_link(entry) || !entry.is_directory())
 				continue;
 
 			auto info = ::child(entry.path(), "info");
@@ -158,7 +159,7 @@ namespace {
 
 			auto error = std::error_code{};
 			for (const auto& entry : std::filesystem::directory_iterator{ *english, error }) {
-				if (entry.is_symlink() || ::lowercase(entry.path().extension().string()) != ".utxt")
+				if (is_link(entry) || ::lowercase(entry.path().extension().string()) != ".utxt")
 					continue;
 
 				if (auto text = localized(::read_text(entry.path()), written); !text.empty())
@@ -183,7 +184,7 @@ void setup::link_mods(const std::filesystem::path& library, const std::filesyste
 	auto taken = std::set<std::string>{};
 	for (const auto& entry : std::filesystem::directory_iterator{ game / "mods", error }) {
 		// a link whose mod is gone would only be a dead entry in the game's own list of mods
-		if (entry.is_symlink() && ::leads_into(entry.path(), library) && !std::filesystem::is_directory(entry.path(), error))
+		if (is_link(entry) && ::leads_into(entry.path(), library) && !std::filesystem::is_directory(entry.path(), error))
 			std::filesystem::remove(entry.path(), error);
 		else
 			taken.insert(::lowercase(entry.path().filename().string()));
@@ -191,11 +192,11 @@ void setup::link_mods(const std::filesystem::path& library, const std::filesyste
 
 	for (const auto& entry : std::filesystem::directory_iterator{ library, error }) {
 		auto name = entry.path().filename().string();
-		if (entry.is_symlink() || !entry.is_directory() || name.starts_with('.') || !::child(entry.path(), "mod.desc"))
+		if (is_link(entry) || !entry.is_directory() || name.starts_with('.') || !::child(entry.path(), "mod.desc"))
 			continue;
 
 		if (taken.insert(::lowercase(name)).second)
-			std::filesystem::create_directory_symlink(entry.path(), game / "mods" / name, error);
+			setup::link_directory(entry.path(), game / "mods" / name, error);
 	}
 }
 
@@ -204,7 +205,7 @@ std::vector<Mod> setup::find_mods(const std::filesystem::path& game, DiscEdition
 	auto mods = std::vector<Mod>{};
 	auto error = std::error_code{};
 	for (const auto& entry : std::filesystem::directory_iterator{ game / "mods", error }) {
-		if (!entry.is_directory() || (entry.is_symlink() && !::leads_into(entry.path(), library)))
+		if (!entry.is_directory() || (is_link(entry) && !::leads_into(entry.path(), library)))
 			continue;
 
 		auto name = entry.path().filename().string();
@@ -264,3 +265,4 @@ std::string setup::localized(const std::string& utxt, const std::string& key)
 
 	return {};
 }
+

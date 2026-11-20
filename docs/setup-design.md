@@ -22,13 +22,16 @@ are preserved; their original repository links are historical paths.
   No macOS APIs, POSIX system calls or Apple digests live in the portable core.
 - `cli/`: testing/diagnostic frontend, Ctrl-C and progress text.
 - `src/setup`: the assistant as one coroutine class (page order, Back, Cancel, failures), free of
-  AppKit and tested against `tests/fake.cpp`. `src/installer` and `src/store` are its portable
+  any toolkit and tested against `tests/fake.cpp`. `src/installer` and `src/store` are its portable
   services over the core; `src/session` holds Registry.con persistence, the current installation,
   the voice settings file and the launch arguments as plain functions; `src/launch` the start-up
   options, their file and the command line they become, without any I/O.
-- `src/window.mm`, `src/client.mm`, `src/microphone.mm`, `src/main.mm`: the macOS side. AppKit
-  window with five-field key rows (BF2 plus SF for Deluxe), NSTask client launch, AVFoundation
-  microphone permission and meter, Application Support resolution.
+- `src/window_qt.cpp`, `src/client_qt.cpp`, `src/microphone_sdl.cpp`, `src/main_qt.cpp`: the one
+  graphical front end for macOS and Linux, Qt Widgets in plain C++ (no Designer files, no QML):
+  window with five-field key rows, the launcher page with its online selector and Advanced Options dialog,
+  QProcess client launch, SDL3 level meter. `src/platform_mac.mm` and `src/platform_linux.cpp` hold
+  the platform differences (Option key or `--launcher`, Qt's microphone permission on macOS, handing
+  the foreground to the client); `cmake/frontend.cmake` builds the library both platforms use.
 - `macos/`: bundle metadata and the packaging scripts.
 - `third_party/`: unmodified rtptool snapshot with MIT notice and locked Rust
   dependency notices. zlib comes from the build platform.

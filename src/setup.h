@@ -38,6 +38,8 @@ namespace setup {
 		// the options as the launcher page last loaded or saved them: only a change is written
 		LaunchOptions m_Saved;
 		bool m_Unverified = false;
+		// the last download of an expired provider file failed: the launcher says so
+		bool m_RefreshFailed = false;
 		unsigned m_PendingPatchChecks = 0;
 
 	public:
@@ -70,6 +72,10 @@ namespace setup {
 		task<void> VoiceSetup();
 		// true once the game has run and quit cleanly
 		task<bool> Play(const Installation& installation, const LaunchOptions& options);
+		// a provider's file from the source the user chose in Online services; kept and in use when it is valid
+		task<void> ConfigureProvider(const Installation& installation, const Event& event);
+		// a downloaded provider file which no longer holds (its valid_to has passed) is downloaded again
+		task<void> RefreshProvider();
 		// the saved options with a mod which is installed; links the mods of the library on the way
 		LaunchOptions LoadOptions(const Installation& installation);
 		void ShowLauncher(const Installation& installation, const LaunchOptions& options);

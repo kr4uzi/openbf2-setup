@@ -3,19 +3,25 @@
 #include "platform.h"
 #include "session.h"
 #include "process_qt.h"
+#include "platform_qt.h"
 
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <boost/asio/experimental/channel.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/asio/this_coro.hpp>
 #include <boost/asio/use_awaitable.hpp>
+#include <chrono>
 #include <cerrno>
+#if defined(Q_OS_LINUX)
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
 
 using namespace setup;
 namespace {
+#if defined(Q_OS_LINUX)
 class Diagnostic {
 	int fd = -1;
 	size_t written = 0;
@@ -49,19 +55,22 @@ public:
 		written += offset;
 	}
 };
+#endif
 struct Exit { int status = 0; std::string error; };
 }
 
-struct Client::Impl { ClientLayout layout; std::filesystem::path support, home; };
+struct Client::Impl { ClientLayout layout; std::filesystem::path support, home; ClientLayout x86; };
 Client::Client(ClientLayout layout, std::filesystem::path support, std::filesystem::path home)
 	: m_Impl(std::make_unique<Impl>(std::move(layout), std::move(support), std::move(home))) {}
 Client::~Client() = default;
-bool Client::Present() const { return assistant::clientPresent(m_Impl->layout); }
+void Client::Alternative(ClientLayout x86) { m_Impl->x86 = std::move(x86); }
+bool Client::Present() const { return assistant::clientPresent(m_Impl->layout) || (!m_Impl->x86.executable.empty() && assistant::clientPresent(m_Impl->x86)); }
 
 task<int> Client::Run(const Installation& installation, LaunchOptions options) {
 	auto platform = nativePlatform();
 	auto lock = platform->lock(m_Impl->support / "Setup/Install.lock");
-	auto launch = assistant::clientLaunch(m_Impl->layout, m_Impl->support, options);
+	auto& layout = options.client == "x86" && !m_Impl->x86.executable.empty() ? m_Impl->x86 : m_Impl->layout;
+	auto launch = assistant::clientLaunch(layout, m_Impl->support, options);
 	if (launch.directory != installation.game)
 		throw std::runtime_error("The active installation changed. Reopen OpenBF2 to verify it.");
 	co_return co_await runClientProcess(std::move(launch), m_Impl->home);
@@ -69,35 +78,65 @@ task<int> Client::Run(const Installation& installation, LaunchOptions options) {
 
 task<int> setup::runClientProcess(assistant::Launch launch, std::filesystem::path home) {
 	auto environment = QProcessEnvironment::systemEnvironment();
+	// the client derives its support root from HOME, so both look at the same files (a test home moves
+	// everything). the embedded Python 2.3 would read these, and a foreign PYTHONPATH breaks the scripts
+#if !defined(Q_OS_WIN)
 	environment.insert("HOME", QString::fromStdString(home.string()));
+#endif
+	for (auto variable : {"PYTHONPATH", "PYTHONHOME", "PYTHONCASEOK", "PYTHONSTARTUP", "PYTHONUSERBASE"}) environment.remove(variable);
+#if defined(Q_OS_LINUX)
 	if (linuxDataHome(home, environment.value("XDG_DATA_HOME").toStdString()) / "OpenBF2" != launch.support)
 		throw std::runtime_error("The client and installer data directories differ. Reopen OpenBF2.");
-	for (auto variable : {"PYTHONPATH", "PYTHONHOME", "PYTHONCASEOK", "PYTHONSTARTUP", "PYTHONUSERBASE"}) environment.remove(variable);
 	environment.insert("DXVK_WSI_DRIVER", "SDL3");
 	// Includes dlopen-only AI, DXVK and audio libraries. Never changes the desktop environment.
 	auto libraries = launch.executable.parent_path().parent_path() / "lib";
 	auto inherited = environment.value("LD_LIBRARY_PATH");
 	environment.insert("LD_LIBRARY_PATH", QString::fromStdString(libraries.string()) + (inherited.isEmpty() ? "" : ":" + inherited));
+#endif
 
-	Diagnostic log(launch.support);
 	QProcess child;
 	child.setProcessEnvironment(environment);
 	child.setWorkingDirectory(QString::fromStdString(launch.directory.string()));
 	child.setProcessChannelMode(QProcess::MergedChannels);
 	child.setStandardInputFile(QProcess::nullDevice());
+#if defined(Q_OS_LINUX)
+	Diagnostic log(launch.support);
+#else
+	// the client's own log is what it prints: into the game folder next to the renderer's log, afresh
+	// with every run (docs/client-artifact.md)
+	child.setStandardOutputFile(QString::fromStdString((launch.directory / "OpenBF2Client.log").string()), QIODevice::Truncate);
+#endif
 	QStringList arguments;
 	for (const auto& value : launch.arguments) arguments.append(QString::fromStdString(value));
 	using Channel = boost::asio::experimental::channel<void(boost::system::error_code, Exit)>;
 	Channel exit(co_await boost::asio::this_coro::executor, 1);
+#if defined(Q_OS_LINUX)
 	QObject::connect(&child, &QProcess::readyReadStandardOutput, &child, [&] { log.append(child.readAllStandardOutput()); });
+#endif
 	QObject::connect(&child, &QProcess::errorOccurred, &child, [&](QProcess::ProcessError error) {
 		if (error == QProcess::FailedToStart) exit.try_send(boost::system::error_code{}, Exit{0, "The native client could not start: " + child.errorString().toStdString()});
 	});
 	QObject::connect(&child, &QProcess::finished, &child, [&](int code, QProcess::ExitStatus status) {
+#if defined(Q_OS_LINUX)
 		log.append(child.readAllStandardOutput());
+#endif
 		exit.try_send(boost::system::error_code{}, Exit{status == QProcess::CrashExit ? 128 + code : code, {}});
 	});
 	child.start(QString::fromStdString(launch.executable.string()), arguments, QIODevice::ReadOnly);
+
+	// the game gets the foreground from the application which started it, so its first clicks count.
+	// five seconds at most; the client also asks for activation itself
+	if (child.waitForStarted(5000)) {
+		auto timer = boost::asio::steady_timer{ co_await boost::asio::this_coro::executor };
+		for (int attempt = 0; attempt < 50 && child.state() == QProcess::Running; ++attempt) {
+			if (frontend::handOverActivation(child.processId()))
+				break;
+
+			timer.expires_after(std::chrono::milliseconds{ 100 });
+			co_await timer.async_wait(boost::asio::use_awaitable);
+		}
+	}
+
 	auto result = co_await exit.async_receive(boost::asio::use_awaitable);
 	if (!result.error.empty()) throw std::runtime_error(result.error);
 	co_return result.status;

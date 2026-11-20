@@ -1,7 +1,7 @@
 # OpenBF2 Setup
 
 Standalone native Battlefield 2 setup: a portable C++17 ISO/DVD, cabinet, SFX
-and RTPatch pipeline, a diagnostic CLI, and native macOS AppKit and Linux Qt 6 Widgets assistants.
+and RTPatch pipeline, a diagnostic CLI, and one Qt 6 Widgets assistant for macOS, Linux and Windows.
 No Wine, Python interpreter, Rust runtime, game content or patch payload is
 required in the distributed app. Users supply their own supported English DVD
 or ISO (regular BF2, Deluxe or Complete Edition) and the official
@@ -22,7 +22,7 @@ both the installer and the launcher: with no installation it runs the setup
 wizard, afterwards it starts the game right away, with no window.
 Hold the Option (⌥) key while opening the app to get its launcher page instead,
 with the start-up options, Play, the voice setup and "Verify Game Data…"; the
-page can also ask to be opened every time. Every start compares sizes and
+page has "Open launcher on startup" to show it every time. Every start compares sizes and
 modification times of the installed files against the record of the last full
 verification, which takes a moment; when that comparison fails or no record
 exists, the launcher page opens with a note instead, and the full check of every
@@ -75,9 +75,21 @@ that subset has no levels and is not offered as a mod. Details and evidence:
 Prerequisites already available on the builder: CMake 3.24+, a C++23 compiler
 (the sources use the C++20 library; verified with Apple clang 17
 and Boost 1.92), zlib development library, Boost headers (1.86 or newer, for the app and its
-application checks), Cargo with the locked dependencies cached. macOS also
-needs Command Line Tools and preinstalled `aarch64-apple-darwin` and
-`x86_64-apple-darwin` Rust targets. Builds never install or download dependencies.
+application checks), Cargo with the locked dependencies cached, and for the
+application Qt 6 Widgets and SDL3 3.2 or newer. macOS also needs Command Line Tools,
+preinstalled `aarch64-apple-darwin` and `x86_64-apple-darwin` Rust targets, a
+**universal** Qt 6.5 or newer (the official binaries, e.g. installed with
+`aqtinstall` into `~/Qt/<version>/macos`; Homebrew's Qt is single-architecture, and
+Qt 6.8.3 no longer links against the current macOS SDK) and a universal SDL3 (a
+static, audio-only build from the release source is enough). Pass their locations
+with `-DSETUP_QT_ROOT=DIR` and `-DSETUP_SDL3_ROOT=DIR` when they are not installed
+system-wide. Builds never install or download dependencies.
+
+`ci/fetch-dependencies.sh PREFIX` fetches the pinned versions of `ci/versions.env`
+(Boost headers, SDL3, and on macOS the universal Qt), each checked against its hash,
+and prints the matching `-DSETUP_..._ROOT` options; `CMakePresets.json` has `macos`
+and `linux` presets that read the same roots from the environment. The workflow in
+`.github/workflows/ci.yml` builds and tests both platforms with them.
 
 Use a separate directory for build and test output:
 
@@ -92,8 +104,9 @@ ctest --test-dir "$scratch/build" --output-on-failure
 Targets: `bf2_setup_core`, `bf2_setup_platform`, `bf2_setup`,
 `bf2_setup_checks`, `bf2_setup_rtp`, and macOS `OpenBF2`. Both Rust slices
 are built with `--release --offline --locked`, merged with `lipo` and statically
-linked. C++ and AppKit get the same universal architectures. No Rust compiler
-is needed on an end user's machine.
+linked. C++ and the Qt front end get the same universal architectures; the Qt
+frameworks and plugins are deployed into the bundle with `macdeployqt` and signed with
+it. No Rust compiler is needed on an end user's machine.
 
 For a release build driven by CI, `macos/build-release.sh CLIENT_DIR OUT.dmg`
 configures, builds, tests and packages in one step; the client directory
@@ -107,7 +120,7 @@ alone; the DMG script still rejects such a bundle. Build all targets or
 `bf2_setup_client` to validate/import them. No client is fetched or built here.
 
 On other hosts, configure/build the same core and CLI with CMake. Rust's host
-triple is detected; Apple frameworks and AppKit are selected only on macOS.
+triple is detected; Apple frameworks are selected only on macOS.
 POSIX and Windows adapters implement locking and durable publication in
 `src/posix.cpp` and `src/windows.cpp`. Linux also builds the Qt frontend when
 Qt 6 Widgets and SDL3 are installed; use `-DSETUP_BUILD_APP=OFF` for core/CLI only.
@@ -117,14 +130,15 @@ release packaging also supplies the matching Qt runtime. See the
 [Linux artifact/build contract](docs/linux-distribution.md#development-build)
 for prerequisites, the explicit development override and release commands.
 Linux checks and remaining runtime acceptance are recorded separately. Windows
-compilation/runtime and its UI remain future work. See [third-party provenance](third_party/README.md)
+builds with MSVC 2022, Qt 6 (msvc2022_64) and SDL3 into an application folder; see
+[Windows build and layout](docs/windows-distribution.md). See [third-party provenance](third_party/README.md)
 for the pinned owner-fork source and alternate checkout option.
 
 ## Reading the code
 
 All sources are in `src/`, one flat directory. The assistant is one application
 class, `Setup`, whose `Launch` coroutine reads top to bottom as the whole program.
-It knows nothing about AppKit:
+It knows nothing about Qt or any other toolkit:
 
 ```cpp
 task<int> Setup::Launch()
@@ -149,29 +163,30 @@ task<int> Setup::Launch()
 | File | Content |
 |---|---|
 | `setup` | the application: pages, their order, what happens on Back, Cancel and failures |
-| `window.h`, `window.mm` | what the application needs from a window (pages, events, progress) and its AppKit implementation |
+| `window.h`, `window_qt.cpp` | what the application needs from a window (pages, events, progress) and its Qt Widgets implementation, written in plain C++ (no Designer files, no QML) |
 | `installer` | disc and patch checks, installation and verification on the worker threads |
 | `store` | CD keys, start-up options and voice defaults below the support root |
 | `launch` | the start-up options, their file and the command line they become: pure functions |
-| `client.h`, `client.mm` | the game process: started with NSTask, awaited until it quits |
-| `microphone.h`, `microphone.mm` | microphone permission and the level meter (AVFoundation) |
-| `main.mm` | puts the pieces together, runs the window, holds the two UI checks |
+| `client.h`, `client_qt.cpp` | the game process: started with QProcess, awaited until it quits |
+| `microphone.h`, `microphone_sdl.cpp` | the level meter (SDL3) and, on macOS, the microphone permission (Qt) |
+| `main_qt.cpp` | puts the pieces together per platform (data folder, bundle or install layout), runs the window, holds the smoke test |
+| `platform_qt.h`, `platform_mac.mm`, `platform_linux.cpp`, `platform_windows.cpp` | the few platform differences of the front end: launcher key or switch, hints, handing the foreground to the game |
 | `media`, `cabinet`, `edition`, `patch`, `install`, `digest`, `key_check` | the portable setup core |
-| `session` | Registry.con, receipts, voice file, launch options and launch arguments as plain functions |
+| `session` | Registry.con (Registry.dat, protected for the user, on Windows), receipts, voice file, launch options and launch arguments as plain functions |
 | `mods` | the mods of an installed game and their names, from `mod.desc` and the game's localization |
 | `platform.h`, `posix.cpp`, `windows.cpp` | locks, flushes, atomic replace |
+| `links` | links into the mod library: symbolic links, directory junctions on Windows |
 
 The application needs Boost.Asio (header-only, 1.86 or newer; `-DSETUP_BOOST_ROOT=DIR`
 for a header tree which is not installed). The core, the CLI and their checks build
-without it. A Windows front end would implement `window.h`, `client.h` and
-`microphone.h` again and reuse everything else.
+without it.
 
 `application_checks` links the real `src/setup.cpp` against `tests/fake.cpp`, which
 implements `Window`, `Installer`, `Store`, `Client` and `Microphone` on top of a
 described machine and a scripted user. It covers the order of the pages, Back,
 key gating, the Special Forces checkbox, wrong media, Cancel and resume, failures,
-the start-up options, the plain start into the game and Play. It runs on Linux and
-macOS. It does not cover AppKit, the media formats
+the start-up options, the plain start into the game and Play. It runs on Linux,
+macOS and Windows. It does not cover the Qt widgets themselves (`qt_workflow_checks` drives the real Qt window through the same flow), the media formats
 or a real installation; those keep their own checks.
 
 ## CLI
@@ -259,7 +274,7 @@ touch the microphone, launch anything or save anything:
 `docs/` holds the maintainer documents, each with a line saying who it is for:
 [setup design](docs/setup-design.md), [client contract](docs/client-artifact.md),
 [distribution and signing](docs/distribution.md), [disc editions](docs/disc-editions.md),
-[official patch pins](docs/patch-verification.md), [CD-key check](docs/cdkey-check.md)
+[Windows build and layout](docs/windows-distribution.md), [official patch pins](docs/patch-verification.md), [CD-key check](docs/cdkey-check.md)
 and [voice setup](docs/voice-setup.md). `docs/research/` keeps the evidence from
 which the manifests and the policies were derived, with [an index](docs/research/README.md)
 of when to open which. No third-party key tool was copied or consulted.

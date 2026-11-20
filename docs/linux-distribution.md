@@ -53,7 +53,7 @@ can contain private data; logs are never added to packages or uploaded.
 SDL3 opens a mono float recording stream and polls it on the Qt thread. Linux
 does not use macOS's permission prompt. A failed open or capture is visible,
 with retry and skip actions; Skip leaves existing voice defaults alone. SDL's
-dummy driver is used only in tests. macOS keeps AVFoundation permission behavior.
+dummy driver is used only in tests. macOS uses the same SDL3 capture and asks for permission through Qt (`QMicrophonePermission`).
 
 ## Development build
 

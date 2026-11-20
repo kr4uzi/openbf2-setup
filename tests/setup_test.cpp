@@ -18,6 +18,11 @@ namespace {
 
 	const auto key = std::string{ "AAAAAAAAAAAAAAAAAAAA" };
 	const auto special_forces_key = std::string{ "SSSSSSSSSSSSSSSSSSSS" };
+	// a provider file as BF2Hub's extractor writes it, with BF2Hub's public addresses
+	const auto bf2hub_file = std::string{ R"({"schema": 1, "provider": "BF2Hub", "generator": "openbf2-hubtool 0.1.0",
+		"services": {"available": "5.252.33.100", "ms14": "5.252.33.100", "master": "5.252.33.100", "gpcm": "5.252.33.100", "gpsp": "5.252.33.100",
+		"gamestats": "116.203.14.166", "BF2Web": "116.203.14.166", "eapusher": "116.203.14.166"}})" };
+	const auto bf2hub_switches = std::string{ "+gamespyRedirectavailable 5.252.33.100 +gamespyRedirectms14 5.252.33.100 +gamespyRedirectmaster 5.252.33.100 +gamespyRedirectgpcm 5.252.33.100 +gamespyRedirectgpsp 5.252.33.100 +gamespyRedirectgamestats 116.203.14.166 +gamespyRedirectBF2Web 116.203.14.166 +gamespyRedirecteapusher 116.203.14.166" };
 
 	unsigned checks = 0;
 
@@ -443,6 +448,155 @@ int main()
 	}, [] {
 		check(g_Machine.command_line == "+modPath mods/bf2 +fullscreen 0 +szx 800 +szy 600", "the override was not shown as the command line");
 		check(g_Machine.client_options.override == "+modPath mods/bf2 +fullscreen 0 +szx 800 +szy 600", "the override did not reach the client");
+	});
+
+	run("BF2Hub from a file is kept, and Play passes its entries", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.provider_files["BF2Hub.json"] = bf2hub_file;
+		machine.script = { { Kind::bf2hub_file, "BF2Hub.json" }, click(Page::launcher), quit() };
+	}, [] {
+		check(called("import-provider") && g_Machine.kept_providers["bf2hub"] == bf2hub_file && g_Machine.shown_provider_online == "bf2hub" && g_Machine.shown_provider_source == "file", "BF2Hub's file was not kept, or not shown");
+		check(g_Machine.stored_launch.online == "bf2hub" && g_Machine.stored_launch.bf2hub_source == "file" && g_Machine.client_options.provider.services.size() == 8, "the choice was not saved, or Play did not use it");
+		check(g_Machine.command_line == "+modPath mods/bf2 +restart 1 " + bf2hub_switches, "the command line did not pass the provider file's entries");
+	});
+
+	run("BF2Hub's hosted file is downloaded and kept", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.downloads[bf2hub_hosted_url] = bf2hub_file;
+		machine.script = { { Kind::bf2hub_hosted }, click(Page::launcher), quit() };
+	}, [] {
+		check(called(std::string("download ") + bf2hub_hosted_url) && g_Machine.kept_providers["bf2hub"] == bf2hub_file && g_Machine.stored_launch.bf2hub_source == "hosted", "the hosted file was not downloaded and kept");
+		check(std::ranges::count(g_Machine.busy_labels, std::string{ "Downloading…" }) == 1 && g_Machine.client_options.online == "bf2hub", "the page did not wait for the download, or Play did not use it");
+	});
+
+	run("another provider's file from the web, and a download which fails", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.downloads["https://example.org/p.json"] = R"({"schema": 1, "provider": "Example", "services": {"*": "10.0.0.7"}})";
+		machine.script = { { Kind::other_url, "https://unreachable.example/p.json" }, { Kind::other_url, "http://example.org/p.json" }, { Kind::other_url, "https://example.org/p.json" }, click(Page::launcher), quit() };
+	}, [] {
+		check(std::ranges::count(g_Machine.messages, std::string{ "The provider file was not accepted: The address could not be reached." }) == 1, "a failed download was not said");
+		check(told("The provider file was not accepted") && !called("download http://example.org/p.json"), "an address without https was downloaded");
+		check(g_Machine.stored_launch.online == "other" && g_Machine.stored_launch.other_source == "url" && g_Machine.stored_launch.other_url == "https://example.org/p.json", "the other provider's address was not saved");
+		check(g_Machine.command_line == "+modPath mods/bf2 +restart 1 +gamespyRedirect 10.0.0.7", "the other provider's \"*\" was not passed");
+	});
+
+	run("a provider file which is not valid changes nothing", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.provider_files["wrong.json"] = R"({"schema": 1, "provider": "BF2Hub", "services": {"available": "5.252.33.100 +multi 1"}})";
+		machine.script = { { Kind::bf2hub_file, "wrong.json" }, { Kind::other_file, "missing.json" }, click(Page::launcher), quit() };
+	}, [] {
+		check(g_Machine.kept_providers.empty() && told("BF2Hub's addresses could not be read") && told("The provider file was not accepted"), "an invalid or missing provider file was not refused with its reason");
+		check(g_Machine.client_options.online.empty() && g_Machine.command_line == "+modPath mods/bf2 +restart 1", "a refused provider file reached the game");
+	});
+
+	run("a provider whose file is gone opens the launcher", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.option_key_held = false;
+		machine.stored_launch.online = "bf2hub";
+		machine.stored_launch.bf2hub_source = "file";
+		machine.script = { quit() };
+	}, [] {
+		check(!called("run-client") && g_Machine.pages == std::vector{ Page::launcher }, "the game started without the provider's services");
+		check(g_Machine.launcher_note.starts_with("The provider file is missing"), "the launcher did not say that the provider file is missing");
+	});
+
+	run("a provider file starts straight into the game", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.option_key_held = false;
+		machine.stored_launch.online = "bf2hub";
+		machine.stored_launch.bf2hub_source = "file";
+		machine.stored_launch.provider = parse_provider(bf2hub_file);
+	}, [] {
+		check(g_Machine.client_runs == 1 && g_Machine.pages.empty(), "the plain start did not go into the game");
+		check(command_line(launch_arguments(g_Machine.client_options)) == "+modPath mods/bf2 +restart 1 " + bf2hub_switches, "the plain start did not pass the provider file's entries");
+	});
+
+	run("an expired hosted file is downloaded again before the game starts", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.option_key_held = false;
+		machine.stored_launch.online = "bf2hub";
+		machine.stored_launch.bf2hub_source = "hosted";
+		machine.stored_launch.provider = parse_provider(R"({"schema": 1, "provider": "BF2Hub", "valid_to": "2020-01-01T00:00:00Z", "services": {"available": "1.1.1.1"}})");
+		machine.downloads[bf2hub_hosted_url] = bf2hub_file;
+	}, [] {
+		check(called(std::string("download ") + bf2hub_hosted_url) && g_Machine.kept_providers["bf2hub"] == bf2hub_file, "the expired hosted file was not downloaded again");
+		check(g_Machine.client_runs == 1, "the game did not start after the download");
+	});
+
+	run("an expired file which cannot be downloaded again stays in use, and the launcher says so", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.stored_launch.online = "bf2hub";
+		machine.stored_launch.bf2hub_source = "hosted";
+		machine.stored_launch.provider = parse_provider(R"({"schema": 1, "provider": "BF2Hub", "valid_to": "2020-01-01T00:00:00Z", "services": {"available": "1.1.1.1"}})");
+		machine.script = { quit() };
+	}, [] {
+		check(g_Machine.launcher_note.starts_with("The provider file could not be downloaded again"), "the launcher did not say that the old file is used");
+		check(g_Machine.command_line.find("+gamespyRedirectavailable 1.1.1.1") != std::string::npos, "the old file was not used");
+	});
+
+	run("an expired automatic file is not asked for again by itself", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.stored_launch.online = "bf2hub";
+		machine.stored_launch.bf2hub_source = "automatic";
+		machine.stored_launch.provider = parse_provider(R"({"schema": 1, "provider": "BF2Hub", "valid_to": "2020-01-01T00:00:00Z", "services": {"available": "1.1.1.1"}})");
+		machine.script = { quit() };
+	}, [] {
+		check(!called("probe-bf2hub") && g_Machine.launcher_note.starts_with("The provider file is out of date"), "the hubtool ran by itself, or the launcher did not say the file is out of date");
+	});
+
+	run("the BF2Hub installer gives a provider file through the hubtool", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.hubtool_run.exitCode = 0;
+		machine.hubtool_run.out = bf2hub_file;
+		machine.script = { { Kind::bf2hub_installer, "BF2Hub-Client-Setup.exe" }, click(Page::launcher), quit() };
+	}, [] {
+		check(called("probe-bf2hub") && g_Machine.kept_providers["bf2hub"] == bf2hub_file + "\n" && g_Machine.shown_provider_source == "automatic", "the hubtool's provider file was not kept and shown");
+		check(std::ranges::count(g_Machine.busy_labels, std::string{ "Asking BF2Hub…" }) == 1 && g_Machine.messages.empty(), "the page did not wait for the tool, or a message was shown");
+		check(command_line(launch_arguments(g_Machine.client_options)) == "+modPath mods/bf2 +restart 1 " + bf2hub_switches && g_Machine.stored_launch.bf2hub_source == "automatic", "Play did not use the hubtool's provider file");
+	});
+
+	run("the hubtool's exit 6 still gives its printed provider file", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.hubtool_run.exitCode = 6;
+		machine.hubtool_run.out = bf2hub_file;
+		machine.script = { { Kind::bf2hub_installer, "BF2Hub-Client-Setup.exe" }, quit() };
+	}, [] {
+		check(g_Machine.kept_providers.contains("bf2hub") && g_Machine.shown_provider && g_Machine.messages.empty(), "exit 6 with a printed provider file was refused");
+	});
+
+	run("a failed hubtool run says why and keeps the services in use", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.stored_launch.online = "openspy";
+		machine.stored_launch.provider = parse_provider(provider_presets().front().json);
+		machine.hubtool_run.exitCode = 5;
+		for (int i = 1; i <= 25; ++i) machine.hubtool_run.err += "probe " + std::to_string(i) + "\n";
+		machine.script = { { Kind::bf2hub_installer, "BF2Hub-Client-Setup.exe" }, click(Page::launcher), quit() };
+	}, [] {
+		check(told("BF2Hub's addresses could not be read") && g_Machine.messages.back().ends_with("BF2Hub gave no addresses."), "the failure did not say what the exit code means");
+		check(g_Machine.message_details.rfind("probe 6\n", 0) == 0 && g_Machine.message_details.ends_with("probe 25\n"), "the details are not the last 20 lines of the tool's errors");
+		check(g_Machine.kept_providers.empty() && g_Machine.client_options.online == "openspy", "a failed run changed the services in use");
+	});
+
+	run("the dialog offers the game's demos and opens their folder", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.demos = { "Demos/new.bf2demo", "Demos/old.con" };
+		machine.script = { { Kind::demos_folder }, quit() };
+	}, [] {
+		check(g_Machine.shown_demos == std::vector<std::filesystem::path>{ "Demos/new.bf2demo", "Demos/old.con" }, "the dialog did not get the game's demos");
+		check(called("demos-folder") && !g_Machine.revealed.empty() && g_Machine.revealed.back() == "Demos", "the demos folder was not opened");
 	});
 
 	run("a mod is added while the launcher is open", [](FakeMachine& machine) {

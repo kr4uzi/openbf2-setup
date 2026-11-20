@@ -50,6 +50,20 @@ namespace setup {
 		std::vector<Mod> dropped_mods;
 		// the options of an earlier run, in Setup/Launch.txt
 		LaunchOptions stored_launch;
+		// files the user can choose as provider file, and addresses which can be downloaded, with their contents
+		std::map<std::string, std::string> provider_files;
+		std::map<std::string, std::string> downloads;
+		// the provider files the application kept, by online service, and what the launcher was shown
+		std::map<std::string, std::string> kept_providers;
+		std::optional<ProviderServices> shown_provider;
+		std::string shown_provider_online, shown_provider_source;
+		std::map<std::string, ProviderServices> shown_kept;
+		// the recorded demos of the game folder, and what the dialog offered of them
+		std::vector<std::filesystem::path> demos;
+		std::vector<std::filesystem::path> shown_demos;
+		// what openbf2-hubtool gives, and the details of the last message
+		HubtoolRun hubtool_run;
+		std::string message_details;
 		// most scripts want the pages; the plain start into the game is described with false
 		bool option_key_held = true;
 		bool client_present = true;
@@ -82,6 +96,8 @@ namespace setup {
 		std::vector<Page> pages;
 		bool busy = false;
 		std::string busy_label;
+		// every label the default button had while busy
+		std::vector<std::string> busy_labels;
 		bool back = false;
 		bool deluxe_keys = false;
 		bool included141 = false;

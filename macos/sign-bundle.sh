@@ -32,6 +32,12 @@ fi
 while IFS= read -r -d '' dylib; do
   /usr/bin/codesign --force --sign "$identity" ${options[@]+"${options[@]}"} "$dylib"
 done < <(/usr/bin/find "$app/Contents" -type f -name '*.dylib' -print0)
+# The Qt frameworks deployed into Contents/Frameworks: each signed as a bundle, inside out
+if [[ -d "$app/Contents/Frameworks" ]]; then
+  while IFS= read -r -d '' framework; do
+    /usr/bin/codesign --force --sign "$identity" ${options[@]+"${options[@]}"} "$framework"
+  done < <(/usr/bin/find "$app/Contents/Frameworks" -maxdepth 1 -type d -name '*.framework' -print0)
+fi
 if [[ -f "$app/Contents/MacOS/bf2_client" ]]; then
   /usr/bin/codesign --force --sign "$identity" ${options[@]+"${options[@]}"} ${client_entitlements[@]+"${client_entitlements[@]}"} "$app/Contents/MacOS/bf2_client"
 fi

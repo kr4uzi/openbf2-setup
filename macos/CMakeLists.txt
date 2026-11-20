@@ -1,21 +1,17 @@
-enable_language(OBJCXX)
-if(NOT SETUP_HAVE_BOOST)
-  message(FATAL_ERROR "The app needs the Boost headers (Boost.Asio): install Boost, pass -DSETUP_BOOST_ROOT=DIR, or configure with -DSETUP_BUILD_APP=OFF")
-endif()
-set(app_sources main.mm window.mm client.mm microphone.mm setup.cpp installer.cpp store.cpp)
-list(TRANSFORM app_sources PREPEND "${CMAKE_SOURCE_DIR}/src/")
-add_executable(OpenBF2 MACOSX_BUNDLE ${app_sources})
-set_target_properties(OpenBF2 PROPERTIES OUTPUT_NAME "OpenBF2" MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist" OBJCXX_STANDARD 23)
-target_compile_options(OpenBF2 PRIVATE -fobjc-arc)
+# The application is the shared Qt front end (cmake/frontend.cmake); this file makes it a bundle.
+add_executable(OpenBF2 MACOSX_BUNDLE ${frontend_application_sources})
+set_target_properties(OpenBF2 PROPERTIES OUTPUT_NAME "OpenBF2" MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist")
 target_compile_definitions(OpenBF2 PRIVATE SETUP_UI_TEST_ROOT="${SETUP_SCRATCH}")
-target_link_libraries(OpenBF2 PRIVATE bf2_setup_session bf2_setup_boost "-framework AppKit" "-framework AVFoundation")
+target_link_libraries(OpenBF2 PRIVATE bf2_setup_frontend)
 set(content_manifests "${CMAKE_SOURCE_DIR}/core/content-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-deluxe-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-deluxe-base-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-complete-150.tsv")
 set_source_files_properties(${content_manifests} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/Setup)
 target_sources(OpenBF2 PRIVATE ${content_manifests})
 # The app icon: an original drawing (macos/icon/make-icon.swift regenerates it), no game artwork.
 set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/OpenBF2.icns" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 target_sources(OpenBF2 PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/OpenBF2.icns")
-# Client artifacts are supplied by a separate engine build, never fetched here.
+# Qt's frameworks and plugins go into the bundle (macdeployqt from the same Qt installation), then
+# everything is signed. Client artifacts are supplied by a separate engine build, never fetched here.
+find_program(SETUP_MACDEPLOYQT macdeployqt HINTS "${Qt6_DIR}/../../../bin" NO_DEFAULT_PATH REQUIRED)
 set(SETUP_CLIENT_ARTIFACT "" CACHE PATH "Local directory with bf2_client, libdice_py.dylib, libaidll.dylib (read-only)")
 option(SETUP_CLIENT_ALLOW_THIN "Developer builds only: accept a client artifact built for the host architecture alone (DMG creation still rejects it)" OFF)
 if(SETUP_CLIENT_ARTIFACT)
@@ -25,17 +21,17 @@ if(SETUP_CLIENT_ARTIFACT)
   endif()
   add_custom_target(bf2_setup_client ALL
     COMMAND "${CMAKE_COMMAND}" -E env "SETUP_CLIENT_ALLOW_THIN=${client_thin}" /bin/bash "${CMAKE_CURRENT_SOURCE_DIR}/embed-client.sh" "${SETUP_CLIENT_ARTIFACT}" "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/MacOS"
+    COMMAND "${SETUP_MACDEPLOYQT}" "$<TARGET_BUNDLE_DIR:OpenBF2>" -always-overwrite
     COMMAND /bin/bash "${CMAKE_CURRENT_SOURCE_DIR}/sign-bundle.sh" "$<TARGET_BUNDLE_DIR:OpenBF2>"
     DEPENDS OpenBF2 VERBATIM)
 else()
   add_custom_target(bf2_setup_client ALL
     COMMAND "${CMAKE_COMMAND}" -E rm -f "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/MacOS/bf2_client" "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/MacOS/libdice_py.dylib" "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/MacOS/libaidll.dylib" "$<TARGET_BUNDLE_DIR:OpenBF2>/Contents/Resources/Setup/client-artifact.sha256"
+    COMMAND "${SETUP_MACDEPLOYQT}" "$<TARGET_BUNDLE_DIR:OpenBF2>" -always-overwrite
     COMMAND /bin/bash "${CMAKE_CURRENT_SOURCE_DIR}/sign-bundle.sh" "$<TARGET_BUNDLE_DIR:OpenBF2>"
     DEPENDS OpenBF2 VERBATIM)
 endif()
 if(BUILD_TESTING)
-  add_test(NAME wizard_disc_actions COMMAND "$<TARGET_FILE:OpenBF2>" --test-disc-selection)
-  set_tests_properties(wizard_disc_actions PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 90)
   add_test(NAME client_packaging_checks COMMAND /bin/bash "${CMAKE_SOURCE_DIR}/tests/client_packaging.sh" "${SETUP_SCRATCH}" "${CMAKE_CURRENT_SOURCE_DIR}")
   add_test(NAME release_path_checks COMMAND /bin/bash "${CMAKE_SOURCE_DIR}/tests/release_paths.sh" "${SETUP_SCRATCH}" "${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
@@ -45,6 +41,8 @@ configure_file("${CMAKE_SOURCE_DIR}/third_party/rtptool/LICENSE" "licences/rtpto
 configure_file("${CMAKE_SOURCE_DIR}/third_party/THIRD-PARTY-NOTICES.txt" "licences/Rust-dependencies.txt" COPYONLY)
 configure_file("${CMAKE_SOURCE_DIR}/LICENSE" "licences/OpenBF2-Setup-LICENSE.txt" COPYONLY)
 configure_file("${CMAKE_SOURCE_DIR}/docs/prototype-LICENSE" "licences/Prototype-LICENSE.txt" COPYONLY)
+configure_file("${CMAKE_SOURCE_DIR}/third_party/Qt-NOTICE.txt" "licences/Qt-NOTICE.txt" COPYONLY)
+configure_file("${CMAKE_SOURCE_DIR}/third_party/SDL3-LICENSE.txt" "licences/SDL3-LICENSE.txt" COPYONLY)
 file(GLOB licences "${CMAKE_CURRENT_BINARY_DIR}/licences/*.txt")
 set_source_files_properties(${licences} PROPERTIES MACOSX_PACKAGE_LOCATION Resources/Setup/Licences)
 target_sources(OpenBF2 PRIVATE ${licences})

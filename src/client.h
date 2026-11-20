@@ -21,6 +21,9 @@ namespace setup {
 		Client(ClientLayout layout, std::filesystem::path support, std::filesystem::path home);
 		~Client();
 
+		// Windows ships two clients: the 64-bit one (the layout given to the constructor) and the 32-bit
+		// one for PunkBuster servers. LaunchOptions::client chooses between them
+		void Alternative(ClientLayout x86);
 		bool Present() const;
 		// starts the game on the given installation with the command line of the options and returns its
 		// exit status once it has quit. the installation lock is held meanwhile, so nothing replaces the

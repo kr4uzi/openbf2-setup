@@ -98,7 +98,7 @@ ctest --test-dir "$build" -R '^key_checks_owner$' --output-on-failure
 
 No real keys were provided in this session, so real-key acceptance and its
 corruption tests were skipped. Universal build and rejection/session/packaging
-test results are recorded in the project notes. Interactive AppKit verification
+test results are recorded in the project notes. Interactive Qt front end verification
 remains a desktop check if the sandbox cannot create an application session.
 Static reports, decompilation and analysis projects are scratch-only artifacts;
 no executable, game content or owner key belongs in this repository.

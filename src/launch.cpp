@@ -1,4 +1,6 @@
 #include "launch.h"
+
+#include <cctype>
 #include <algorithm>
 #include <sstream>
 #include <stdexcept>
@@ -12,6 +14,11 @@ setup::ClientLayout setup::linuxClientLayout(const std::filesystem::path& root)
 {
 	return {root / "bin/bf2_client", {root / "lib/libdice_py.so", root / "lib/libaidll.so",
 		root / "lib/libdxvk_d3d9.so.0", root / "lib/libSDL3.so.0", root / "lib/libopenal.so.1"}};
+}
+
+setup::ClientLayout setup::windowsClientLayout(const std::filesystem::path& folder)
+{
+	return {folder / "BF2.exe", {folder / "dice_py.dll", folder / "RendDX9.dll", folder / "SwiffPlayer.dll", folder / "BF2Audio.dll"}};
 }
 
 std::filesystem::path setup::linuxDataHome(const std::filesystem::path& home, const std::string& xdg)
@@ -49,6 +56,17 @@ namespace {
 		return result;
 	}
 
+
+	int integer(const std::string& value, int low, int high, int fallback)
+	{
+		auto text = trim(value);
+		if (text.empty() || text.size() > 7 || text.find_first_not_of("-0123456789") != std::string::npos || text.find('-', 1) != std::string::npos || text == "-")
+			return fallback;
+
+		auto parsed = std::stoi(text);
+		return parsed >= low && parsed <= high ? parsed : fallback;
+	}
+
 	unsigned number(const std::string& value, unsigned low, unsigned high, unsigned fallback)
 	{
 		auto text = trim(value);
@@ -75,7 +93,9 @@ std::vector<std::string> setup::launch_arguments(const LaunchOptions& options)
 			arguments.insert(arguments.end(), { "+szx", std::to_string(options.width), "+szy", std::to_string(options.height) });
 	}
 
-	if (auto server = clean(options.server); !server.empty()) {
+	// a demo replaces joining a server
+	auto demo = unquoted(options.demo);
+	if (auto server = clean(options.server); !server.empty() && demo.empty()) {
 		arguments.insert(arguments.end(), { "+joinServer", server, "+port", std::to_string(options.port) });
 		if (auto password = unquoted(options.password); !password.empty())
 			arguments.insert(arguments.end(), { "+password", password });
@@ -84,7 +104,48 @@ std::vector<std::string> setup::launch_arguments(const LaunchOptions& options)
 	if (auto player = clean(options.player); !player.empty())
 		arguments.insert(arguments.end(), { "+playerName", player });
 
+	// the online services: the provider file's entries as it writes them, "+gamespyRedirect" and the key, then the
+	// value; a value the game would refuse is not passed
+	if (!options.online.empty())
+		for (const auto& [key, value] : options.provider.services)
+			if (valid_service(key, value))
+				arguments.insert(arguments.end(), { service_switch(key), value });
+
+	if (options.no_sound)
+		arguments.insert(arguments.end(), { "+noSound", "1" });
+
+	if (options.multi)
+		arguments.insert(arguments.end(), { "+multi", "1" });
+
+
+
+	if (!options.fullscreen && options.window_x >= 0 && options.window_y >= 0)
+		arguments.insert(arguments.end(), { "+wx", std::to_string(options.window_x), "+wy", std::to_string(options.window_y) });
+
+	if (!options.tutorial_messages)
+		arguments.insert(arguments.end(), { "+tutorialMessages", "0" });
+
+	if (options.skip_dx_check)
+		arguments.insert(arguments.end(), { "+skipDXCheck", "1" });
+
+	if (auto folder = unquoted(options.punkbuster); !folder.empty())
+		arguments.insert(arguments.end(), { "+pbPath", folder });
+
+	if (!demo.empty() && !demo_recording(demo))
+		arguments.insert(arguments.end(), { "+demo", demo });
+	else if (!demo.empty() && !options.demo_config.empty())
+		arguments.insert(arguments.end(), { "+demo", options.demo_config });
+
 	return arguments;
+}
+
+bool setup::has_advanced_options(const LaunchOptions& options)
+{
+	// the online services and the tutorial messages are on the launcher page itself
+	auto defaults = LaunchOptions{};
+	return options.no_sound || options.multi || options.window_x != defaults.window_x
+		|| options.window_y != defaults.window_y || options.skip_dx_check || !options.punkbuster.empty()
+		|| !options.demo.empty() || !clean(options.server).empty();
 }
 
 std::string setup::command_line(const std::vector<std::string>& arguments)
@@ -158,6 +219,29 @@ std::string setup::argument_mod(const std::vector<std::string>& arguments)
 	return {};
 }
 
+bool setup::provider_online(const std::string& online)
+{
+	return online == "bf2hub" || online == "other";
+}
+
+bool setup::valid_online(const std::string& online)
+{
+	return online.empty() || online == "openspy" || provider_online(online);
+}
+
+bool setup::demo_recording(const std::string& demo)
+{
+	auto name = clean(demo);
+	std::ranges::transform(name, name.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+	return name.ends_with(".bf2demo");
+}
+
+std::string setup::demo_config_text(const std::string& recording)
+{
+	// the game takes the rest of a line as the path, spaces included
+	return "rem written by OpenBF2 to play a recording\ndemo.demomode playback\ndemo.demofile " + unquoted(recording) + "\n";
+}
+
 std::string setup::launch_text(const LaunchOptions& options)
 {
 	auto text = std::ostringstream{};
@@ -171,7 +255,20 @@ std::string setup::launch_text(const LaunchOptions& options)
 		<< "password=" << unquoted(options.password) << '\n'
 		<< "player=" << clean(options.player) << '\n'
 		<< "override=" << clean(options.override) << '\n'
-		<< "always_show=" << (options.always_show ? 1 : 0) << '\n';
+		<< "always_show=" << (options.always_show ? 1 : 0) << '\n'
+		<< "client=" << (options.client == "x86" ? "x86" : "x64") << '\n'
+		<< "online=" << (valid_online(options.online) ? options.online : std::string{}) << '\n'
+		<< "bf2hub_source=" << clean(options.bf2hub_source) << '\n'
+		<< "other_source=" << clean(options.other_source) << '\n'
+		<< "other_url=" << (valid_provider_url(clean(options.other_url)) ? clean(options.other_url) : std::string{}) << '\n'
+		<< "no_sound=" << (options.no_sound ? 1 : 0) << '\n'
+		<< "multi=" << (options.multi ? 1 : 0) << '\n'
+		<< "window_x=" << options.window_x << '\n'
+		<< "window_y=" << options.window_y << '\n'
+		<< "tutorial_messages=" << (options.tutorial_messages ? 1 : 0) << '\n'
+		<< "skip_dx_check=" << (options.skip_dx_check ? 1 : 0) << '\n'
+		<< "punkbuster=" << unquoted(options.punkbuster) << '\n'
+		<< "demo=" << unquoted(options.demo) << '\n';
 	return text.str();
 }
 
@@ -211,6 +308,34 @@ LaunchOptions setup::parse_launch(const std::string& text)
 			options.override = clean(value);
 		else if (name == "always_show")
 			options.always_show = trim(value) == "1";
+		else if (name == "client")
+			options.client = trim(value) == "x86" ? "x86" : "x64";
+		else if (name == "online")
+			options.online = valid_online(trim(value)) ? trim(value) : std::string{};
+		else if (name == "bf2hub_source")
+			options.bf2hub_source = trim(value) == "automatic" || trim(value) == "hosted" || trim(value) == "file" ? trim(value) : std::string{};
+		else if (name == "other_source")
+			options.other_source = trim(value) == "url" || trim(value) == "file" ? trim(value) : std::string{};
+		else if (name == "other_url")
+			options.other_url = valid_provider_url(trim(value)) ? trim(value) : std::string{};
+
+		else if (name == "no_sound")
+			options.no_sound = trim(value) == "1";
+		else if (name == "multi")
+			options.multi = trim(value) == "1";
+		else if (name == "window_x")
+			options.window_x = integer(value, -1, 32767, -1);
+		else if (name == "window_y")
+			options.window_y = integer(value, -1, 32767, -1);
+		else if (name == "tutorial_messages")
+			options.tutorial_messages = trim(value) != "0";
+		else if (name == "skip_dx_check")
+			options.skip_dx_check = trim(value) == "1";
+		else if (name == "punkbuster")
+			options.punkbuster = unquoted(value);
+		else if (name == "demo")
+			options.demo = unquoted(value);
+
 	}
 
 	return options;

@@ -2,8 +2,12 @@
 
 *For:* Maintainers preparing a release. *Covers:* the app bundle, signing (ad-hoc and Developer ID), the disk image, notarization steps and the key file format.
 
-The CMake AppKit target creates `OpenBF2.app`. It statically links the
-portable C++/Rust setup libraries. No game data, installer EXE, patch payload,
+The CMake target creates `OpenBF2.app` from the shared Qt front end
+(`cmake/frontend.cmake`). It statically links the portable C++/Rust setup
+libraries and SDL3 (audio only); `macdeployqt` copies the Qt frameworks into
+`Contents/Frameworks` and the Cocoa, style and image plugins into
+`Contents/PlugIns`, and `macos/sign-bundle.sh` signs those frameworks with the rest.
+Qt stays dynamically linked (LGPLv3; notice in `Resources/Setup/Licences`). No game data, installer EXE, patch payload,
 key or profile belongs in its resources. `Resources/Setup` contains only the
 path/size/hash manifest and licence notices.
 
@@ -50,8 +54,8 @@ assistant storage. `--test-home` redirects both assistant support and child HOME
 to a direct child of the configured scratch root. No key is passed on the command
 line or in the environment. The assistant verifies before Play, locks
 `Setup/Install.lock`, resolves the current receipt again, and refuses launch if
-the generation changed since verification. It retains that lock until NSTask
-exits, prevents repeated Play and normal assistant quit while the game runs,
+the generation changed since verification. It retains that lock until the
+client process exits, prevents repeated Play and normal assistant quit while the game runs,
 and reports launch/nonzero-exit errors. No command shell is involved.
 
 The existing client uses a separate `Client.lock` for single-instance behavior.

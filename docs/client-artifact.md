@@ -84,11 +84,60 @@ do. The setup app follows it as described here.
   options: `+modPath mods/<mod>`, `+restart 1` (skip the intro movies, on by
   default), nothing for fullscreen (the engine's own default, as in retail) and
   `+fullscreen 0` for windowed mode, `+szx <w> +szy <h>` only when windowed and
-  a size was given, `+joinServer <host> +port <port>` when a
-  server was given, with `+password <password>` when one was given as well (its
-  own argument, never quoted by the app, double quotes dropped, left out when
-  empty, as the engine's parser wants it), `+playerName <name>` when a name was
-  given. Behind the lock of the options page
+  a size was given, `+playerName <name>` when a name was given. The online services ("Online services" on the launcher page): nothing for
+  the retail services (the default), `+gamespyRedirect openspy.net` for OpenSpy, and
+  for BF2Hub or another provider the entries of its provider file as they are
+  written, in the file's order: `+gamespyRedirect<key> <value>` per entry, and
+  `+gamespyRedirect <value>` for the key `*`, the fallback for every name (a domain
+  replaces `gamespy.com` and `dice.se` in each name the engine looks up; an IPv4
+  address takes every name; Host headers stay retail). Other keys are the exact
+  retail host-name labels, case-sensitive like the engine's switch names:
+  `available`, `ms14`, `master`, `gpcm`, `gpsp`, `gamestats`, `BF2Web`,
+  `stage-net`, `eapusher`, `natneg1` to `natneg3`. Only values the engine accepts
+  are passed (a dotted IPv4 address, or a host name of at most 253 characters; a
+  domain for `*` at most 230), since the engine ends its start-up on any other
+  value. A provider file is JSON with `"schema": 1`, `"provider"` (a name of
+  letters, digits, spaces, `-` and `.`, at most 64), a non-empty `services` object
+  of keys (`*`, or letters, digits and `-`, at most 32) and values, and optionally
+  `"valid_to"`, a UTC time (`2026-11-27T18:00:00Z`) until which the file holds;
+  without it, it holds for ever. Other entries (`generated`, `generator`, `source`)
+  are not used.
+  BF2Hub's dialog takes the file automatically from the BF2Hub installer the user
+  downloaded (Windows, with the bundled openbf2-hubtool), from the file OpenBF2
+  hosts (`https://bf2hub.krauzi.de/servers.json`), or from a file on the computer;
+  the other provider's dialog from an `https` address or a file. Downloads are
+  `https` only (redirects too), at most 64 KiB, with a 15-second limit. The files
+  are kept as `<support root>/Setup/Provider-BF2Hub.json` and
+  `Provider-Other.json`, and `Launch.txt` records the choice and the source. A
+  downloaded file which has run out is downloaded again at the next start (the old
+  one stays in use when that fails); a file from the installer or the computer is
+  only noted as out of date. A missing or invalid kept file opens the launcher
+  instead of the direct start. The setup checks the format only, never the
+  services, and the community services are not verified by OpenBF2.
+  The launcher page
+  also passes `+tutorialMessages 0` when "Show tutorial messages" is off (on
+  passes nothing, so the profile's own setting applies; `+help` is never passed,
+  since it prints the usage and ends the start-up). The Advanced
+  Options dialog adds `+noSound 1`, `+multi 1`,
+  `+wx <x> +wy <y>` (windowed only), on Windows
+  `+skipDXCheck 1` and `+pbPath <folder>`, joining a server at start
+  (`+joinServer <host> +port <port>`, with `+password <password>` when one was
+  given: its own argument, never quoted by the app, double quotes dropped, as the
+  engine's parser wants it), and a recorded demo, which replaces joining: a
+  `.con` with its demo options is passed as `+demo <con>`; for a recording
+  (`.bf2demo`) the launcher writes `<support root>/Setup/Demo.con` (`demo.demomode
+  playback`, `demo.demofile <recording>`) when the game starts and passes that. The
+  dialog lists the `.bf2demo` and `.con` files of the game folder's `Demos`
+  (where the game records), the newest first, and has Choose… and Open Folder. The
+  launcher is for the client: it offers no server switches (`+hostServer`,
+  `+loadLevel`, `+gameMode`, `+maxPlayers`, `+ai`, `+config`, `+mapList`,
+  `+rsconfig`, `+ranked`, `+dropDynamicSpawns`). Not offered either:
+  `+playerPassword` (an account password would be stored in `Launch.txt` and
+  visible in the process list), `+dedicated` and `+noStatusMonitor` (dedicated
+  server only),
+  `+playNow` (left out on purpose), `+widescreenHud` (the engine no longer has it: the widescreen HUD is automatic), `+lowPriority`, `+checkForPatch` and
+  `+checkForAvailablePatch` (parsed, no effect),
+  `+warmupLevel` (the setup's own) and `+help`/`+?` (usage only). Behind the lock of the options page
   the user may write the whole line instead; it is split on whitespace with
   double quotes kept together, and its `+modPath` mod must still be installed.
   Offered as `<mod>` is every directory below `mods/` of the generation which has a

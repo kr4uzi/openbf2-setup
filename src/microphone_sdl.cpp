@@ -5,6 +5,17 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#if defined(Q_OS_MACOS) || defined(Q_OS_WIN)
+#include <QDesktopServices>
+#include <QUrl>
+#endif
+#if defined(Q_OS_MACOS)
+#include <QCoreApplication>
+#include <QPermissions>
+#include <boost/asio/experimental/channel.hpp>
+#include <boost/asio/this_coro.hpp>
+#include <boost/asio/use_awaitable.hpp>
+#endif
 
 using namespace setup;
 struct Microphone::Impl {
@@ -39,9 +50,46 @@ Microphone::Microphone(bool allowed) : m_Impl(std::make_unique<Impl>(allowed)) {
 }
 Microphone::~Microphone() { Stop(); }
 bool Microphone::Allowed() const { return m_Impl->allowed; }
+#if defined(Q_OS_MACOS)
+// macOS asks the user once (the bundle's NSMicrophoneUsageDescription is the question); afterwards only
+// System Settings can change the answer. The client inherits the grant as a child process.
+MicrophoneAccess Microphone::Access() const
+{
+	switch (qApp->checkPermission(QMicrophonePermission{})) {
+	case Qt::PermissionStatus::Granted: return MicrophoneAccess::granted;
+	case Qt::PermissionStatus::Denied: return MicrophoneAccess::denied;
+	case Qt::PermissionStatus::Undetermined: break;
+	}
+	return MicrophoneAccess::undetermined;
+}
+
+task<bool> Microphone::Request()
+{
+	if (!m_Impl->allowed)
+		co_return false;
+
+	using Answer = boost::asio::experimental::channel<void(boost::system::error_code, bool)>;
+	auto answer = std::make_shared<Answer>(co_await boost::asio::this_coro::executor, 1);
+	qApp->requestPermission(QMicrophonePermission{}, &m_Impl->timer, [answer](const QPermission& permission) {
+		answer->try_send(boost::system::error_code{}, permission.status() == Qt::PermissionStatus::Granted);
+	});
+	co_return co_await answer->async_receive(boost::asio::use_awaitable);
+}
+
+void Microphone::OpenSystemSettings()
+{
+	QDesktopServices::openUrl(QUrl{"x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"});
+}
+#else
+// Linux and Windows ask no per-application question; Windows has one switch for all desktop apps
 MicrophoneAccess Microphone::Access() const { return MicrophoneAccess::not_required; }
 task<bool> Microphone::Request() { co_return m_Impl->allowed; }
+#if defined(Q_OS_WIN)
+void Microphone::OpenSystemSettings() { QDesktopServices::openUrl(QUrl{"ms-settings:privacy-microphone"}); }
+#else
 void Microphone::OpenSystemSettings() {}
+#endif
+#endif
 void Microphone::OnError(std::function<void()> error) { m_Impl->error = std::move(error); }
 bool Microphone::Start(std::function<void(double)> level) {
 	auto& i = *m_Impl;

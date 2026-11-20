@@ -1,5 +1,7 @@
 #pragma once
 
+#include "online.h"
+
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -13,6 +15,8 @@ namespace setup {
 	};
 	ClientLayout macClientLayout(const std::filesystem::path& contents);
 	ClientLayout linuxClientLayout(const std::filesystem::path& root);
+	// one client package folder of the Windows application (x64 or x86): BF2.exe and its DLLs
+	ClientLayout windowsClientLayout(const std::filesystem::path& folder);
 	std::filesystem::path linuxDataHome(const std::filesystem::path& home, const std::string& xdg);
 	// how the game is started: the choices of the options page. they only ever go on the command line of the
 	// client, like retail's shortcut did; no file of the game is written for them
@@ -40,9 +44,52 @@ namespace setup {
 		std::string override;
 		// the pages at every start, not only with the Option key. no switch: the application's own
 		bool always_show = false;
+		// Windows only: which client starts, "x64" or "x86" (the 32-bit one, which PunkBuster servers need)
+		std::string client = "x64";
+
+		// the online services: "" the game's own (retail), "openspy" (a preset), "bf2hub" or "other". the last two
+		// take a provider file (Setup/Provider-BF2Hub.json, Setup/Provider-Other.json): each entry is passed as
+		// written, "+gamespyRedirect<key> <value>"
+		std::string online;
+		// where BF2Hub's file came from: "automatic" (the hubtool, Windows), "hosted" (bf2hub_hosted_url) or "file";
+		// the other provider's: "url" (other_url) or "file"
+		std::string bf2hub_source, other_source, other_url;
+		// the provider file of the chosen service: read with the options, never written to Launch.txt
+		ProviderServices provider;
+
+		// the advanced options. each passes its switch only when it differs from the game's default
+		bool no_sound = false;        // +noSound 1
+		bool multi = false;           // +multi 1: several instances at once
+		// the tutorial messages. on follows the profile's own setting (on unless the player turned it off in the
+		// game) and passes nothing; off is +tutorialMessages 0 for this session. an engine without the switch
+		// ignores it. +help is never passed: it prints the usage and ends the start-up
+		bool tutorial_messages = true;
+		bool skip_dx_check = false;   // +skipDXCheck 1: no DirectX version check (Windows)
+		std::string punkbuster;       // +pbPath, PunkBuster's folder for several instances (Windows, 32-bit client)
+		// a recorded demo to play, which replaces joining a server: a .bf2demo, or a .con with its demo options;
+		// relative to the game folder (Demos/<name>.bf2demo, where the game records) or absolute. a .con is passed
+		// as +demo <con>; for a .bf2demo the launcher writes demo_config, which names it, and passes that
+		std::string demo;
+		// Setup/Demo.con in the support root: read with the options, never written to Launch.txt
+		std::string demo_config;
+		// +wx/+wy, windowed only; -1 leaves the position to the system (honoured on Windows, unverified elsewhere)
+		int window_x = -1;
+		int window_y = -1;
 
 		bool operator==(const LaunchOptions&) const = default;
 	};
+
+	// the advanced options differ from their defaults: the launcher opens with them shown
+	bool has_advanced_options(const LaunchOptions& options);
+
+	// the online services which take a provider file of their own, and whether a choice is one of the launcher's
+	bool provider_online(const std::string& online);
+	bool valid_online(const std::string& online);
+
+	// a demo given as its recording (.bf2demo), which needs the .con the launcher writes for it
+	bool demo_recording(const std::string& demo);
+	// the .con which plays a recording: the game reads "demo.demofile" and plays it back
+	std::string demo_config_text(const std::string& recording);
 
 	// the arguments after the client executable
 	std::vector<std::string> launch_arguments(const LaunchOptions& options);

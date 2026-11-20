@@ -51,6 +51,12 @@ namespace {
 			return !g_Machine.busy && page == Page::launcher;
 		case Kind::options_edited:
 		case Kind::mods_folder:
+		case Kind::demos_folder:
+		case Kind::bf2hub_installer:
+		case Kind::bf2hub_hosted:
+		case Kind::bf2hub_file:
+		case Kind::other_url:
+		case Kind::other_file:
 			return !g_Machine.busy && page == Page::launcher;
 		case Kind::activated:
 			return true;
@@ -174,6 +180,7 @@ void Window::SetBusy(const std::string& label)
 {
 	g_Machine.busy = true;
 	g_Machine.busy_label = label;
+	g_Machine.busy_labels.push_back(label);
 }
 
 void Window::EnableNext(bool enabled)
@@ -189,6 +196,40 @@ LaunchOptions Window::Options() const
 void Window::SetCommandLine(const std::string& line)
 {
 	g_Machine.command_line = line;
+}
+
+void Window::SetDemos(const std::vector<std::filesystem::path>& demos)
+{
+	g_Machine.shown_demos = demos;
+}
+
+void Window::SetProviders(const std::map<std::string, ProviderServices>& kept)
+{
+	g_Machine.shown_kept = kept;
+}
+
+void Window::ShowProvider(const std::string& online, const std::string& source, const std::string& url, const ProviderServices& services)
+{
+	auto options = Options();
+	options.online = online;
+	options.provider = services;
+	(online == "bf2hub" ? options.bf2hub_source : options.other_source) = source;
+	if (online == "other")
+		options.other_url = url;
+	g_Machine.edited_options = options;
+	g_Machine.shown_provider = services;
+	g_Machine.shown_provider_online = online;
+	g_Machine.shown_provider_source = source;
+}
+
+task<std::string> Window::Download(std::string url)
+{
+	co_await ::yield();
+	::call("download " + url);
+	auto found = g_Machine.downloads.find(url);
+	if (found == g_Machine.downloads.end())
+		throw std::runtime_error{ "The address could not be reached." };
+	co_return found->second;
 }
 
 void Window::SetPatch(PatchSlot slot, PatchStatus status, double)
@@ -237,9 +278,10 @@ void Window::SetLevel(double peak)
 	g_Machine.levels.push_back(peak);
 }
 
-void Window::Message(const std::string& title, const std::string& detail)
+void Window::Message(const std::string& title, const std::string& detail, const std::string& more)
 {
 	g_Machine.messages.push_back(title + ": " + detail);
+	g_Machine.message_details = more;
 }
 
 void Window::Reveal(const std::filesystem::path& directory)
@@ -252,9 +294,16 @@ void Window::Reveal(const std::filesystem::path& directory)
 
 #endif
 
-Installer::Installer(Worker& worker, std::filesystem::path support, std::filesystem::path manifests)
-	: m_Worker{ worker }, m_Support{ std::move(support) }, m_Manifests{ std::move(manifests) }
+Installer::Installer(Worker& worker, std::filesystem::path support, std::filesystem::path manifests, std::filesystem::path hubtool)
+	: m_Worker{ worker }, m_Support{ std::move(support) }, m_Manifests{ std::move(manifests) }, m_Hubtool{ std::move(hubtool) }
 {
+}
+
+task<HubtoolRun> Installer::ProbeBf2hub(std::filesystem::path)
+{
+	co_await ::yield();
+	::call("probe-bf2hub");
+	co_return g_Machine.hubtool_run;
 }
 
 task<DiscEdition> Installer::CheckDisc(std::filesystem::path disc)
@@ -331,8 +380,8 @@ void Installer::Cancel()
 	m_Cancelled = true;
 }
 
-Store::Store(std::filesystem::path support)
-	: m_Support{ std::move(support) }
+Store::Store(std::filesystem::path support, std::filesystem::path profileHome)
+	: m_Support{ std::move(support) }, m_ProfileHome{ std::move(profileHome) }
 {
 }
 
@@ -358,6 +407,17 @@ void Store::SaveKeys(const KeyEntry& keys)
 	g_Machine.keys_stored = true;
 }
 
+std::vector<std::filesystem::path> Store::Demos(const Installation&)
+{
+	return g_Machine.demos;
+}
+
+std::filesystem::path Store::DemosFolder(const Installation&)
+{
+	::call("demos-folder");
+	return "Demos";
+}
+
 std::filesystem::path Store::ModLibrary()
 {
 	return "CustomMods";
@@ -380,6 +440,31 @@ void Store::SaveLaunch(const LaunchOptions& options)
 	g_Machine.stored_launch = options;
 }
 
+ProviderServices Store::ImportProvider(const std::string& online, const std::filesystem::path& file)
+{
+	::call("import-provider");
+	auto found = g_Machine.provider_files.find(file.string());
+	if (found == g_Machine.provider_files.end())
+		throw std::runtime_error{ "The provider file cannot be read." };
+
+	return KeepProvider(online, found->second);
+}
+
+ProviderServices Store::KeepProvider(const std::string& online, const std::string& json)
+{
+	auto services = parse_provider(json);
+	g_Machine.kept_providers[online] = json;
+	return services;
+}
+
+std::map<std::string, ProviderServices> Store::KeptProviders() const
+{
+	auto kept = std::map<std::string, ProviderServices>{};
+	for (const auto& [online, json] : g_Machine.kept_providers)
+		kept[online] = parse_provider(json);
+	return kept;
+}
+
 assistant::VoiceSettings Store::LoadVoice() const
 {
 	return {};
@@ -397,6 +482,10 @@ bool Store::ProfilesExist() const
 }
 
 struct Client::Impl {};
+
+void Client::Alternative(ClientLayout)
+{
+}
 
 Client::Client(ClientLayout, std::filesystem::path, std::filesystem::path)
 {

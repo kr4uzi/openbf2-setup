@@ -7,6 +7,7 @@
 #include "session.h"
 
 #include <filesystem>
+#include <map>
 #include <string>
 
 namespace setup {
@@ -18,9 +19,11 @@ namespace setup {
 	class Store
 	{
 		std::filesystem::path m_Support;
+		// where the game keeps Profiles/: the support root on macOS and Linux, Documents\Battlefield 2 on Windows
+		std::filesystem::path m_ProfileHome;
 
 	public:
-		explicit Store(std::filesystem::path support);
+		explicit Store(std::filesystem::path support, std::filesystem::path profileHome = {});
 
 		// Setup/Current.txt names a generation. whether it is intact is for Installer::Verify to say
 		bool HasInstallation() const;
@@ -36,9 +39,19 @@ namespace setup {
 		// what Play can start, Battlefield 2 first. the mods of the library are linked into the installation
 		// on the way, which is how the game finds them
 		std::vector<Mod> Mods(const Installation& installation);
+		// the recorded demos of the game folder (Demos/), relative to it, the newest first; the folder itself, made
+		// on the first call
+		std::vector<std::filesystem::path> Demos(const Installation& installation);
+		std::filesystem::path DemosFolder(const Installation& installation);
 		// the start-up options (Setup/Launch.txt), the defaults before the first save
 		LaunchOptions LoadLaunch() const;
 		void SaveLaunch(const LaunchOptions& options);
+		// checks the provider file the user chose, or a preset's text, and keeps it (Setup/Provider.json); throws
+		// with the reason when it is not valid
+		ProviderServices ImportProvider(const std::string& online, const std::filesystem::path& file);
+		ProviderServices KeepProvider(const std::string& online, const std::string& json);
+		// the kept provider files of "bf2hub" and "other" which are valid
+		std::map<std::string, ProviderServices> KeptProviders() const;
 
 		// a missing or unreadable file gives the defaults
 		assistant::VoiceSettings LoadVoice() const;
