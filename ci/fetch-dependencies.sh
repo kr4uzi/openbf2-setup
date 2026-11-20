@@ -38,10 +38,16 @@ if [[ ! -f "$prefix/sdl3/lib/cmake/SDL3/SDL3Config.cmake" ]]; then
     -DSDL_DIALOG=OFF -DSDL_TRAY=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON)
   if [[ "$(uname -s)" == Darwin ]]; then
     options+=(-DCMAKE_OSX_ARCHITECTURES='arm64;x86_64' -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3)
+  else
+    # audio only: no X11 or Wayland. the audio backends (ALSA, PulseAudio, PipeWire) come from their -dev packages
+    options+=(-DSDL_UNIX_CONSOLE_BUILD=ON)
   fi
-  cmake -S "$downloads/$sdl" -B "$downloads/$sdl-build" "${options[@]}" >/dev/null
-  cmake --build "$downloads/$sdl-build" -j"$(getconf _NPROCESSORS_ONLN)" >/dev/null
-  cmake --install "$downloads/$sdl-build" >/dev/null
+  # the build folder's name must not start with the source folder's: SDL's source groups take that for a subfolder
+  build="$prefix/build-sdl3"
+  rm -rf "$build"
+  cmake -S "$downloads/$sdl" -B "$build" "${options[@]}" >/dev/null
+  cmake --build "$build" -j"$(getconf _NPROCESSORS_ONLN)" >/dev/null
+  cmake --install "$build" >/dev/null
 fi
 
 qt=""
