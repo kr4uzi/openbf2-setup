@@ -1,4 +1,5 @@
 // [TEMP] [CHOSEN, not recovered] Malformed-input and C ABI checks for setup.
+#include <thread>
 #include "install.h"
 #include "cabinet.h"
 #include "edition.h"
@@ -70,8 +71,10 @@ int main(int argc, char** argv) {
         for (auto s : {"sample", "Disk1\\sample", "", "3"}) { fields += s; fields += '\0'; }
         pe.insert(pe.end(), fields.begin(), fields.end()); pe.insert(pe.end(), {1,2,3});
         save(root / "sfx", pe);
-        auto files = setup::readSfx(setup::View(root / "sfx"));
-        check(files.size()==1 && files.at("disk1/sample").all()==setup::Bytes({1,2,3}), "valid SFX range");
+        {
+            auto files = setup::readSfx(setup::View(root / "sfx"));
+            check(files.size()==1 && files.at("disk1/sample").all()==setup::Bytes({1,2,3}), "valid SFX range");
+        }
         pe.pop_back(); save(root / "truncated", pe);
         rejects([&] { setup::readSfx(setup::View(root / "truncated")); }, "truncated SFX payload accepted");
         pe.push_back(3); pe.push_back('x'); save(root / "trailer", pe);
@@ -249,7 +252,15 @@ int main(int argc, char** argv) {
         check(inventorySum==300*42,"lazy large directory inventory");
         check(inventory.front().read(0,1)==setup::Bytes({42}),"stream input did not reopen");
         inventory.clear();
-        setup::fs::remove_all(root);
+        // a view keeps its file open once read, and Windows cannot remove an open file: let `v` drop "short"
+        // (a view opens its file lazily, so the replacement holds nothing open)
+        v=setup::View(setup::fs::absolute(argv[0]));
+        // Windows Defender holds the synthetic PE files above for many seconds after they were read: retry up to 30 s
+        for(int attempt=0;;++attempt){
+            std::error_code busy;setup::fs::remove_all(root,busy);
+            if(!busy||attempt==300){if(busy)throw setup::fs::filesystem_error("remove_all",root,busy);break;}
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
         std::cout << checks << " setup checks passed\n";
         return 0;
     } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
