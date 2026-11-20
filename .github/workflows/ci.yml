@@ -1,0 +1,70 @@
+# Builds and tests the setup on every push and pull request: the core, the CLI, the shared Qt front
+# end and its workflow test, on macOS (universal) and Linux. Toolchain versions: ci/versions.env.
+# Release packaging with the engine's client happens in OpenBF2's workflow, not here.
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    name: macOS (universal)
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Rust targets and locked crates
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          cargo fetch --locked --manifest-path core/rtp-bridge/Cargo.toml
+      - name: Toolchain (Boost, SDL3, universal Qt)
+        run: |
+          options=$(bash ci/fetch-dependencies.sh "$RUNNER_TEMP/deps")
+          echo "SETUP_OPTIONS=$options" >> "$GITHUB_ENV"
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES='arm64;x86_64' -DSETUP_SCRATCH="$PWD/build/scratch" $SETUP_OPTIONS
+          cmake --build build -j"$(sysctl -n hw.ncpu)"
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j"$(sysctl -n hw.ncpu)"
+      - name: Smoke render of every page
+        run: build/macos/OpenBF2.app/Contents/MacOS/OpenBF2 --smoke-test "$PWD/build/scratch/smoke"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: smoke-macos
+          path: build/scratch/smoke/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
+  linux:
+    name: Linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: System packages (compiler, Qt 6 Widgets, zlib)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++-14 qt6-base-dev libgl-dev zlib1g-dev patchelf python3
+      - name: Rust and locked crates
+        run: cargo fetch --locked --manifest-path core/rtp-bridge/Cargo.toml
+      - name: Toolchain (Boost, SDL3)
+        run: |
+          options=$(bash ci/fetch-dependencies.sh "$RUNNER_TEMP/deps")
+          echo "SETUP_OPTIONS=$options" >> "$GITHUB_ENV"
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++-14 -DSETUP_SCRATCH="$PWD/build/scratch" $SETUP_OPTIONS
+          cmake --build build -j"$(nproc)"
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j"$(nproc)"
