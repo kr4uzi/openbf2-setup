@@ -1,0 +1,6 @@
+directx\ holds files of Microsoft's DirectX End-User Runtimes (June 2010), unmodified: DXSETUP.exe, DSETUP.dll,
+dsetup32.dll, dxupdate.cab and Apr2005_d3dx9_25_x64.cab. They are Microsoft's, redistributed under the terms of
+the DirectX redistributable, and install the 64-bit d3dx9_25.dll which the 64-bit client of OpenBF2 needs.
+
+OpenBF2 runs DXSETUP only when the 64-bit client finds no d3dx9_25.dll and the game disc did not supply one,
+and only after asking; Windows then asks for administrator rights. The 32-bit client does not need it.

@@ -204,6 +204,9 @@ int main(int argc, char** argv) {
 		auto profiles = support;
 #endif
 		Installer installer(worker, support, manifests);
+#if defined(Q_OS_WIN)
+		installer.DirectX(folder / "x64");
+#endif
 		Store store(support, profiles);
 		Client client(layout, support, home);
 #if defined(Q_OS_WIN)

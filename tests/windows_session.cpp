@@ -3,6 +3,7 @@
 // A real CD key never belongs in the repository: the saved-and-read-back check runs only with the owner's
 // own key in BF2_TEST_KEY, as tests/key_check.cpp does.
 #include "launch.h"
+#include "directx.h"
 #include "links.h"
 #include "mods.h"
 #include "platform.h"
@@ -166,6 +167,30 @@ int main(int argc, char** argv)
 			auto utf8_system = RegGetValueW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Nls\\CodePage", L"ACP", RRF_RT_REG_SZ, nullptr, text, &size) == ERROR_SUCCESS && _wtoi(text) == CP_UTF8;
 			check(session::systemAnsiTakes("C:\\Users\\Player\\AppData\\Local\\OpenBF2\\Setup\\Provider-BF2Hub.json"), "an ASCII path was refused");
 			check(session::systemAnsiTakes("C:\\Users\\\xF0\x9F\x98\x80\\Provider-BF2Hub.json") == utf8_system, "a path outside the ANSI code page was taken");
+		}
+
+		// the 64-bit DirectX runtime: the client folder's own copy counts, Microsoft's setup is found beside the client
+		// folders, and only the known cab is unpacked. With the owner's disc in SETUP_TEST_ISO, the DLL is unpacked from it
+		{
+			auto app = root / "directx-app";
+			fs::create_directories(app / "x64");
+			fs::create_directories(app / "directx");
+			check(!setup::directxSetup(app / "x64"), "a DirectX setup was found where there is none");
+			write(app / "directx/DXSETUP.exe", "");
+			check(setup::directxSetup(app / "x64") == app / "directx/DXSETUP.exe", "the DirectX setup beside the client folders was not found");
+			write(app / "x64/d3dx9_25.dll", "");
+			check(setup::d3dxPresent(app / "x64"), "the client folder's own d3dx9_25.dll was not seen");
+			fs::remove(app / "x64/d3dx9_25.dll");
+			write(root / "fake.cab", "not the cab");
+			rejects([&] { setup::extractD3dx(setup::View{ root / "fake.cab" }, app / "x64", root / "directx-work"); }, "an unknown cab was unpacked");
+			check(!fs::exists(app / "x64/d3dx9_25.dll"), "an unknown cab left a d3dx9_25.dll");
+			if (auto iso = std::getenv("SETUP_TEST_ISO"); iso && *iso) {
+				auto cab = setup::d3dxCab(setup::readDisc(iso));
+				check(cab.has_value(), "the disc's DirectX cab was not found");
+				setup::extractD3dx(*cab, app / "x64", root / "directx-work");
+				check(fs::file_size(app / "x64/d3dx9_25.dll") == 3823312 && !fs::exists(root / "directx-work/Apr2005_d3dx9_25_x64.cab"), "the disc's d3dx9_25.dll was not unpacked, or the cab's copy stayed");
+				std::cout << "owner disc: 64-bit d3dx9_25.dll unpacked\n";
+			}
 		}
 
 		// the client choice

@@ -1,4 +1,5 @@
 #include "installer.h"
+#include "directx.h"
 #include "install.h"
 #include "session.h"
 
@@ -86,6 +87,15 @@ task<Installation> Installer::Install(Media media, bool specialForces, std::func
 		auto installed = install(options, *platform);
 		// the installation verified every file before it published them: the first start need not again
 		::recordVerification(m_Support, installed, options.manifest, *platform);
+#if defined(_WIN32)
+		// the game is installed whatever comes of this: without the runtime, starting the 64-bit client offers
+		// Microsoft's DirectX setup instead
+		if (!m_DirectX.empty() && !d3dxPresent(m_DirectX))
+			try {
+				if (auto cab = d3dxCab(readDisc(media.disc)))
+					extractD3dx(*cab, m_DirectX, m_Support / "Setup/work-directx");
+			} catch (const std::exception&) {}
+#endif
 		return installed;
 	});
 

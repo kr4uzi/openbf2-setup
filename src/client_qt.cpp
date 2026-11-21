@@ -19,6 +19,18 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
+#if defined(Q_OS_WIN)
+#include "directx.h"
+#include <QMessageBox>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <shellapi.h>
+#endif
 
 using namespace setup;
 namespace {
@@ -58,6 +70,39 @@ public:
 };
 #endif
 struct Exit { int status = 0; std::string error; };
+#if defined(Q_OS_WIN)
+// The 64-bit client needs Microsoft's 64-bit d3dx9_25.dll (directx.h). When neither the installation from the disc
+// nor the system gave it one, Microsoft's DirectX setup from the application folder installs it, with the user's
+// consent; Windows asks for administrator rights. Waits without blocking the window
+task<void> requireDirectX(const std::filesystem::path& folder) {
+	if (d3dxPresent(folder)) co_return;
+	const std::string missing = "The 64-bit client needs Microsoft's DirectX 9 runtime (the 64-bit d3dx9_25.dll), which is not installed.";
+	auto setup = directxSetup(folder);
+	if (!setup) throw std::runtime_error(missing + " Install the DirectX End-User Runtime, or choose the 32-bit client under Client.");
+	auto answer = QMessageBox::question(nullptr, "DirectX Runtime Needed",
+		QString::fromStdString(missing + "\n\nInstall it now with Microsoft's DirectX setup? Windows asks for administrator rights."),
+		QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Yes);
+	if (answer != QMessageBox::Yes) throw std::runtime_error(missing + " Install it, or choose the 32-bit client under Client.");
+	auto file = setup->wstring(), directory = setup->parent_path().wstring();
+	SHELLEXECUTEINFOW info{};
+	info.cbSize = sizeof info;
+	info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
+	info.lpVerb = L"runas";
+	info.lpFile = file.c_str();
+	info.lpParameters = L"/silent";
+	info.lpDirectory = directory.c_str();
+	info.nShow = SW_SHOWNORMAL;
+	if (!ShellExecuteExW(&info) || !info.hProcess)
+		throw std::runtime_error(GetLastError() == ERROR_CANCELLED ? "The DirectX setup needs administrator rights, which were not given." : "The DirectX setup did not start.");
+	boost::asio::steady_timer timer(co_await boost::asio::this_coro::executor);
+	while (WaitForSingleObject(info.hProcess, 0) == WAIT_TIMEOUT) {
+		timer.expires_after(std::chrono::milliseconds(200));
+		co_await timer.async_wait(boost::asio::use_awaitable);
+	}
+	CloseHandle(info.hProcess);
+	if (!d3dxPresent(folder)) throw std::runtime_error("The DirectX setup ended, but the 64-bit d3dx9_25.dll is still missing. Choose the 32-bit client under Client.");
+}
+#endif
 }
 
 struct Client::Impl { ClientLayout layout; std::filesystem::path support, home; ClientLayout x86; };
@@ -71,6 +116,9 @@ task<int> Client::Run(const Installation& installation, LaunchOptions options) {
 	auto platform = nativePlatform();
 	auto lock = platform->lock(m_Impl->support / "Setup/Install.lock");
 	auto& layout = options.client == "x86" && !m_Impl->x86.executable.empty() ? m_Impl->x86 : m_Impl->layout;
+#if defined(Q_OS_WIN)
+	if (&layout == &m_Impl->layout) co_await requireDirectX(layout.executable.parent_path());
+#endif
 	auto launch = assistant::clientLaunch(layout, m_Impl->support, options);
 	if (launch.directory != installation.game)
 		throw std::runtime_error("The active installation changed. Reopen OpenBF2 to verify it.");

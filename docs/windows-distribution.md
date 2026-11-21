@@ -1,7 +1,8 @@
 # Windows build and layout
 
 *For:* Maintainers building or packaging the Windows application. *Covers:* the build, the application
-folder, where an installation keeps its data, and what is not done yet.
+folder, the installer, the DirectX runtime of the 64-bit client, where an installation keeps its data, and what
+is not done yet.
 
 ## Application
 
@@ -22,7 +23,10 @@ falls back to the 64-bit client when the application folder has no `x86\` folder
 
 Prerequisites on the builder: Visual Studio 2022 (MSVC x64, its CMake and Ninja), Rust with the
 `x86_64-pc-windows-msvc` target and the locked dependencies fetched, Boost headers 1.86 or newer, a static
-zlib, Qt 6.5 or newer for `msvc2022_64`, and SDL3 3.2 or newer. Builds never download anything.
+zlib, Qt 6.5 or newer for `msvc2022_64`, and SDL3 3.2 or newer; for the installer also DXSETUP's files from
+Microsoft's DirectX June 2010 redist and Inno Setup 6. Builds never download anything. `ci/fetch-dependencies.sh`
+(Git Bash, inside the developer environment) fetches all of them at the versions and hashes of `ci/versions.env`
+and prints the CMake options.
 
 From a Visual Studio x64 developer prompt:
 
@@ -47,6 +51,21 @@ client choice), `application_checks` and the two Qt workflow checks. With the ow
 
 The developer smoke mode renders every page: `app\OpenBF2.exe --smoke-test NEW_DIRECTORY`.
 
+With `-DSETUP_DIRECTX_REDIST=<folder>` the build copies DXSETUP's five files into `app\directx\`, each only with
+its known SHA-256. With `-DSETUP_ISCC=<ISCC.exe>` the `installer` target builds
+`installer\openbf2-windows-setup.exe` from `windows/OpenBF2.iss`.
+
+The release build, as OpenBF2's workflow runs it, in the developer environment with the variables that
+`ci/fetch-dependencies.sh` prints (`SETUP_BOOST_ROOT`, `SETUP_QT_ROOT`, `SETUP_SDL3_ROOT`, `ZLIB_LIBRARY`,
+`ZLIB_INCLUDE_DIR`, `SETUP_DIRECTX_REDIST`, `SETUP_ISCC`):
+
+```bat
+powershell -File windows\build-release.ps1 CLIENT_X64_DIR CLIENT_X86_DIR OUTPUT\openbf2-windows-setup.exe [BUILD_DIR]
+```
+
+It configures with both client packages, builds, runs the tests (without the owner's media and key), checks the
+application folder, builds the installer and writes `openbf2-windows-setup.exe.sha256` beside it.
+
 ## The application folder
 
 The build tree's `app\` folder is the application as it is shipped, and can be zipped as it is:
@@ -54,13 +73,36 @@ The build tree's `app\` folder is the application as it is shipped, and can be z
 | Path | Contents |
 | --- | --- |
 | `OpenBF2.exe` | the setup assistant and launcher |
-| `Qt6*.dll`, `platforms\`, `styles\`, `imageformats\`, `generic\` | Qt, deployed by `windeployqt` |
+| `Qt6*.dll`, `platforms\`, `styles\`, `imageformats\`, `generic\`, `tls\` | Qt, deployed by `windeployqt` (`tls\` for provider files downloaded over https) |
+| `vcruntime140*.dll`, `msvcp140*.dll`, `concrt140.dll` | the Visual C++ runtime of `OpenBF2.exe`, app-local from the compiler's redistributable folder |
+| `directx\` | Microsoft's DXSETUP with the cab of the 64-bit `d3dx9_25.dll` (see below) |
 | `setup\` | the content manifests (`content-*.tsv`) |
 | `licences\` | the licences of the setup, Qt, SDL3 and the Rust dependencies |
 | `x64\`, `x86\` | the client packages as the engine's build supplies them |
 
-The Microsoft Visual C++ runtime (x64, and x86 for the 32-bit client) must be installed; the 64-bit client
-also needs the 64-bit `d3dx9_25.dll` of the DirectX End-User Runtime. Neither is part of the folder yet.
+Each client package carries its own Visual C++ runtime. The 32-bit client uses retail's `d3dx9_25.dll` from the
+game folder.
+
+## The installer
+
+`openbf2-windows-setup.exe` (Inno Setup, `windows/OpenBF2.iss`) installs the application folder for the current
+user into `%LOCALAPPDATA%\Programs\OpenBF2`, without administrator rights, adds a Start menu entry (a desktop
+shortcut on request) and then starts OpenBF2, which installs the game from the user's disc. The uninstaller removes
+the application folder; it asks (default no) whether to remove `%LOCALAPPDATA%\OpenBF2` (the installed game, its
+settings and the CD keys) and never touches `Documents\Battlefield 2`. The installer is not code-signed yet, so
+SmartScreen asks before it runs.
+
+## The DirectX runtime of the 64-bit client
+
+The 64-bit client needs Microsoft's 64-bit `d3dx9_25.dll` (April 2005); without it, it shows a message and quits.
+`src/directx.h`:
+
+1. After an installation, OpenBF2 looks on the user's disc for `directx\Apr2005_d3dx9_25_x64.cab` (the regular and
+   the Deluxe disc carry it; any file of that name with the known SHA-256 counts), unpacks `d3dx9_25.dll` from it
+   with Windows' own cabinet API, checks its SHA-256 and puts it into `x64\`. Nothing from the disc is run.
+2. When the 64-bit client is started and finds neither its own copy nor the system's (System32), OpenBF2 asks
+   whether to run Microsoft's DXSETUP from `directx\` (`/silent`); Windows asks for administrator rights.
+   Declined or failed, the start stops with a message which names the 32-bit client as the way out.
 
 ## Where an installation keeps its data
 
@@ -86,6 +128,5 @@ so OpenBF2 uses junctions (`src/links.cpp`).
 
 - the all-users mode (administrator rights, the CD keys and the install path in the registry for older
   tools, a shared game folder);
-- an installer (Inno Setup) with the Visual C++ and DirectX runtimes;
-- code signing;
-- a Windows job in this repository's CI.
+- code signing of the installer and the executables (`signtool`, once a certificate exists);
+- a Windows job in this repository's CI (OpenBF2's workflow builds and tests the release).

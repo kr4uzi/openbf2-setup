@@ -46,3 +46,54 @@ foreach(arch IN ITEMS x64 x86)
     add_dependencies(bf2_setup_client_${arch} OpenBF2)
   endif()
 endforeach()
+
+# The Visual C++ runtime beside OpenBF2.exe, app-local as in the client packages: a clean Windows has no
+# MSVCP140.dll. The DLLs come from this compiler's redistributable folder (Microsoft's Distributable Code).
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+set(CMAKE_INSTALL_UCRT_LIBRARIES FALSE)
+include(InstallRequiredSystemLibraries)
+if(NOT CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS)
+  message(FATAL_ERROR "The Visual C++ runtime DLLs of this compiler were not found")
+endif()
+add_custom_command(TARGET OpenBF2 POST_BUILD
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS} "${app_dir}"
+  VERBATIM)
+
+# directx\: Microsoft's DirectX setup with the cab of the 64-bit d3dx9_25.dll, from the DirectX June 2010 redist
+# (ci/fetch-dependencies.sh). The launcher runs it, with the user's consent, only when the 64-bit client finds no
+# d3dx9_25.dll and the disc did not supply one (src/directx.h). Each file is taken only with its known SHA-256.
+set(SETUP_DIRECTX_REDIST "" CACHE PATH "Folder with DXSETUP's files from Microsoft's DirectX June 2010 redist")
+if(SETUP_DIRECTX_REDIST)
+  foreach(entry IN ITEMS
+      "DXSETUP.exe=8f47d7121ef6532ad9ad9901e44e237f5c30448b752028c58a9d19521414e40d"
+      "DSETUP.dll=2a61679eeedabf7d0d0ac14e5447486575622d6b7cfa56f136c1576ff96da21f"
+      "dsetup32.dll=fb0e534f9b0926e518f1c2980640dfd29f14217cdfa37cf3a0c13349127ed9a8"
+      "dxupdate.cab=e18a5404b612e88fa8b403c9b33f064c0a89528db7ef9a79aa116908d0e6afed"
+      "Apr2005_d3dx9_25_x64.cab=b4188ce988af9c4771ae0abcc7edc42a091133f9f20196564f51755dc55ea85d")
+    string(REPLACE "=" ";" pair "${entry}")
+    list(GET pair 0 file)
+    list(GET pair 1 expected)
+    file(SHA256 "${SETUP_DIRECTX_REDIST}/${file}" actual)
+    if(NOT actual STREQUAL expected)
+      message(FATAL_ERROR "SETUP_DIRECTX_REDIST: ${file} is not the file of the DirectX June 2010 redist")
+    endif()
+    configure_file("${SETUP_DIRECTX_REDIST}/${file}" "${app_dir}/directx/${file}" COPYONLY)
+  endforeach()
+  configure_file("${CMAKE_SOURCE_DIR}/third_party/DirectX-NOTICE.txt" "${app_dir}/licences/DirectX-NOTICE.txt" COPYONLY)
+endif()
+
+# The installer, openbf2-windows-setup.exe: Inno Setup (OpenBF2.iss) packs the app folder as it is
+set(SETUP_ISCC "" CACHE FILEPATH "Inno Setup's ISCC.exe; with it, the installer target builds openbf2-windows-setup.exe")
+if(SETUP_ISCC)
+  add_custom_target(installer
+    COMMAND "${SETUP_ISCC}" /Q "/DAppVersion=${PROJECT_VERSION}" "/DSourceDir=${app_dir}"
+      "/DOutputDir=${CMAKE_BINARY_DIR}/installer" "/DOutputBaseFilename=openbf2-windows-setup"
+      "${CMAKE_CURRENT_SOURCE_DIR}/OpenBF2.iss"
+    VERBATIM)
+  add_dependencies(installer OpenBF2)
+  foreach(arch IN ITEMS x64 x86)
+    if(TARGET bf2_setup_client_${arch})
+      add_dependencies(installer bf2_setup_client_${arch})
+    endif()
+  endforeach()
+endif()

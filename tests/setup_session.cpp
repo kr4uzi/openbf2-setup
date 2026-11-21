@@ -1,4 +1,5 @@
 #include "install.h"
+#include "directx.h"
 #include "edition.h"
 #include "patch.h"
 #include "session.h"
@@ -265,6 +266,9 @@ int main(int argc,char** argv){
             check(setup::parse_provider(setup::provider_preset("bf2hub")->json)==setup::ProviderServices{"BF2Hub",{{"*","bf2hub.p.bf2.org"}},std::nullopt},"the BF2Hub preset");
             check(setup::provider_config_name("openspy")=="Provider-OpenSpy.json"&&setup::provider_config_name("bf2hub")=="Provider-BF2Hub.json"&&setup::provider_config_name("other")=="Provider-Other.json","the files the game reads");
             // the game's parser: at most 255 bytes and no double quote; the files the launcher passes; the game's refusal
+            {   // the 64-bit DirectX cab is found by its name and its SHA-256, never by the name alone
+                write(root/"fake.cab","not the cab");setup::Files disc{{"directx/apr2005_d3dx9_25_x64.cab",setup::View{root/"fake.cab"}}};
+                check(!setup::d3dxCab(disc)&&!setup::d3dxCab({}),"a file named like the DirectX cab was taken");}
             check(setup::game_path_problem(std::string(255,'a')).empty()&&!setup::game_path_problem(std::string(256,'a')).empty()&&!setup::game_path_problem("/a\"b").empty()&&setup::game_path_problem("/Users/A B/x.json").empty(),"the game's path limits");
             {auto files=online;files.online="other";files.provider=parsed;files.demo="Demos/a.con";
              check(setup::launch_files(files)==std::vector<std::pair<std::string,std::string>>{{"+demo","Demos/a.con"},{"+onlineProviderConfig",(fs::path{"/s/Setup"}/"Provider-Other.json").string()}}||setup::launch_files(files)==std::vector<std::pair<std::string,std::string>>{{"+onlineProviderConfig",(fs::path{"/s/Setup"}/"Provider-Other.json").string()},{"+demo","Demos/a.con"}},"the files the launcher passes");

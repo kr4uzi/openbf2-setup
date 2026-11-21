@@ -38,9 +38,14 @@ namespace setup {
 		// the directory with the content manifests (content-150.tsv, ...)
 		std::filesystem::path m_Manifests;
 		std::atomic<bool> m_Cancelled{ false };
+		// Windows: the folder of the 64-bit client, which gets the disc's 64-bit d3dx9_25.dll (directx.h)
+		std::filesystem::path m_DirectX;
 
 	public:
 		Installer(Worker& worker, std::filesystem::path support, std::filesystem::path manifests);
+		// Windows: after an installation, the 64-bit client in `folder` gets the disc's 64-bit DirectX runtime
+		// unless it finds one already
+		void DirectX(std::filesystem::path folder) { m_DirectX = std::move(folder); }
 
 		task<DiscEdition> CheckDisc(std::filesystem::path disc);
 		// a check which was replaced by a newer choice is stopped through `cancelled`
