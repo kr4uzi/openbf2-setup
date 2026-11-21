@@ -26,25 +26,6 @@ namespace setup::assistant {
 namespace {
 std::string outputName(bool sf) {return std::string("HKEY_LOCAL_MACHINE\\SOFTWARE\\Electronic Arts\\EA Games\\")+(sf?"Battlefield 2 Special Forces":"Battlefield 2")+"\\ergc";}
 void require(bool ok,const char* error){if(!ok)throw std::runtime_error(error);}
-#if defined(_WIN32)
-// The client reads its command line in the system's ANSI code page (this application runs with UTF-8): a path
-// with a character outside it reaches the game changed. A system which uses UTF-8 itself takes every path.
-bool systemAnsiTakes(const std::string& utf8) {
-    if(utf8.empty())return true;
-    wchar_t text[16]={};DWORD size=sizeof text;
-    auto page=UINT(0);
-    if(RegGetValueW(HKEY_LOCAL_MACHINE,L"SYSTEM\\CurrentControlSet\\Control\\Nls\\CodePage",L"ACP",RRF_RT_REG_SZ,nullptr,text,&size)==ERROR_SUCCESS)
-        page=UINT(_wtoi(text));
-    if(page==0||page==CP_UTF8)return true;
-    auto length=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,utf8.data(),int(utf8.size()),nullptr,0);
-    if(length<=0)return false;
-    std::wstring wide(size_t(length),L'\0');
-    MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,utf8.data(),int(utf8.size()),wide.data(),length);
-    BOOL replaced=FALSE;
-    auto converted=WideCharToMultiByte(page,WC_NO_BEST_FIT_CHARS,wide.data(),length,nullptr,0,nullptr,&replaced);
-    return converted>0&&!replaced;
-}
-#endif
 std::string trim(const std::string& s) {
     auto a=s.find_first_not_of(" \t\r\n"),b=s.find_last_not_of(" \t\r\n");
     return a==std::string::npos?"":s.substr(a,b-a+1);
@@ -262,6 +243,23 @@ void writeProviderPreset(const LaunchOptions& options,Platform& platform) {
     noLinks(file);
     writeTextFile(file,preset->json,platform);
 }
+#if defined(_WIN32)
+bool systemAnsiTakes(const std::string& utf8) {
+    if(utf8.empty())return true;
+    wchar_t text[16]={};DWORD size=sizeof text;
+    auto page=UINT(0);
+    if(RegGetValueW(HKEY_LOCAL_MACHINE,L"SYSTEM\\CurrentControlSet\\Control\\Nls\\CodePage",L"ACP",RRF_RT_REG_SZ,nullptr,text,&size)==ERROR_SUCCESS)
+        page=UINT(_wtoi(text));
+    if(page==0||page==CP_UTF8)return true;
+    auto length=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,utf8.data(),int(utf8.size()),nullptr,0);
+    if(length<=0)return false;
+    std::wstring wide(size_t(length),L'\0');
+    MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,utf8.data(),int(utf8.size()),wide.data(),length);
+    BOOL replaced=FALSE;
+    auto converted=WideCharToMultiByte(page,WC_NO_BEST_FIT_CHARS,wide.data(),length,nullptr,0,nullptr,&replaced);
+    return converted>0&&!replaced;
+}
+#endif
 Launch clientLaunch(const ClientLayout& layout,const fs::path& support,const LaunchOptions& options) {
     require(clientPresent(layout),"The native client or its libraries are missing from this build.");
     require(storedKey(support),"Enter your CD key before playing.");

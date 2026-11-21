@@ -45,6 +45,12 @@ struct Launch {
 void writeProviderPreset(const LaunchOptions& options, Platform&);
 // The mod of the options (or of +modPath in an override) must be a directory below mods/ of the
 // current generation; an override without +modPath leaves the mod to the client.
+#if defined(_WIN32)
+// whether the system's ANSI code page shows every character of a UTF-8 path: the client reads its command line in
+// it (this application runs with UTF-8), so a path with a character outside it reaches the game changed. a system
+// which uses UTF-8 itself takes every path
+bool systemAnsiTakes(const std::string& utf8);
+#endif
 Launch clientLaunch(const ClientLayout& layout, const fs::path& support, const LaunchOptions& options);
 inline Launch clientLaunch(const fs::path& contents, const fs::path& support, const LaunchOptions& options) { return clientLaunch(macClientLayout(contents), support, options); }
 Launch clientLaunch(const fs::path& contents, const fs::path& support, const std::string& mod = "bf2");

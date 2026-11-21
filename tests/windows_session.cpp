@@ -158,6 +158,16 @@ int main(int argc, char** argv)
 			check(arguments.size() >= 2 && arguments[arguments.size() - 2] == "+onlineProviderConfig" && fs::path{ arguments.back() } == support / "Setup/Provider-BF2Hub.json", "the command line does not name the preset's file");
 		}
 
+		// the client reads its command line in the system's ANSI code page: an ASCII path always reaches it, an emoji
+		// (in no ANSI code page) only on a system which uses UTF-8 itself
+		{
+			wchar_t text[16]{};
+			DWORD size = sizeof text;
+			auto utf8_system = RegGetValueW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Nls\\CodePage", L"ACP", RRF_RT_REG_SZ, nullptr, text, &size) == ERROR_SUCCESS && _wtoi(text) == CP_UTF8;
+			check(session::systemAnsiTakes("C:\\Users\\Player\\AppData\\Local\\OpenBF2\\Setup\\Provider-BF2Hub.json"), "an ASCII path was refused");
+			check(session::systemAnsiTakes("C:\\Users\\\xF0\x9F\x98\x80\\Provider-BF2Hub.json") == utf8_system, "a path outside the ANSI code page was taken");
+		}
+
 		// the client choice
 		setup::LaunchOptions options;
 		check(options.client == "x64", "the 64-bit client is not the default");
