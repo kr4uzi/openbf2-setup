@@ -146,9 +146,10 @@ headers/CMake packages and is used only to build, not copied into the release.
 Qt runtime construction belongs with SDK provisioning; this repository owns
 its packaging requirements. The engine build owns provisioning and workflow integration.
 
-Required Qt modules/plugins: Widgets, Gui, Core, DBus and their closure; xcb,
-offscreen, a Wayland platform plugin, xdg-shell integration, and
-`platformthemes/libqxdgdesktopportal.so`. Include the remaining Wayland client
+Required Qt modules/plugins: Widgets, Gui, Core, DBus, Network and their closure; xcb,
+offscreen, a Wayland platform plugin, xdg-shell integration,
+`platformthemes/libqxdgdesktopportal.so` and `tls/libqopensslbackend.so` (a provider
+file downloaded by URL; it loads the host's libssl at run time). Include the remaining Wayland client
 integration/decoration plugins required by the chosen Qt build. Preserve the
 same Qt build/version throughout. Include dynamically loaded audio backends,
 not just the executable's DT_NEEDED list. GPU drivers, Vulkan/GL loaders, libc

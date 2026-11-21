@@ -21,7 +21,9 @@ APP = ("bin/OpenBF2", "bin/qt.conf", "share/openbf2/setup/content-150.tsv",
        "share/icons/hicolor/256x256/apps/org.openbf2.Setup.png")
 PLUGINS = ("lib/qt6/plugins/platforms/libqxcb.so", "lib/qt6/plugins/platforms/libqoffscreen.so",
            "lib/qt6/plugins/wayland-shell-integration/libxdg-shell.so",
-           "lib/qt6/plugins/platformthemes/libqxdgdesktopportal.so")
+           "lib/qt6/plugins/platformthemes/libqxdgdesktopportal.so",
+           # the provider file downloaded by URL (https): QtNetwork's TLS backend, which loads the system's libssl
+           "lib/qt6/plugins/tls/libqopensslbackend.so")
 # Only libc, the kernel-facing window system and GPU driver/loader remain host dependencies.
 # All other DT_NEEDED entries must resolve inside the artifact, including C++/GCC runtimes.
 HOST = frozenset(("ld-linux-x86-64.so.2", "libc.so.6", "libm.so.6", "libdl.so.2", "libpthread.so.0",
