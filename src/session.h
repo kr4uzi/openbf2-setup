@@ -40,6 +40,9 @@ struct Launch {
     fs::path executable, directory, support;
     std::vector<std::string> arguments;
 };
+// A preset's provider file (OpenSpy, BF2Hub) in the options' provider folder, where the game reads it; written at
+// every start, so the game reads this version's preset. Nothing for another choice.
+void writeProviderPreset(const LaunchOptions& options, Platform&);
 // The mod of the options (or of +modPath in an override) must be a directory below mods/ of the
 // current generation; an override without +modPath leaves the mod to the client.
 Launch clientLaunch(const ClientLayout& layout, const fs::path& support, const LaunchOptions& options);
@@ -47,14 +50,15 @@ inline Launch clientLaunch(const fs::path& contents, const fs::path& support, co
 Launch clientLaunch(const fs::path& contents, const fs::path& support, const std::string& mod = "bf2");
 // The launcher's own choices (Setup/Launch.txt, see launch.h); the game's files are never
 // written for them. An unreadable or missing file gives the defaults.
-// The options carry the services of the chosen online service: the OpenSpy preset, or the kept provider file of
-// BF2Hub or of the other provider; none when that file is missing or invalid.
+// The options carry the services of the chosen online service: the OpenSpy or BF2Hub preset, or the kept provider
+// file of the other provider; none when that file is missing or invalid. A preset's file is written to
+// Setup/Provider-OpenSpy.json or Setup/Provider-BF2Hub.json by clientLaunch, where the game reads it.
 LaunchOptions loadLaunch(const fs::path& support);
 // The demos of the game folder (Demos/, where the game records): its .bf2demo and .con files, relative to the
 // game folder, the newest first.
 std::vector<fs::path> findDemos(const fs::path& game);
 void saveLaunch(const fs::path& support, const LaunchOptions& options, Platform&);
-// The provider file of "bf2hub" or "other" (provider_online): checked (parse_provider), then kept as Setup/Provider-BF2Hub.json or Setup/Provider-Other.json, replacing an
+// The provider file of "other" (provider_online): checked (parse_provider), then kept as Setup/Provider-Other.json, replacing an
 // earlier one. A file which is not valid throws with the reason and leaves the kept one as it was.
 ProviderServices importProvider(const fs::path& support, const std::string& online, const fs::path& file, Platform&);
 ProviderServices keepProvider(const fs::path& support, const std::string& online, const std::string& json, Platform&);

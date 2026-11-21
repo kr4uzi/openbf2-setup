@@ -100,9 +100,9 @@ int smoke(Window& window, const std::filesystem::path& output) {
 	options.fullscreen = false; options.width = 1280; options.height = 720;
 	window.ShowLauncher(options, {{"bf2", "Battlefield 2"}}, true, "");
 	window.SetCommandLine(command_line(launch_arguments(options))); window.Snapshot(output / "8-launcher-windowed.png");
-	options.fullscreen = true; options.override = "+modPath mods/bf2 +gamespyRedirect openspy.net";
+	options.fullscreen = true; options.override = "+modPath mods/bf2 +noSound 1";
 	window.ShowLauncher(options, {{"bf2", "Battlefield 2"}}, true, ""); window.Snapshot(output / "9-launcher-command-line.png");
-	options = LaunchOptions{}; options.online = "openspy"; options.provider = parse_provider(provider_presets().front().json);
+	options = LaunchOptions{}; options.online = "openspy"; options.provider = parse_provider(provider_preset("openspy")->json); options.provider_folder = "/Users/Player/Library/Application Support/OpenBF2/Setup";
 	window.ShowLauncher(options, {{"bf2", "Battlefield 2"}}, true, "");
 	window.SetCommandLine(command_line(launch_arguments(options))); window.Snapshot(output / "10-launcher-online.png");
 	if (window.Options() != options) throw std::runtime_error("The launcher does not give back the online provider it was shown.");
@@ -116,15 +116,14 @@ int smoke(Window& window, const std::filesystem::path& output) {
 	window.SetDemos({"Demos/Strike_at_Karkand_2026-11-20.bf2demo", "Demos/Wake_Island_2026-11-18.bf2demo"});
 	window.SnapshotAdvanced(output / "12-advanced-options.png");
 	if (window.Options() != options) throw std::runtime_error("The launcher does not give back the advanced options it was shown.");
-	// BF2Hub from its hosted file: an entry per host, with BF2Hub's public addresses, holding until a date
-	options = LaunchOptions{}; options.online = "bf2hub"; options.bf2hub_source = "hosted";
-	options.provider = parse_provider(R"({"schema": 1, "provider": "BF2Hub", "valid_to": "2026-11-27T18:00:00Z", "services": {"available": "5.252.33.100", "ms14": "5.252.33.100",
-		"master": "5.252.33.100", "gpcm": "5.252.33.100", "gpsp": "5.252.33.100", "gamestats": "116.203.14.166", "BF2Web": "116.203.14.166", "eapusher": "116.203.14.166"}})");
+	// another provider's file from the web: an entry per host besides the fallback, holding until a date
+	options = LaunchOptions{}; options.online = "other"; options.other_source = "url"; options.other_url = "https://example.org/provider.json";
+	options.provider_folder = "/Users/Player/Library/Application Support/OpenBF2/Setup";
+	options.provider = parse_provider(R"({"schema": 1, "provider": "Example", "valid_to": "2026-11-27T18:00:00Z", "services": {"*": "example.org", "gpcm": "login.example.org"}})");
 	window.ShowLauncher(options, {{"bf2", "Battlefield 2"}}, true, "");
 	window.SetCommandLine(command_line(launch_arguments(options))); window.Snapshot(output / "13-launcher-provider.png");
 	if (window.Options() != options) throw std::runtime_error("The launcher does not give back the provider file and its services.");
-	window.SnapshotProvider("bf2hub", output / "14-bf2hub.png");
-	window.SnapshotProvider("other", output / "15-other-provider.png");
+	window.SnapshotProvider(output / "14-other-provider.png");
 	return 0;
 }
 }
@@ -144,11 +143,10 @@ int main(int argc, char** argv) {
 		auto layout = macClientLayout(contents);
 		const char* usage = "Usage: OpenBF2 [--check-client | --smoke-test NEW_DIRECTORY | --test-home DIRECTORY]\n";
 #elif defined(Q_OS_WIN)
-		// OpenBF2\OpenBF2.exe with setup\ (the manifests), openbf2-hubtool.exe and the two client packages x64\
+		// OpenBF2\OpenBF2.exe with setup\ (the manifests) and the two client packages x64\
 		// and x86\ beside it
 		auto folder = std::filesystem::path{QCoreApplication::applicationDirPath().toStdWString()};
 		auto manifests = folder / "setup";
-		auto hubtool = folder / "openbf2-hubtool.exe";
 		auto layout = windowsClientLayout(folder / "x64");
 		auto x86 = windowsClientLayout(folder / "x86");
 		const char* usage = "Usage: OpenBF2 [--check-client | --smoke-test NEW_DIRECTORY | --test-home DIRECTORY]\n";
@@ -205,11 +203,7 @@ int main(int argc, char** argv) {
 		auto support = data / "OpenBF2";
 		auto profiles = support;
 #endif
-#if defined(Q_OS_WIN)
-		Installer installer(worker, support, manifests, hubtool);
-#else
 		Installer installer(worker, support, manifests);
-#endif
 		Store store(support, profiles);
 		Client client(layout, support, home);
 #if defined(Q_OS_WIN)

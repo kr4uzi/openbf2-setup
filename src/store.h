@@ -46,11 +46,11 @@ namespace setup {
 		// the start-up options (Setup/Launch.txt), the defaults before the first save
 		LaunchOptions LoadLaunch() const;
 		void SaveLaunch(const LaunchOptions& options);
-		// checks the provider file the user chose, or a preset's text, and keeps it (Setup/Provider.json); throws
+		// checks the other provider's file the user chose, or its downloaded text, and keeps it (Setup/Provider-Other.json); throws
 		// with the reason when it is not valid
 		ProviderServices ImportProvider(const std::string& online, const std::filesystem::path& file);
 		ProviderServices KeepProvider(const std::string& online, const std::string& json);
-		// the kept provider files of "bf2hub" and "other" which are valid
+		// the kept provider file of "other" when it is valid
 		std::map<std::string, ProviderServices> KeptProviders() const;
 
 		// a missing or unreadable file gives the defaults

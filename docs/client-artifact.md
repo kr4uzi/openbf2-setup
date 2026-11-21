@@ -85,35 +85,34 @@ do. The setup app follows it as described here.
   default), nothing for fullscreen (the engine's own default, as in retail) and
   `+fullscreen 0` for windowed mode, `+szx <w> +szy <h>` only when windowed and
   a size was given, `+playerName <name>` when a name was given. The online services ("Online services" on the launcher page): nothing for
-  the retail services (the default), `+gamespyRedirect openspy.net` for OpenSpy, and
-  for BF2Hub or another provider the entries of its provider file as they are
-  written, in the file's order: `+gamespyRedirect<key> <value>` per entry, and
-  `+gamespyRedirect <value>` for the key `*`, the fallback for every name (a domain
-  replaces `gamespy.com` and `dice.se` in each name the engine looks up; an IPv4
-  address takes every name; Host headers stay retail). Other keys are the exact
-  retail host-name labels, case-sensitive like the engine's switch names:
-  `available`, `ms14`, `master`, `gpcm`, `gpsp`, `gamestats`, `BF2Web`,
-  `stage-net`, `eapusher`, `natneg1` to `natneg3`. Only values the engine accepts
-  are passed (a dotted IPv4 address, or a host name of at most 253 characters; a
-  domain for `*` at most 230), since the engine ends its start-up on any other
-  value. A provider file is JSON with `"schema": 1`, `"provider"` (a name of
-  letters, digits, spaces, `-` and `.`, at most 64), a non-empty `services` object
-  of keys (`*`, or letters, digits and `-`, at most 32) and values, and optionally
-  `"valid_to"`, a UTC time (`2026-11-27T18:00:00Z`) until which the file holds;
-  without it, it holds for ever. Other entries (`generated`, `generator`, `source`)
-  are not used.
-  BF2Hub's dialog takes the file automatically from the BF2Hub installer the user
-  downloaded (Windows, with the bundled openbf2-hubtool), from the file OpenBF2
-  hosts (`https://bf2hub.krauzi.de/servers.json`), or from a file on the computer;
-  the other provider's dialog from an `https` address or a file. Downloads are
-  `https` only (redirects too), at most 64 KiB, with a 15-second limit. The files
-  are kept as `<support root>/Setup/Provider-BF2Hub.json` and
-  `Provider-Other.json`, and `Launch.txt` records the choice and the source. A
-  downloaded file which has run out is downloaded again at the next start (the old
-  one stays in use when that fails); a file from the installer or the computer is
-  only noted as out of date. A missing or invalid kept file opens the launcher
-  instead of the direct start. The setup checks the format only, never the
-  services, and the community services are not verified by OpenBF2.
+  the retail services (the default); otherwise `+onlineProviderConfig <file>`,
+  the provider file the engine reads itself (client and dedicated server; the
+  engine passes it on when it restarts for a mod). OpenSpy and BF2Hub are presets
+  the application carries: bf2.org's domains `openspy.p.bf2.org` and
+  `bf2hub.p.bf2.org`, written at every start to
+  `<support root>/Setup/Provider-OpenSpy.json` and `Provider-BF2Hub.json`.
+  "Other" takes the user's own provider file, kept as
+  `<support root>/Setup/Provider-Other.json`. A provider file is JSON with
+  `"schema": 1`, `"provider"` (a name of letters, digits, spaces, `-` and `.`, at
+  most 64), a non-empty `services` object and optionally `"valid_to"`, a UTC time
+  (`2026-11-27T18:00:00Z`) until which the file holds; without it, it holds for
+  ever. Other top-level entries are not used, by the engine neither. A key of
+  `services` is `*`, the fallback (a domain which replaces `gamespy.com` and
+  `dice.se` in each name the engine looks up, at most 230 characters, or an IPv4
+  address which takes every name), or one of the engine's retail host-name
+  labels, case-sensitive: `available`, `ms14`, `master`, `gpcm`, `gpsp`,
+  `gamestats`, `BF2Web`, `stage-net`, `natneg1` to `natneg3`, `eapusher`. A label
+  takes precedence over `*`; its value is a dotted IPv4 address or a host name of
+  at most 253 characters. The engine refuses a file with any other key or value
+  and ends its start-up, so the setup checks every file the same way before it
+  keeps it. The other provider's dialog takes the file from an `https` address or
+  from the computer. Downloads are `https` only (redirects too), at most 64 KiB,
+  with a 15-second limit. `Launch.txt` records the choice and where the other
+  provider's file came from. A downloaded file which has run out is downloaded
+  again at the next start (the old one stays in use when that fails); a file from
+  the computer is only noted as out of date. A missing or invalid kept file opens
+  the launcher instead of the direct start. The setup checks the format only, never
+  the services, and the community services are not verified by OpenBF2.
   The launcher page
   also passes `+tutorialMessages 0` when "Show tutorial messages" is off (on
   passes nothing, so the profile's own setting applies; `+help` is never passed,

@@ -52,9 +52,6 @@ namespace {
 		case Kind::options_edited:
 		case Kind::mods_folder:
 		case Kind::demos_folder:
-		case Kind::bf2hub_installer:
-		case Kind::bf2hub_hosted:
-		case Kind::bf2hub_file:
 		case Kind::other_url:
 		case Kind::other_file:
 			return !g_Machine.busy && page == Page::launcher;
@@ -213,7 +210,7 @@ void Window::ShowProvider(const std::string& online, const std::string& source, 
 	auto options = Options();
 	options.online = online;
 	options.provider = services;
-	(online == "bf2hub" ? options.bf2hub_source : options.other_source) = source;
+	options.other_source = source;
 	if (online == "other")
 		options.other_url = url;
 	g_Machine.edited_options = options;
@@ -278,10 +275,9 @@ void Window::SetLevel(double peak)
 	g_Machine.levels.push_back(peak);
 }
 
-void Window::Message(const std::string& title, const std::string& detail, const std::string& more)
+void Window::Message(const std::string& title, const std::string& detail)
 {
 	g_Machine.messages.push_back(title + ": " + detail);
-	g_Machine.message_details = more;
 }
 
 void Window::Reveal(const std::filesystem::path& directory)
@@ -294,16 +290,9 @@ void Window::Reveal(const std::filesystem::path& directory)
 
 #endif
 
-Installer::Installer(Worker& worker, std::filesystem::path support, std::filesystem::path manifests, std::filesystem::path hubtool)
-	: m_Worker{ worker }, m_Support{ std::move(support) }, m_Manifests{ std::move(manifests) }, m_Hubtool{ std::move(hubtool) }
+Installer::Installer(Worker& worker, std::filesystem::path support, std::filesystem::path manifests)
+	: m_Worker{ worker }, m_Support{ std::move(support) }, m_Manifests{ std::move(manifests) }
 {
-}
-
-task<HubtoolRun> Installer::ProbeBf2hub(std::filesystem::path)
-{
-	co_await ::yield();
-	::call("probe-bf2hub");
-	co_return g_Machine.hubtool_run;
 }
 
 task<DiscEdition> Installer::CheckDisc(std::filesystem::path disc)
@@ -431,7 +420,14 @@ std::vector<Mod> Store::Mods(const Installation&)
 
 LaunchOptions Store::LoadLaunch() const
 {
-	return g_Machine.stored_launch;
+	// as the real one: a preset's services, or the kept file of the other provider; the folder the game reads them in
+	auto options = g_Machine.stored_launch;
+	if (auto preset = provider_preset(options.online))
+		options.provider = parse_provider(preset->json);
+	else if (auto kept = g_Machine.kept_providers.find(options.online); provider_online(options.online) && kept != g_Machine.kept_providers.end())
+		options.provider = parse_provider(kept->second);
+	options.provider_folder = "/support/Setup";
+	return options;
 }
 
 void Store::SaveLaunch(const LaunchOptions& options)

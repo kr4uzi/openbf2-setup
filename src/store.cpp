@@ -93,7 +93,7 @@ ProviderServices Store::ImportProvider(const std::string& online, const std::fil
 std::map<std::string, ProviderServices> Store::KeptProviders() const
 {
 	auto kept = std::map<std::string, ProviderServices>{};
-	for (auto online : { "bf2hub", "other" })
+	for (auto online : { "other" })
 		if (auto services = assistant::storedProvider(m_Support, online))
 			kept[online] = *services;
 	return kept;

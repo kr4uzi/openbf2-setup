@@ -47,15 +47,17 @@ namespace setup {
 		// Windows only: which client starts, "x64" or "x86" (the 32-bit one, which PunkBuster servers need)
 		std::string client = "x64";
 
-		// the online services: "" the game's own (retail), "openspy" (a preset), "bf2hub" or "other". the last two
-		// take a provider file (Setup/Provider-BF2Hub.json, Setup/Provider-Other.json): each entry is passed as
-		// written, "+gamespyRedirect<key> <value>"
+		// the online services: "" the game's own (retail), "openspy" or "bf2hub" (presets the application carries) or
+		// "other" (the user's provider file, Setup/Provider-Other.json). the chosen file goes to the game as
+		// "+onlineProviderConfig <file>"
 		std::string online;
-		// where BF2Hub's file came from: "automatic" (the hubtool, Windows), "hosted" (bf2hub_hosted_url) or "file";
-		// the other provider's: "url" (other_url) or "file"
-		std::string bf2hub_source, other_source, other_url;
+		// where the other provider's file came from: "url" (other_url) or "file"
+		std::string other_source, other_url;
 		// the provider file of the chosen service: read with the options, never written to Launch.txt
 		ProviderServices provider;
+		// Setup/ in the support root, where the file the game reads lies (provider_config_name): read with the
+		// options, never written to Launch.txt
+		std::string provider_folder;
 
 		// the advanced options. each passes its switch only when it differs from the game's default
 		bool no_sound = false;        // +noSound 1
@@ -82,9 +84,13 @@ namespace setup {
 	// the advanced options differ from their defaults: the launcher opens with them shown
 	bool has_advanced_options(const LaunchOptions& options);
 
-	// the online services which take a provider file of their own, and whether a choice is one of the launcher's
+	// the online services which take a provider file of the user's ("other"), and whether a choice is one of the
+	// launcher's
 	bool provider_online(const std::string& online);
 	bool valid_online(const std::string& online);
+	// the name of the file in provider_folder which the game reads for an online choice: Provider-OpenSpy.json,
+	// Provider-BF2Hub.json (the presets, written at each start) or Provider-Other.json (the kept file)
+	std::string provider_config_name(const std::string& online);
 
 	// a demo given as its recording (.bf2demo), which needs the .con the launcher writes for it
 	bool demo_recording(const std::string& demo);

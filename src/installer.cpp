@@ -1,12 +1,6 @@
 #include "installer.h"
-#include "digest.h"
 #include "install.h"
-#include "media.h"
 #include "session.h"
-
-#include <random>
-#include <stdexcept>
-#include <thread>
 
 #include <boost/asio/post.hpp>
 #include <boost/asio/this_coro.hpp>
@@ -45,55 +39,9 @@ namespace {
 	}
 }
 
-Installer::Installer(Worker& worker, std::filesystem::path support, std::filesystem::path manifests, std::filesystem::path hubtool)
-	: m_Worker{ worker }, m_Support{ std::move(support) }, m_Manifests{ std::move(manifests) }, m_Hubtool{ std::move(hubtool) }
+Installer::Installer(Worker& worker, std::filesystem::path support, std::filesystem::path manifests)
+	: m_Worker{ worker }, m_Support{ std::move(support) }, m_Manifests{ std::move(manifests) }
 {
-}
-
-task<HubtoolRun> Installer::ProbeBf2hub(std::filesystem::path installer)
-{
-	co_return co_await m_Worker.Run([this, installer]() -> HubtoolRun {
-		namespace fs = std::filesystem;
-		if (m_Hubtool.empty() || !fs::is_regular_file(m_Hubtool))
-			throw std::runtime_error{ "This build has no BF2Hub tool." };
-		if (!fs::is_regular_file(installer))
-			throw std::runtime_error{ "The BF2Hub installer cannot be read: it is not a file." };
-
-		auto installation = Current();
-		auto expected = manifest_file(::manifest(m_Manifests, installation.edition), "BF2.exe");
-		auto name = std::string{ "openbf2-hubtool-" };
-		auto random = std::random_device{};
-		for (int i = 0; i < 4; ++i)
-			name += "0123456789abcdef"[random() % 16], name += "0123456789abcdef"[random() % 16];
-		auto folder = fs::temp_directory_path() / name;
-		if (!fs::create_directory(folder))
-			throw std::runtime_error{ "The BF2Hub tool's folder could not be made." };
-
-		// removed whatever happens; a virus scanner may hold the tool for a moment after it ended
-		struct Removal {
-			fs::path folder;
-			~Removal() {
-				for (int attempt = 0; attempt < 50; ++attempt) {
-					std::error_code error;
-					fs::remove_all(folder, error);
-					if (!error && !fs::exists(folder, error))
-						return;
-					std::this_thread::sleep_for(std::chrono::milliseconds{ 100 });
-				}
-			}
-		} removal{ folder };
-		fs::copy_file(m_Hubtool, folder / "openbf2-hubtool.exe");
-		fs::copy_file(installation.game / expected.path, folder / "BF2.exe");
-		// what the tool reads must be the retail 1.50 BF2.exe of the content contract
-		{
-			auto copy = View{ folder / "BF2.exe" };
-			auto digest = Digest{};
-			copy.stream([&](const uint8_t* data, size_t size) { digest.update(data, size); });
-			if (copy.size() != expected.size || digest.finish() != expected.sha256)
-				throw std::runtime_error{ "The installed BF2.exe is not the one of the game data. Verify the game data first." };
-		}
-		return run_hubtool(folder, folder / "openbf2-hubtool.exe", installer, std::chrono::seconds{ 60 });
-	});
 }
 
 task<DiscEdition> Installer::CheckDisc(std::filesystem::path disc)

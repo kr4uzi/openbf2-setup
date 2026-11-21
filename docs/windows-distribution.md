@@ -35,12 +35,6 @@ cmake --build C:\build\openbf2
 ctest --test-dir C:\build\openbf2 --output-on-failure
 ```
 
-`SETUP_HUBTOOL` is `openbf2-hubtool.exe`, built from the commit pinned in `ci/versions.env` with
-`ci/build-hubtool.sh REPOSITORY OUTPUT_DIR` (mingw-w64 i686; the script exports the pinned commit, so local
-changes in the checkout never reach the build). Its licence and the notice of the LZMA SDK decoder it carries
-(public domain) go into `licences\`. It is optional: without it, "BF2Hub Installer…" says the build
-has no BF2Hub tool.
-
 `SETUP_CLIENT_X64` and `SETUP_CLIENT_X86` are the unpacked `openbf2-windows-x64-client` and
 `openbf2-windows-x86-client` packages of the engine's build. Each is optional; configuration fails when a
 folder lacks one of the files the launcher requires (`BF2.exe`, `dice_py.dll`, `RendDX9.dll`,
@@ -63,7 +57,6 @@ The build tree's `app\` folder is the application as it is shipped, and can be z
 | `Qt6*.dll`, `platforms\`, `styles\`, `imageformats\`, `generic\` | Qt, deployed by `windeployqt` |
 | `setup\` | the content manifests (`content-*.tsv`) |
 | `licences\` | the licences of the setup, Qt, SDL3 and the Rust dependencies |
-| `openbf2-hubtool.exe` | BF2Hub's provider file from the user's own BF2Hub installer (see below) |
 | `x64\`, `x86\` | the client packages as the engine's build supplies them |
 
 The Microsoft Visual C++ runtime (x64, and x86 for the 32-bit client) must be installed; the 64-bit client
@@ -76,7 +69,7 @@ The current-user mode needs no administrator rights and writes nothing to the re
 | Path | Contents |
 | --- | --- |
 | `%LOCALAPPDATA%\OpenBF2\GameData\` | the installed game, one generation per installation |
-| `%LOCALAPPDATA%\OpenBF2\Setup\` | receipts, `Launch.txt`, the verification record, `Provider-BF2Hub.json` and `Provider-Other.json` when those providers are set up |
+| `%LOCALAPPDATA%\OpenBF2\Setup\` | receipts, `Launch.txt`, the verification record, the provider file the game reads (`Provider-OpenSpy.json`, `Provider-BF2Hub.json` or `Provider-Other.json`) |
 | `%LOCALAPPDATA%\OpenBF2\Registry.dat` | the CD keys for the client |
 | `%LOCALAPPDATA%\OpenBF2\CustomMods\` | the user's mods; each is linked into the game folder |
 | `Documents\Battlefield 2\` | the game's profiles and the voice defaults, where retail keeps them |
@@ -88,23 +81,6 @@ described in the engine's `docs/registry-file.md`. Only the current Windows acco
 The game finds mods only below its own `mods\` folder, so each mod of the library is linked there. Windows
 creates symbolic links only with administrator rights or developer mode; directory junctions need neither,
 so OpenBF2 uses junctions (`src/links.cpp`).
-
-## BF2Hub from its installer
-
-In the BF2Hub dialog (Online services → BF2Hub → Configure…), "Automatic" asks for the BF2Hub client installer the
-user downloaded from bf2hub.com; the setup never downloads it. Get then:
-
-1. checks the installed `BF2.exe` against the content manifest (size and SHA-256);
-2. copies `openbf2-hubtool.exe` and that `BF2.exe` into a new folder of its own in the temporary folder and runs
-   `openbf2-hubtool.exe <installer>` there, without a console window, for at most 60 seconds;
-3. takes the provider file the tool prints (exit 0, and exit 6, which prints it although it could not write
-   `bf2hub.json`), checks it like a chosen provider file and keeps it as `Setup\Provider-BF2Hub.json`;
-4. removes the folder, whatever happened.
-
-A failure says in one line what the exit code means (2 the installer or `BF2.exe` could not be used, 3 the
-tool's sandbox could not start, 4 the BF2Hub client could not be asked, 5 no addresses, or the time ran out), with
-the last 20 lines of the tool's error output behind the details button. The tool gets no CD key and no password,
-and the setup keeps nothing but the provider file.
 
 ## Not done yet
 

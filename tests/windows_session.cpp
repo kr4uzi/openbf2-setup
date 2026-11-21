@@ -2,7 +2,6 @@
 // defaults in the game's profile folder, directory junctions for the user's mods, and the client choice.
 // A real CD key never belongs in the repository: the saved-and-read-back check runs only with the owner's
 // own key in BF2_TEST_KEY, as tests/key_check.cpp does.
-#include "hubtool.h"
 #include "launch.h"
 #include "links.h"
 #include "mods.h"
@@ -86,8 +85,8 @@ namespace {
 int main(int argc, char** argv)
 {
 	try {
-		if (argc != 3)
-			throw std::runtime_error{ "usage: windows_session_checks SCRATCH FAKE_HUBTOOL" };
+		if (argc != 2)
+			throw std::runtime_error{ "usage: windows_session_checks SCRATCH" };
 
 		auto root = fs::absolute(argv[1]) / ("windows-session-" + std::to_string(GetCurrentProcessId()));
 		fs::remove_all(root);
@@ -144,27 +143,20 @@ int main(int argc, char** argv)
 		setup::link_mods(library, game);
 		check(!fs::exists(fs::symlink_status(link)), "the junction of a removed mod stayed");
 
-		// the provider file is kept with the Windows writer
-		write(root / "hub.json", R"({"schema": 1, "provider": "BF2Hub", "services": {"available": "5.252.33.100", "master": "5.252.33.100", "cm": "5.252.33.100", "sp": "5.252.33.100"}})");
-		check(session::importProvider(support, "bf2hub", root / "hub.json", *platform).services.size() == 4 && session::storedProvider(support, "bf2hub"), "the provider file was not kept");
-		check(!fs::exists(support / "Setup/Provider-BF2Hub.pending"), "the provider pending file stayed");
-
-		// the hubtool's process: one quoted argument, its working folder, the output, the time limit, no window
-		auto tool = root / "hubtool";
-		fs::create_directories(tool);
-		fs::copy_file(argv[2], tool / "openbf2-hubtool.exe");
-		auto installer = fs::path{ "C:/Users/Some One/Downloads/BF2Hub Client ok.exe" };
-		auto run = setup::run_hubtool(tool, tool / "openbf2-hubtool.exe", installer, std::chrono::seconds{ 20 });
-		check(run.exitCode == 2 && run.err.find("argument: " + installer.string()) != std::string::npos, "the tool ran without BF2.exe beside it, or the argument was split");
-		write(tool / "BF2.exe", "synthetic");
-		run = setup::run_hubtool(tool, tool / "openbf2-hubtool.exe", installer, std::chrono::seconds{ 20 });
-		check(run.exitCode == 0 && !run.timedOut && setup::parse_provider(setup::hubtool_provider(run)).services.size() == 2, "the tool's provider file was not read from its output");
-		run = setup::run_hubtool(tool, tool / "openbf2-hubtool.exe", "C:/x/fail.exe", std::chrono::seconds{ 20 });
-		check(run.exitCode == 5 && setup::hubtool_failure(run) == "BF2Hub gave no addresses." && setup::last_lines(run.err).rfind("probe line 11", 0) == 0, "a failed run's code or errors");
-		auto started = std::chrono::steady_clock::now();
-		run = setup::run_hubtool(tool, tool / "openbf2-hubtool.exe", "C:/x/slow.exe", std::chrono::seconds{ 2 });
-		check(run.timedOut && std::chrono::steady_clock::now() - started < std::chrono::seconds{ 15 }, "a run past its time was not stopped");
-		rejects([&] { setup::run_hubtool(tool, tool / "missing.exe", installer, std::chrono::seconds{ 2 }); }, "a missing tool was run");
+		// the provider file is kept with the Windows writer, and a preset is written where the game reads it
+		write(root / "other.json", R"({"schema": 1, "provider": "Example", "services": {"*": "example.org", "gpcm": "10.0.0.2", "BF2Web": "stats.example.org"}})");
+		check(session::importProvider(support, "other", root / "other.json", *platform).services.size() == 3 && session::storedProvider(support, "other"), "the provider file was not kept");
+		check(!fs::exists(support / "Setup/Provider-Other.pending"), "the provider pending file stayed");
+		{
+			setup::LaunchOptions online;
+			online.online = "bf2hub";
+			online.provider_folder = (support / "Setup").string();
+			session::writeProviderPreset(online, *platform);
+			check(read(support / "Setup/Provider-BF2Hub.json") == setup::provider_preset("bf2hub")->json, "the BF2Hub preset was not written");
+			online.provider = setup::parse_provider(setup::provider_preset("bf2hub")->json);
+			auto arguments = setup::launch_arguments(online);
+			check(arguments.size() >= 2 && arguments[arguments.size() - 2] == "+onlineProviderConfig" && fs::path{ arguments.back() } == support / "Setup/Provider-BF2Hub.json", "the command line does not name the preset's file");
+		}
 
 		// the client choice
 		setup::LaunchOptions options;

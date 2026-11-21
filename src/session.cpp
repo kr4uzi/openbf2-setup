@@ -236,6 +236,13 @@ bool clientPresent(const ClientLayout& layout) {
     return ::access(layout.executable.c_str(),X_OK)==0;
 #endif
 }
+void writeProviderPreset(const LaunchOptions& options,Platform& platform) {
+    auto preset=provider_preset(options.online);
+    if(!preset||options.provider_folder.empty())return;
+    auto file=fs::path{options.provider_folder}/provider_config_name(options.online);
+    noLinks(file);
+    writeTextFile(file,preset->json,platform);
+}
 Launch clientLaunch(const ClientLayout& layout,const fs::path& support,const LaunchOptions& options) {
     require(clientPresent(layout),"The native client or its libraries are missing from this build.");
     require(storedKey(support),"Enter your CD key before playing.");
@@ -250,6 +257,7 @@ Launch clientLaunch(const ClientLayout& layout,const fs::path& support,const Lau
         auto directory=generation/"mods"/mod;std::error_code unreadable;
         require(fs::is_directory(directory)&&(!is_link(fs::symlink_status(directory))||link_target(directory,unreadable)==mod_library(support)/mod),"The selected mod is not installed.");
     }
+    {auto platform=nativePlatform();writeProviderPreset(options,*platform);}
     // a recording is played through the .con which names it
     if(options.override.empty()&&demo_recording(options.demo)&&!options.demo_config.empty()) {
         auto platform=nativePlatform();
@@ -270,16 +278,17 @@ LaunchOptions loadLaunch(const fs::path& support) {
         noLinks(support/"Setup/Launch.txt");
         options=parse_launch(read(support/"Setup/Launch.txt"));
     } catch(const std::exception&) {}
-    if(options.online=="openspy")
-        options.provider=parse_provider(provider_presets().front().json);
+    if(auto preset=provider_preset(options.online))
+        options.provider=parse_provider(preset->json);
     else if(provider_online(options.online))
         if(auto provider=storedProvider(support,options.online))options.provider=*provider;
+    options.provider_folder=(support/"Setup").string();
     options.demo_config=(support/"Setup/Demo.con").string();
     return options;
 }
 fs::path providerFile(const fs::path& support,const std::string& online) {
-    require(provider_online(online),"Only BF2Hub and another provider keep a provider file.");
-    return support/"Setup"/(online=="bf2hub"?"Provider-BF2Hub.json":"Provider-Other.json");
+    require(provider_online(online),"Only another provider keeps a provider file.");
+    return support/"Setup"/provider_config_name(online);
 }
 ProviderServices keepProvider(const fs::path& support,const std::string& online,const std::string& json,Platform& platform) {
     auto file=providerFile(support,online);

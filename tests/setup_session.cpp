@@ -1,5 +1,4 @@
 #include "install.h"
-#include "hubtool.h"
 #include "edition.h"
 #include "patch.h"
 #include "session.h"
@@ -139,7 +138,7 @@ int main(int argc,char** argv){
             check(setup::localized(utf16("A  \x1b\x1b\x1b\x1b\r\n"),"A").empty(),"empty delimited localization value not empty");
             // The launcher's own options file.
             // the path of the demo's .con comes with every read, it is not saved
-            auto loaded=[&]{auto options=session::loadLaunch(support);check(options.demo_config==(support/"Setup/Demo.con").string(),"the path of the demo's .con");options.demo_config.clear();return options;};
+            auto loaded=[&]{auto options=session::loadLaunch(support);check(options.demo_config==(support/"Setup/Demo.con").string()&&options.provider_folder==(support/"Setup").string(),"the path of the demo's .con or of the provider folder");options.demo_config.clear();options.provider_folder.clear();return options;};
             check(loaded()==setup::LaunchOptions{},"launch options before any were saved");
             {
                 setup::LaunchOptions options;options.mod="xpack";options.fullscreen=false;options.width=1280;options.height=800;options.server="10.0.0.2";options.port=16568;options.password="secret 42";options.player="Name With Space";
@@ -166,8 +165,8 @@ int main(int argc,char** argv){
                     // the online provider and the advanced switches
                     setup::LaunchOptions advanced;advanced.skip_movies=false;
                     check(!setup::has_advanced_options(advanced),"defaults count as advanced");
-                    {setup::LaunchOptions online;online.online="openspy";online.provider=setup::parse_provider(setup::provider_presets().front().json);
-                     check(!setup::has_advanced_options(online)&&setup::command_line(setup::launch_arguments(online))=="+modPath mods/bf2 +restart 1 +gamespyRedirect openspy.net","the OpenSpy preset, or a provider counted as advanced");}
+                    {setup::LaunchOptions online;online.online="openspy";online.provider=setup::parse_provider(setup::provider_preset("openspy")->json);online.provider_folder="/s/Setup";
+                     check(!setup::has_advanced_options(online)&&setup::command_line(setup::launch_arguments(online))=="+modPath mods/bf2 +restart 1 +onlineProviderConfig "+(fs::path{"/s/Setup"}/"Provider-OpenSpy.json").string(),"the OpenSpy preset, or a provider counted as advanced");}
                     advanced.no_sound=advanced.multi=true;
                     advanced.fullscreen=false;advanced.window_x=10;advanced.window_y=20;
                     advanced.server="10.0.0.2";advanced.password="pw";
@@ -206,8 +205,8 @@ int main(int argc,char** argv){
             {setup::LaunchOptions bad;bad.mod="a\nb";rejects([&]{session::saveLaunch(support,bad,*platform);},"mod name with a line break accepted");}
         }
         {
-            // provider files: each entry becomes "+gamespyRedirect" and its key, then its value, in the file's order;
-            // the empty key gives the fallback for every name. BF2Hub's file has one entry per host
+            // provider files: the game reads the chosen one itself (+onlineProviderConfig). a key is "*", the fallback
+            // domain, or one of the game's twelve labels, whose name goes to its value
             const std::string hub=R"({
   "schema": 1,
   "provider": "BF2Hub",
@@ -231,6 +230,7 @@ int main(int argc,char** argv){
                           replace("\"gpcm\": \"5.252.33.100\"","\"gpcm\": \"5.252.33.256\""),replace("\"gpcm\": \"5.252.33.100\"","\"gpcm\": \"1234\""),
                           replace("\"gpcm\": \"5.252.33.100\"","\"gpcm\": \"a..b\""),replace("\"gpcm\": \"5.252.33.100\"","\"gpcm\": \""+std::string(254,'a')+"\""),
                           replace("\"gpcm\":","\"gp cm\":"),replace("\"gpcm\":","\"gpcm+x\":"),replace("\"gpcm\":","\""+std::string(33,'a')+"\":"),
+                          replace("\"gpcm\":","\"GPCM\":"),replace("\"BF2Web\":","\"bf2web\":"),replace("\"gpcm\":","\"Future\":"),replace("\"gpcm\":","\"natneg4\":"),
                           replace("\"gpcm\": \"5.252.33.100\",","\"gpcm\": \"5.252.33.100\", \"gpcm\": \"5.252.33.101\","),
                           replace("\"available\":","\"*\": \"openspy.net\", \"*\": \"other.net\", \"available\":"),replace("\"available\":","\"\": \"openspy.net\", \"available\":"),
                           replace("\"available\":","\"*\": \""+std::string(227,'a')+".net\", \"available\":"),replace("\"available\":","\"*\": \"300.1.1.1\", \"available\":"),
@@ -241,23 +241,29 @@ int main(int argc,char** argv){
                 rejects([&]{setup::parse_provider(bad);},"an invalid provider file was accepted");
             rejects([&]{setup::parse_provider(hub+std::string(setup::provider_file_limit,' '));},"an oversized provider file was read");
             {auto deep=replace("\"generated\"","\"deep\": "+std::string(17,'[')+std::string(17,']')+", \"generated\"");rejects([&]{setup::parse_provider(deep);},"a deeply nested file was read");}
-            // a key is passed as written, whichever host it names; '-' for stage-net; a name with spaces and dots
-            check(setup::parse_provider(replace("\"master\": \"5.252.33.100\",","\"master\": \"5.252.33.100\", \"Future\": \"x.y\",")).services.size()==9,"a key the setup does not know was dropped");
-            check(setup::parse_provider(replace("\"gpsp\":","\"stage-net\": \"5.252.33.100\", \"gpsp\":")).services.size()==9,"a retail label with '-' was refused");
+            // every label of the game, '-' in stage-net; a name with spaces and dots
+            check(setup::service_labels()==std::vector<std::string>{"available","ms14","master","gpcm","gpsp","gamestats","BF2Web","stage-net","natneg1","natneg2","natneg3","eapusher"},"the game's labels");
+            {std::string all="{\"schema\": 1, \"provider\": \"All\", \"services\": {\"*\": \"example.net\"";for(const auto& label:setup::service_labels())all+=", \""+label+"\": \"10.0.0.1\"";
+             check(setup::parse_provider(all+"}}").services.size()==13,"a label of the game was refused");}
+            check(!setup::valid_service("Future","x.y")&&!setup::valid_service("bf2web","x.y")&&setup::valid_service("BF2Web","x.y")&&setup::valid_service("*","10.0.0.1"),"which keys the game takes");
             check(setup::parse_provider(replace("\"BF2Hub\"","\"My Hub 2.0-test\"")).name=="My Hub 2.0-test","a provider name with spaces, dots and '-' was refused");
-            setup::LaunchOptions online;online.online="bf2hub";online.provider=parsed;
-            auto line=setup::command_line(setup::launch_arguments(online));
-            check(line=="+modPath mods/bf2 +restart 1 +gamespyRedirectavailable 5.252.33.100 +gamespyRedirectms14 5.252.33.100 +gamespyRedirectgpcm 5.252.33.100 +gamespyRedirectgpsp 5.252.33.100 +gamespyRedirectmaster 5.252.33.100 +gamespyRedirectgamestats 116.203.14.166 +gamespyRedirectBF2Web 116.203.14.166 +gamespyRedirecteapusher bf2web.example.org","the provider switches");
-            online.provider.services[2].second="bad value";check(setup::command_line(setup::launch_arguments(online)).find("+gamespyRedirectgpcm")==std::string::npos,"a value the game refuses was passed");
-            online.online="";check(setup::command_line(setup::launch_arguments(online)).find("+gamespyRedirect")==std::string::npos,"switches with the retail services");
-            online.online="bf2hub";online.provider={};check(setup::command_line(setup::launch_arguments(online)).find("+gamespyRedirect")==std::string::npos,"switches without a kept provider file");
-            // "*": the fallback, a domain or an IPv4 address
-            for(auto [value,passed]:{std::pair{"10.1.2.3","+gamespyRedirect 10.1.2.3"},std::pair{"example.net","+gamespyRedirect example.net"}}){
-                online.provider=setup::parse_provider(std::string("{\"schema\": 1, \"provider\": \"Mine\", \"services\": {\"*\": \"")+value+"\", \"gpcm\": \"10.9.9.9\"}}");
-                check(setup::command_line(setup::launch_arguments(online))==std::string("+modPath mods/bf2 +restart 1 ")+passed+" +gamespyRedirectgpcm 10.9.9.9","the fallback entry");
-            }
-            check(setup::provider_presets().size()==1&&setup::parse_provider(setup::provider_presets().front().json).name==setup::provider_presets().front().name,"the presets");
-            check(setup::parse_provider(setup::provider_presets().front().json).services==std::vector<std::pair<std::string,std::string>>{{"*","openspy.net"}},"the OpenSpy preset");
+            // the command line names the chosen provider's file in Setup/; nothing without a valid one or with the retail services
+            setup::LaunchOptions online;online.online="other";online.provider=parsed;online.provider_folder="/s/Setup";
+            auto other="+onlineProviderConfig "+(fs::path{"/s/Setup"}/"Provider-Other.json").string();
+            check(setup::command_line(setup::launch_arguments(online))=="+modPath mods/bf2 +restart 1 "+other,"the other provider's file");
+            {auto spaced=online;spaced.provider_folder="/Users/A B/Library/Application Support/OpenBF2/Setup";
+             auto arguments=setup::launch_arguments(spaced);
+             check(arguments.size()==6&&arguments[4]=="+onlineProviderConfig"&&arguments[5]==(fs::path{spaced.provider_folder}/"Provider-Other.json").string(),"a folder with spaces is not one argument");}
+            online.online="";check(setup::command_line(setup::launch_arguments(online)).find("+onlineProviderConfig")==std::string::npos,"a provider file with the retail services");
+            online.online="other";online.provider={};check(setup::command_line(setup::launch_arguments(online)).find("+onlineProviderConfig")==std::string::npos,"a provider file without a kept one");
+            online.provider=parsed;online.provider_folder.clear();check(setup::command_line(setup::launch_arguments(online)).find("+onlineProviderConfig")==std::string::npos,"a provider file without its folder");
+            online.provider_folder="/s/Setup";online.online="evil";check(setup::command_line(setup::launch_arguments(online)).find("+onlineProviderConfig")==std::string::npos,"a provider file for an unknown choice");
+            // the presets: bf2.org's domains for OpenSpy and BF2Hub, each a file of its own
+            check(setup::provider_presets().size()==2&&setup::provider_preset("openspy")&&setup::provider_preset("bf2hub")&&!setup::provider_preset("other")&&!setup::provider_preset(""),"the presets");
+            check(setup::parse_provider(setup::provider_preset("openspy")->json)==setup::ProviderServices{"OpenSpy",{{"*","openspy.p.bf2.org"}},std::nullopt},"the OpenSpy preset");
+            check(setup::parse_provider(setup::provider_preset("bf2hub")->json)==setup::ProviderServices{"BF2Hub",{{"*","bf2hub.p.bf2.org"}},std::nullopt},"the BF2Hub preset");
+            check(setup::provider_config_name("openspy")=="Provider-OpenSpy.json"&&setup::provider_config_name("bf2hub")=="Provider-BF2Hub.json"&&setup::provider_config_name("other")=="Provider-Other.json","the files the game reads");
+            check(setup::valid_online("bf2hub")&&setup::valid_online("openspy")&&setup::valid_online("other")&&setup::valid_online("")&&!setup::valid_online("evil")&&setup::provider_online("other")&&!setup::provider_online("bf2hub"),"the online choices");
             // valid_to: until when the file holds; without it for ever. "generated" is only information
             {
                 auto timed=setup::parse_provider(replace("\"generated\": \"2026-11-19T15:30:00Z\",","\"generated\": \"2026-11-19T15:30:00Z\", \"valid_to\": \"2026-11-26T15:30:00Z\","));
@@ -272,44 +278,64 @@ int main(int argc,char** argv){
                 check(!setup::parse_utc("2026-02-30T00:00:00Z")&&!setup::parse_utc("2026-11-19T24:00:00Z")&&!setup::parse_utc("2026-11-19T15:30:00")&&setup::parse_utc("2028-02-29T23:59:59Z"),"times of the file");
             }
             // the addresses a provider file may come from
-            for(auto good:{"https://bf2hub.krauzi.de/servers.json","https://example.org:8443/a/b.json?x=1"})check(setup::valid_provider_url(good),"a provider address was refused");
+            for(auto good:{"https://example.org/servers.json","https://example.org:8443/a/b.json?x=1"})check(setup::valid_provider_url(good),"a provider address was refused");
             for(auto bad:{"http://example.org/a.json","https://user@example.org/a.json","https://example.org/a b.json","https:///a.json","ftp://x.org","https://example.org/#x","https://300.1.1/a"})check(!setup::valid_provider_url(bad),"an unusable provider address was accepted");
             // Launch.txt keeps the choice and where each provider's file came from, never the entries; older keys are not read
-            online.provider=parsed;online.bf2hub_source="hosted";online.other_source="url";online.other_url="https://example.org/p.json";auto text=setup::launch_text(online);
+            online.online="other";online.provider=parsed;online.other_source="url";online.other_url="https://example.org/p.json";auto text=setup::launch_text(online);
             auto back=setup::parse_launch(text);
-            check(text.find("online=bf2hub")!=std::string::npos&&text.find("5.252.33.100")==std::string::npos&&back.online=="bf2hub"&&back.bf2hub_source=="hosted"&&back.other_url=="https://example.org/p.json"&&back.provider.services.empty(),"the provider choice in Launch.txt");
-            check(setup::parse_launch("online=evil\nbf2hub_source=x\nother_url=http://x.org/a\n")==setup::LaunchOptions{},"an unusable online choice or source was read");
-            check(setup::parse_launch("bf2hub=1\ngamespy=openspy.net\nredirect=10.0.0.1\nprovider=1\n")==setup::LaunchOptions{},"the keys of unreleased test builds were read");
+            check(text.find("online=other")!=std::string::npos&&text.find("5.252.33.100")==std::string::npos&&text.find("/s/Setup")==std::string::npos&&back.online=="other"&&back.other_source=="url"&&back.other_url=="https://example.org/p.json"&&back.provider.services.empty()&&back.provider_folder.empty(),"the provider choice in Launch.txt");
+            check(setup::parse_launch("online=evil\nother_source=x\nother_url=http://x.org/a\n")==setup::LaunchOptions{},"an unusable online choice or source was read");
+            check(setup::parse_launch("bf2hub=1\ngamespy=openspy.net\nredirect=10.0.0.1\nprovider=1\nbf2hub_source=hosted\n")==setup::LaunchOptions{},"the keys of unreleased test builds were read");
+            check(setup::parse_launch("online=bf2hub\nbf2hub_source=automatic\n").online=="bf2hub","a BF2Hub choice of 0.5.0 test builds was lost");
             // the kept copy: replaced only by a valid file, read with the options
             auto files=root/"provider-files";fs::create_directories(files);
             write(files/"hub.json",hub);write(files/"bad.json",replace("\"schema\": 1","\"schema\": 9"));write(files/"big.json",hub+std::string(setup::provider_file_limit,' '));
-            check(!session::storedProvider(support,"bf2hub")&&!session::storedProvider(support,"other"),"a provider file before one was chosen");
-            check(session::importProvider(support,"bf2hub",files/"hub.json",*platform)==parsed&&read(support/"Setup/Provider-BF2Hub.json")==hub&&session::storedProvider(support,"bf2hub")==parsed,"BF2Hub's file was not kept");
-            check(!session::storedProvider(support,"other"),"BF2Hub's file was kept as the other provider's");
-            rejects([&]{session::importProvider(support,"bf2hub",files/"bad.json",*platform);},"an invalid provider file was kept");
-            rejects([&]{session::importProvider(support,"bf2hub",files/"big.json",*platform);},"an oversized provider file was kept");
-            rejects([&]{session::importProvider(support,"bf2hub",files/"missing.json",*platform);},"a missing provider file was kept");
-            rejects([&]{session::importProvider(support,"bf2hub",files,*platform);},"a folder was kept as provider file");
+            check(!session::storedProvider(support,"other"),"a provider file before one was chosen");
+            check(session::importProvider(support,"other",files/"hub.json",*platform)==parsed&&read(support/"Setup/Provider-Other.json")==hub&&session::storedProvider(support,"other")==parsed,"the other provider's file was not kept");
+            rejects([&]{session::importProvider(support,"other",files/"bad.json",*platform);},"an invalid provider file was kept");
+            rejects([&]{session::importProvider(support,"other",files/"big.json",*platform);},"an oversized provider file was kept");
+            rejects([&]{session::importProvider(support,"other",files/"missing.json",*platform);},"a missing provider file was kept");
+            rejects([&]{session::importProvider(support,"other",files,*platform);},"a folder was kept as provider file");
+            rejects([&]{session::keepProvider(support,"openspy",hub,*platform);},"a provider file was kept for OpenSpy");
+            rejects([&]{session::keepProvider(support,"bf2hub",hub,*platform);},"a provider file was kept for BF2Hub");
+            rejects([&]{session::keepProvider(support,"other","{}",*platform);},"an invalid provider file was kept");
+            check(read(support/"Setup/Provider-Other.json")==hub&&!fs::exists(support/"Setup/Provider-Other.pending"),"a refused file changed the kept one");
             write(files/"old.json",replace("\"generated\": \"2026-11-19T15:30:00Z\",","\"valid_to\": \"2020-01-01T00:00:00Z\","));
             check(session::importProvider(support,"other",files/"old.json",*platform).valid_to==setup::parse_utc("2020-01-01T00:00:00Z"),"a file which has run out was refused: it stays usable, as out of date");
-            fs::remove(support/"Setup/Provider-Other.json");
-            rejects([&]{session::keepProvider(support,"openspy",hub,*platform);},"a provider file was kept for OpenSpy");
-            rejects([&]{session::keepProvider(support,"bf2hub","{}",*platform);},"an invalid provider file was kept");
-            check(read(support/"Setup/Provider-BF2Hub.json")==hub&&!fs::exists(support/"Setup/Provider-BF2Hub.pending"),"a refused file changed the kept one");
             auto mine=std::string("{\"schema\": 1, \"provider\": \"Mine\", \"services\": {\"*\": \"10.0.0.7\"}}");
-            check(session::keepProvider(support,"other",mine,*platform).name=="Mine"&&read(support/"Setup/Provider-Other.json")==mine&&session::storedProvider(support,"bf2hub")==parsed,"the other provider's file was not kept beside BF2Hub's");
+            check(session::keepProvider(support,"other",mine,*platform).name=="Mine"&&read(support/"Setup/Provider-Other.json")==mine,"the other provider's file was not replaced");
+            // read with the options: a preset's services, or the kept file; the folder the game reads them in
             auto saved=session::loadLaunch(support);
-            setup::LaunchOptions chosen=saved;chosen.online="bf2hub";session::saveLaunch(support,chosen,*platform);
-            check(session::loadLaunch(support).provider==parsed,"the options were read without BF2Hub's services");
-            chosen.online="other";session::saveLaunch(support,chosen,*platform);
+            check(saved.provider_folder==(support/"Setup").string(),"the options were read without the provider folder");
+            setup::LaunchOptions chosen=saved;chosen.online="other";session::saveLaunch(support,chosen,*platform);
             check(session::loadLaunch(support).provider.name=="Mine","the options were read without the other provider's services");
             chosen.online="openspy";session::saveLaunch(support,chosen,*platform);
-            check(session::loadLaunch(support).provider.services.front().second=="openspy.net","the options were read without OpenSpy's preset");
+            check(session::loadLaunch(support).provider.services.front().second=="openspy.p.bf2.org","the options were read without OpenSpy's preset");
             chosen.online="bf2hub";session::saveLaunch(support,chosen,*platform);
-            write(support/"Setup/Provider-BF2Hub.json","{}");check(!session::storedProvider(support,"bf2hub")&&session::loadLaunch(support).online=="bf2hub"&&session::loadLaunch(support).provider.services.empty(),"a broken kept file gave services");
-            fs::remove(support/"Setup/Provider-BF2Hub.json");fs::create_symlink(files/"hub.json",support/"Setup/Provider-BF2Hub.json");
-            check(!session::storedProvider(support,"bf2hub"),"a symlinked provider file was read");
-            fs::remove(support/"Setup/Provider-BF2Hub.json");fs::remove(support/"Setup/Provider-Other.json");session::saveLaunch(support,saved,*platform);
+            check(session::loadLaunch(support).provider.services.front().second=="bf2hub.p.bf2.org","the options were read without BF2Hub's preset");
+            // the preset's file is written where the game reads it, replacing whatever was there; not for another choice
+            {auto options=session::loadLaunch(support);
+             write(support/"Setup/Provider-BF2Hub.json","old");session::writeProviderPreset(options,*platform);
+             check(read(support/"Setup/Provider-BF2Hub.json")==setup::provider_preset("bf2hub")->json,"the BF2Hub preset was not written");
+             {auto plain=options;plain.override.clear();auto arguments=setup::launch_arguments(plain);auto at=std::ranges::find(arguments,std::string("+onlineProviderConfig"));
+              check(at!=arguments.end()&&at+1!=arguments.end()&&*(at+1)==(support/"Setup/Provider-BF2Hub.json").string(),"the command line does not name the written preset");}
+             options.online="other";write(support/"Setup/Provider-Other.json",mine);session::writeProviderPreset(options,*platform);
+             check(read(support/"Setup/Provider-Other.json")==mine,"the other provider's file was overwritten");
+             options.online="openspy";fs::remove(support/"Setup/Provider-BF2Hub.json");fs::create_symlink(files/"hub.json",support/"Setup/Provider-OpenSpy.json");
+             rejects([&]{session::writeProviderPreset(options,*platform);},"a preset was written through a link");
+             check(read(files/"hub.json")==hub,"a link's target was changed");
+             fs::remove(support/"Setup/Provider-OpenSpy.json");session::writeProviderPreset(options,*platform);
+             check(read(support/"Setup/Provider-OpenSpy.json")==setup::provider_preset("openspy")->json,"the OpenSpy preset was not written");
+             fs::remove(support/"Setup/Provider-OpenSpy.json");}
+            // a hubtool file of a 0.5.0 test build in Provider-BF2Hub.json is not read: BF2Hub is the preset
+            write(support/"Setup/Provider-BF2Hub.json",hub);
+            check(session::loadLaunch(support).provider.name=="BF2Hub"&&session::loadLaunch(support).provider.services.size()==1,"an old BF2Hub file was read instead of the preset");
+            fs::remove(support/"Setup/Provider-BF2Hub.json");
+            chosen.online="other";session::saveLaunch(support,chosen,*platform);
+            write(support/"Setup/Provider-Other.json","{}");check(!session::storedProvider(support,"other")&&session::loadLaunch(support).online=="other"&&session::loadLaunch(support).provider.services.empty(),"a broken kept file gave services");
+            fs::remove(support/"Setup/Provider-Other.json");fs::create_symlink(files/"hub.json",support/"Setup/Provider-Other.json");
+            check(!session::storedProvider(support,"other"),"a symlinked provider file was read");
+            fs::remove(support/"Setup/Provider-Other.json");session::saveLaunch(support,saved,*platform);
         }
         {
             // the demos of the game folder: its Demos folder in any spelling, recordings and .con files, newest first
@@ -322,36 +348,6 @@ int main(int argc,char** argv){
             check(demos==std::vector<fs::path>{"demos/new.BF2DEMO","demos/play.con","demos/old.bf2demo"},"the demos of the game folder");
             check(session::findDemos(root/"missing").empty(),"demos of a missing game folder");
             check(session::loadLaunch(support).demo_config==(support/"Setup/Demo.con").string(),"the options were read without the path of the demo's .con");
-        }
-        {
-            // openbf2-hubtool: what its exit codes mean, and which runs give a provider file (synthetic output)
-            const std::string json="{\"schema\": 1, \"provider\": \"BF2Hub\", \"services\": {\"available\": \"10.0.0.1\", \"gpcm\": \"10.0.0.2\"}}";
-            setup::HubtoolRun run;run.exitCode=0;run.out=json+"\r\n";
-            check(setup::hubtool_provider(run)==json+"\n"&&setup::parse_provider(setup::hubtool_provider(run)).services.size()==2,"a run with exit 0 gave no provider file");
-            run.exitCode=6;check(setup::hubtool_provider(run)==json+"\n","exit 6, which still prints the file, was refused");
-            for(auto [code,line]:{std::pair{2,"The BF2Hub installer or the game's BF2.exe could not be used."},std::pair{3,"The BF2Hub tool's sandbox could not start."},
-                                  std::pair{4,"The BF2Hub client could not be asked."},std::pair{5,"BF2Hub gave no addresses."},std::pair{6,"The BF2Hub tool could not write its file."},
-                                  std::pair{9,"The BF2Hub tool failed (exit code 9)."}}){
-                setup::HubtoolRun failed;failed.exitCode=code;failed.out=code==6?"":json;
-                check(setup::hubtool_failure(failed)==line,"an exit code's meaning");
-                bool refused=false;try{setup::hubtool_provider(failed);}catch(const std::exception& e){refused=std::string(e.what())==line;}
-                check(refused,"a failed run gave a provider file, or not its exit code's meaning");
-            }
-            {setup::HubtoolRun late;late.timedOut=true;late.exitCode=0;late.out=json;bool refused=false;try{setup::hubtool_provider(late);}catch(const std::exception& e){refused=std::string(e.what())=="BF2Hub did not answer in time.";}check(refused,"a stopped run gave a provider file");}
-            for(auto out:{std::string(""),std::string("  \n"),std::string("not json"),std::string("{\"schema\": 1, \"provider\": \"BF2Hub\", \"services\": {\"gpcm\": \"x +multi 1\"}}")}){
-                setup::HubtoolRun bad;bad.exitCode=0;bad.out=out;rejects([&]{setup::hubtool_provider(bad);},"a run with no valid provider file on stdout was accepted");
-            }
-            std::string err;for(int i=1;i<=30;++i)err+="line "+std::to_string(i)+"\r\n";err+="\n\n";
-            auto tail=setup::last_lines(err);
-            check(tail.rfind("line 11\n",0)==0&&tail.ends_with("line 30\n")&&std::count(tail.begin(),tail.end(),'\n')==20,"the last 20 lines of the error output");
-            check(setup::last_lines("only\n")=="only\n"&&setup::last_lines("").empty(),"short error output");
-            // BF2.exe of the content contract, looked up without regard to case
-            auto manifest=root/"manifest.tsv";
-            write(manifest,"# contract\nother.dll\t1\t00\nBF2.exe\t6556160\t2f08d8fced27d8512fc0d0681c33a0eb066947af08d156b191744cc89f4ac257\n");
-            auto bf2=setup::manifest_file(manifest,"bf2.exe");
-            check(bf2.path=="BF2.exe"&&bf2.size==6556160&&bf2.sha256=="2f08d8fced27d8512fc0d0681c33a0eb066947af08d156b191744cc89f4ac257","BF2.exe of the manifest");
-            rejects([&]{setup::manifest_file(manifest,"missing.exe");},"a file missing from the manifest was found");
-            if(!setup::fs::exists("C:/"))rejects([&]{setup::run_hubtool(root,root/"tool",root/"installer",std::chrono::seconds(1));},"the BF2Hub tool ran outside Windows");
         }
         check(!session::storedKey(support),"legacy format-only registry accepted");
         for(auto invalidKey:{key,std::string("bad")}) {

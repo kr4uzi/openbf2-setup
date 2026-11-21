@@ -70,8 +70,8 @@ int main(int argc, char** argv) {
 	QApplication app(argc, argv); app.setQuitOnLastWindowClosed(false);
 	const bool complete = app.arguments().contains("--complete");
 	g_Machine = FakeMachine{}; g_Machine.microphone_allowed = false;
-	g_Machine.provider_files["BF2Hub.json"] = R"({"schema": 1, "provider": "BF2Hub", "generator": "openbf2-hubprobe 0.1",
-		"services": {"available": "5.252.33.100", "ms14": "5.252.33.100", "gpcm": "5.252.33.100", "gpsp": "5.252.33.100", "BF2Web": "116.203.14.166"}})";
+	g_Machine.provider_files["Example.json"] = R"({"schema": 1, "provider": "Example",
+		"services": {"*": "example.org", "ms14": "10.0.0.1", "gpcm": "10.0.0.2", "gpsp": "10.0.0.2", "BF2Web": "stats.example.org"}})";
 	g_Machine.provider_files["wrong.json"] = R"({"schema": 2})";
 	boost::asio::io_context context;
 	Worker worker; Window window(context); window.StayHidden();
@@ -107,42 +107,49 @@ int main(int argc, char** argv) {
 		else if (stage >= 5 && page == Page::voice) { window.Click(Kind::voice_skip); stage = 7; }
 		else if (stage == 7 && page == Page::launcher) {
 			try { advancedDialog(window); } catch (const std::exception& e) { std::cerr << "advanced options: " << e.what() << '\n'; advancedFailed = true; }
-			// BF2Hub without a kept file asks for one: the dialog opens and the choice stays until a file is accepted
+			// BF2Hub is a preset: no dialog, no Configure…, its file goes to the game
 			try {
 				auto choice = find<QComboBox>("onlineServicesChoice");
 				choice->setCurrentIndex(choice->findData(QString("bf2hub"))); emit choice->activated(choice->currentIndex());
-				// the test window stays hidden and opens no dialog: the dialog was set up for BF2Hub
-				if (choice->currentData().toString() != "" || find<QLabel>("providerTitle")->text() != "BF2Hub") throw std::runtime_error("BF2Hub without a file did not ask for one");
+				auto options = window.Options();
+				if (options.online != "bf2hub" || options.provider.name != "BF2Hub" || !find<QLabel>("providerTitle")->text().isEmpty()) throw std::runtime_error("BF2Hub was not taken as a preset");
+				if (!find<QPushButton>("onlineServicesConfigure")->isHidden()) throw std::runtime_error("BF2Hub offers Configure…");
+				auto line = command_line(launch_arguments(options));
+				if (line.find("+onlineProviderConfig " + (std::filesystem::path{ "/support/Setup" } / "Provider-BF2Hub.json").string()) == std::string::npos) throw std::runtime_error("the BF2Hub preset's file is not passed: " + line);
+				// Other without a kept file asks for one: the dialog opens and the choice stays until a file is accepted
+				choice->setCurrentIndex(choice->findData(QString("other"))); emit choice->activated(choice->currentIndex());
+				// the test window stays hidden and opens no dialog: the dialog was set up for the other provider
+				if (choice->currentData().toString() != "bf2hub" || find<QLabel>("providerTitle")->text() != "Other Online Services") throw std::runtime_error("Other without a file did not ask for one");
 				find<QLabel>("providerTitle")->setText(QString());
 			} catch (const std::exception& e) { std::cerr << "provider file: " << e.what() << '\n'; advancedFailed = true; }
-			window.Choose(Kind::bf2hub_file, "BF2Hub.json"); stage = 71;
+			window.Choose(Kind::other_file, "Example.json"); stage = 71;
 		}
-		// the online services: BF2Hub's file is in use, its entries are on the command line; a wrong file keeps it;
+		// the online services: the other provider's file is in use and goes to the game; a wrong file keeps it;
 		// Retail goes back to the game's own
-		else if (stage == 71 && page == Page::launcher && window.Options().online == "bf2hub" && !window.Options().provider.services.empty()) {
+		else if (stage == 71 && page == Page::launcher && window.Options().online == "other" && !window.Options().provider.services.empty()) {
 			try {
 				auto line = find<QLineEdit>("commandLine")->text().toStdString();
-				if (line.find("+gamespyRedirectavailable 5.252.33.100 +gamespyRedirectms14 5.252.33.100 +gamespyRedirectgpcm 5.252.33.100 +gamespyRedirectgpsp 5.252.33.100 +gamespyRedirectBF2Web 116.203.14.166") == std::string::npos)
-					throw std::runtime_error("the command line lacks the provider switches: " + line);
-				if (find<QLabel>("onlineServicesStatus")->text() != "From a file") throw std::runtime_error("the status says " + find<QLabel>("onlineServicesStatus")->text().toStdString());
-				if (find<QPushButton>("onlineServicesConfigure")->isHidden()) throw std::runtime_error("BF2Hub offers no Configure…");
+				if (line.find("+onlineProviderConfig " + (std::filesystem::path{ "/support/Setup" } / "Provider-Other.json").string()) == std::string::npos)
+					throw std::runtime_error("the command line does not name the provider file: " + line);
+				if (find<QLabel>("onlineServicesStatus")->text() != "Example · from a file") throw std::runtime_error("the status says " + find<QLabel>("onlineServicesStatus")->text().toStdString());
+				if (find<QPushButton>("onlineServicesConfigure")->isHidden()) throw std::runtime_error("Other offers no Configure…");
 			} catch (const std::exception& e) { std::cerr << "provider file: " << e.what() << '\n'; advancedFailed = true; }
-			window.Choose(Kind::bf2hub_file, "wrong.json"); ++stage;
+			window.Choose(Kind::other_file, "wrong.json"); ++stage;
 		}
 		else if (stage == 72 && page == Page::launcher && std::ranges::count(g_Machine.calls, std::string("import-provider")) == 2) {
-			if (window.Options().online != "bf2hub" || window.Options().provider.services.size() != 5) { std::cerr << "provider file: a refused file dropped the one in use\n"; advancedFailed = true; }
+			if (window.Options().online != "other" || window.Options().provider.services.size() != 5) { std::cerr << "provider file: a refused file dropped the one in use\n"; advancedFailed = true; }
 			auto choice = find<QComboBox>("onlineServicesChoice");
 			choice->setCurrentIndex(0); emit choice->activated(0);
 			if (!window.Options().online.empty() || !find<QPushButton>("onlineServicesConfigure")->isHidden() || !find<QLabel>("onlineServicesStatus")->isHidden())
 				{ std::cerr << "provider file: Retail did not go back to the game's own services\n"; advancedFailed = true; }
-			// BF2Hub again: its kept file, no dialog
-			choice->setCurrentIndex(choice->findData(QString("bf2hub"))); emit choice->activated(choice->currentIndex());
-			if (window.Options().online != "bf2hub" || !find<QLabel>("providerTitle")->text().isEmpty()) { std::cerr << "provider file: BF2Hub did not take its kept file\n"; advancedFailed = true; }
+			// Other again: its kept file, no dialog
+			choice->setCurrentIndex(choice->findData(QString("other"))); emit choice->activated(choice->currentIndex());
+			if (window.Options().online != "other" || !find<QLabel>("providerTitle")->text().isEmpty()) { std::cerr << "provider file: Other did not take its kept file\n"; advancedFailed = true; }
 			choice->setCurrentIndex(0); emit choice->activated(0);
 			++stage;
 		}
-		// the setup has answered the edit: the command line has no provider switch any more
-		else if (stage == 73 && page == Page::launcher && !find<QLineEdit>("commandLine")->text().contains("gamespyRedirect")) stage = 8;
+		// the setup has answered the edit: the command line names no provider file any more
+		else if (stage == 73 && page == Page::launcher && !find<QLineEdit>("commandLine")->text().contains("onlineProviderConfig")) stage = 8;
 		else if (stage == 8 && page == Page::launcher) {
 			verifiedBefore = std::ranges::count(g_Machine.calls, std::string("verify"));
 			if (pressed("verifyGameDataButton", Kind::verify)) ++stage;

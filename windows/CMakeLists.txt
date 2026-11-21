@@ -25,22 +25,6 @@ add_custom_command(TARGET OpenBF2 POST_BUILD
     --skip-plugin-types networkinformation "$<TARGET_FILE:OpenBF2>"
   VERBATIM)
 
-# openbf2-hubtool.exe, built by ci/build-hubtool.sh from the commit pinned in ci/versions.env: the BF2Hub provider file
-# from the user's own BF2Hub installer. Optional; without it the launcher's BF2Hub button says the build has none
-set(SETUP_HUBTOOL "" CACHE FILEPATH "openbf2-hubtool.exe (ci/build-hubtool.sh)")
-if(SETUP_HUBTOOL)
-  if(NOT EXISTS "${SETUP_HUBTOOL}")
-    message(FATAL_ERROR "SETUP_HUBTOOL: ${SETUP_HUBTOOL} does not exist")
-  endif()
-  get_filename_component(hubtool_dir "${SETUP_HUBTOOL}" DIRECTORY)
-  add_custom_target(bf2_setup_hubtool ALL
-    COMMAND "${CMAKE_COMMAND}" -E copy "${SETUP_HUBTOOL}" "${app_dir}/openbf2-hubtool.exe"
-    COMMAND "${CMAKE_COMMAND}" -E copy "${hubtool_dir}/openbf2-hubtool-LICENSE.txt" "${app_dir}/licences/openbf2-hubtool-LICENSE.txt"
-    COMMAND "${CMAKE_COMMAND}" -E copy "${hubtool_dir}/LZMA-SDK-NOTICE.txt" "${app_dir}/licences/LZMA-SDK-NOTICE.txt"
-    VERBATIM)
-  add_dependencies(bf2_setup_hubtool OpenBF2)
-endif()
-
 # The client packages are supplied by the engine's build, never fetched here: the x64 one (BF2.exe with its
 # DLLs and BF2OpenAL.dll) and the x86 one for PunkBuster servers. Each folder is copied as it is.
 set(SETUP_CLIENT_X64 "" CACHE PATH "Folder with the x64 client package (BF2.exe and its DLLs)")

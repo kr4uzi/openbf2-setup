@@ -2,7 +2,6 @@
 #include "client.h"
 #include "microphone.h"
 #include "store.h"
-#include "hubtool.h"
 
 #include <algorithm>
 #include <exception>
@@ -171,9 +170,6 @@ task<bool> Setup::Launcher(const Installation& installation)
 				m_Window.Message("The demos folder could not be opened", e.what());
 			}
 			break;
-		case Event::Kind::bf2hub_installer:
-		case Event::Kind::bf2hub_hosted:
-		case Event::Kind::bf2hub_file:
 		case Event::Kind::other_url:
 		case Event::Kind::other_file:
 			if (!SaveOptions())
@@ -242,30 +238,19 @@ task<bool> Setup::VerifyGameData()
 task<void> Setup::ConfigureProvider(const Installation& installation, const Event& event)
 {
 	using Kind = Event::Kind;
-	auto online = event.kind == Kind::other_url || event.kind == Kind::other_file ? std::string{ "other" } : std::string{ "bf2hub" };
-	auto source = event.kind == Kind::bf2hub_installer ? "automatic" : event.kind == Kind::bf2hub_hosted ? "hosted" : event.kind == Kind::other_url ? "url" : "file";
-	auto url = event.kind == Kind::bf2hub_hosted ? std::string{ bf2hub_hosted_url } : event.kind == Kind::other_url ? event.path.string() : std::string{};
+	auto online = std::string{ "other" };
+	auto source = event.kind == Kind::other_url ? "url" : "file";
+	auto url = event.kind == Kind::other_url ? event.path.string() : std::string{};
 	auto services = std::optional<ProviderServices>{};
-	auto failure = std::string{}, details = std::string{};
-	// the tool and a download take a while: the page waits
-	if (event.kind != Kind::bf2hub_file && event.kind != Kind::other_file)
-		m_Window.SetBusy(event.kind == Kind::bf2hub_installer ? "Asking BF2Hub…" : "Downloading…");
+	auto failure = std::string{};
 	try {
-		if (event.kind == Kind::bf2hub_file || event.kind == Kind::other_file)
+		if (event.kind == Kind::other_file)
 			services = m_Store.ImportProvider(online, event.path);
-		else if (event.kind == Kind::bf2hub_installer) {
-			auto run = co_await m_Installer.ProbeBf2hub(event.path);
-			try {
-				services = m_Store.KeepProvider(online, hubtool_provider(run));
-			}
-			catch (const std::exception&) {
-				details = last_lines(run.err);
-				throw;
-			}
-		}
 		else {
 			if (!valid_provider_url(url))
 				throw std::runtime_error{ "The address is not one a provider file can come from: it must start with https://." };
+			// a download takes a while: the page waits
+			m_Window.SetBusy("Downloading…");
 			services = m_Store.KeepProvider(online, co_await m_Window.Download(url));
 		}
 	}
@@ -281,22 +266,20 @@ task<void> Setup::ConfigureProvider(const Installation& installation, const Even
 		m_Window.SetCommandLine(command_line(launch_arguments(m_Window.Options())));
 	}
 	else
-		m_Window.Message(online == "bf2hub" ? "BF2Hub's addresses could not be read" : "The provider file was not accepted", failure, details);
+		m_Window.Message("The provider file was not accepted", failure);
 }
 
 task<void> Setup::RefreshProvider()
 {
 	// a downloaded file which no longer holds is downloaded again; the old one stays in use when that fails
 	auto options = m_Store.LoadLaunch();
-	auto online = options.online;
-	auto url = online == "bf2hub" && options.bf2hub_source == "hosted" ? std::string{ bf2hub_hosted_url }
-		: online == "other" && options.other_source == "url" ? options.other_url : std::string{};
+	auto url = options.online == "other" && options.other_source == "url" ? options.other_url : std::string{};
 	auto now = std::chrono::time_point_cast<std::chrono::seconds>(std::chrono::system_clock::now());
 	if (url.empty() || (!options.provider.services.empty() && !provider_expired(options.provider, now)))
 		co_return;
 
 	try {
-		m_Store.KeepProvider(online, co_await m_Window.Download(url));
+		m_Store.KeepProvider(options.online, co_await m_Window.Download(url));
 		m_RefreshFailed = false;
 	}
 	catch (const std::exception&) {

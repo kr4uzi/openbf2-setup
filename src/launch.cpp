@@ -104,12 +104,10 @@ std::vector<std::string> setup::launch_arguments(const LaunchOptions& options)
 	if (auto player = clean(options.player); !player.empty())
 		arguments.insert(arguments.end(), { "+playerName", player });
 
-	// the online services: the provider file's entries as it writes them, "+gamespyRedirect" and the key, then the
-	// value; a value the game would refuse is not passed
-	if (!options.online.empty())
-		for (const auto& [key, value] : options.provider.services)
-			if (valid_service(key, value))
-				arguments.insert(arguments.end(), { service_switch(key), value });
+	// the online services: the file of the chosen provider, which the game reads itself. nothing without a valid one,
+	// so the game keeps the retail services
+	if (valid_online(options.online) && !options.online.empty() && !options.provider.services.empty() && !options.provider_folder.empty())
+		arguments.insert(arguments.end(), { "+onlineProviderConfig", (std::filesystem::path{ options.provider_folder } / provider_config_name(options.online)).string() });
 
 	if (options.no_sound)
 		arguments.insert(arguments.end(), { "+noSound", "1" });
@@ -221,12 +219,17 @@ std::string setup::argument_mod(const std::vector<std::string>& arguments)
 
 bool setup::provider_online(const std::string& online)
 {
-	return online == "bf2hub" || online == "other";
+	return online == "other";
 }
 
 bool setup::valid_online(const std::string& online)
 {
-	return online.empty() || online == "openspy" || provider_online(online);
+	return online.empty() || provider_preset(online) || provider_online(online);
+}
+
+std::string setup::provider_config_name(const std::string& online)
+{
+	return online == "openspy" ? "Provider-OpenSpy.json" : online == "bf2hub" ? "Provider-BF2Hub.json" : "Provider-Other.json";
 }
 
 bool setup::demo_recording(const std::string& demo)
@@ -258,7 +261,6 @@ std::string setup::launch_text(const LaunchOptions& options)
 		<< "always_show=" << (options.always_show ? 1 : 0) << '\n'
 		<< "client=" << (options.client == "x86" ? "x86" : "x64") << '\n'
 		<< "online=" << (valid_online(options.online) ? options.online : std::string{}) << '\n'
-		<< "bf2hub_source=" << clean(options.bf2hub_source) << '\n'
 		<< "other_source=" << clean(options.other_source) << '\n'
 		<< "other_url=" << (valid_provider_url(clean(options.other_url)) ? clean(options.other_url) : std::string{}) << '\n'
 		<< "no_sound=" << (options.no_sound ? 1 : 0) << '\n'
@@ -312,8 +314,6 @@ LaunchOptions setup::parse_launch(const std::string& text)
 			options.client = trim(value) == "x86" ? "x86" : "x64";
 		else if (name == "online")
 			options.online = valid_online(trim(value)) ? trim(value) : std::string{};
-		else if (name == "bf2hub_source")
-			options.bf2hub_source = trim(value) == "automatic" || trim(value) == "hosted" || trim(value) == "file" ? trim(value) : std::string{};
 		else if (name == "other_source")
 			options.other_source = trim(value) == "url" || trim(value) == "file" ? trim(value) : std::string{};
 		else if (name == "other_url")

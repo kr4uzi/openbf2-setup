@@ -1,5 +1,6 @@
 #include "online.h"
 
+#include <algorithm>
 #include <cctype>
 #include <memory>
 #include <stdexcept>
@@ -302,18 +303,20 @@ namespace {
 
 }
 
+const std::vector<std::string>& setup::service_labels()
+{
+	// the game's list (OnlineProvider.cpp), in its order
+	static const std::vector<std::string> labels{ "available", "ms14", "master", "gpcm", "gpsp", "gamestats", "BF2Web", "stage-net", "natneg1", "natneg2", "natneg3", "eapusher" };
+	return labels;
+}
+
 bool setup::valid_service(const std::string& key, const std::string& value)
 {
 	// "battlefield2.available." is the longest name part the game puts before a domain
 	if (key == "*")
 		return valid_ipv4(value) || (valid_target(value) && value.size() <= 253 - 23);
 
-	return valid_target(value);
-}
-
-std::string setup::service_switch(const std::string& key)
-{
-	return key == "*" ? std::string{ "+gamespyRedirect" } : "+gamespyRedirect" + key;
+	return std::ranges::find(service_labels(), key) != service_labels().end() && valid_target(value);
 }
 
 std::optional<std::chrono::sys_seconds> setup::parse_utc(const std::string& text)
@@ -358,11 +361,19 @@ bool setup::valid_provider_url(const std::string& url)
 
 const std::vector<setup::ProviderPreset>& setup::provider_presets()
 {
-	// OpenSpy serves the retail names under its own domain
+	// bf2.org serves the retail names of both under a domain of its own: battlefield2.available.gamespy.com is
+	// battlefield2.available.openspy.p.bf2.org, and so on
 	static const std::vector<ProviderPreset> presets{
-		{ "OpenSpy", R"({"schema": 1, "provider": "OpenSpy", "services": {"*": "openspy.net"}})" },
+		{ "openspy", R"({"schema": 1, "provider": "OpenSpy", "services": {"*": "openspy.p.bf2.org"}})" },
+		{ "bf2hub", R"({"schema": 1, "provider": "BF2Hub", "services": {"*": "bf2hub.p.bf2.org"}})" },
 	};
 	return presets;
+}
+
+const setup::ProviderPreset* setup::provider_preset(const std::string& online)
+{
+	auto found = std::ranges::find_if(provider_presets(), [&](const ProviderPreset& preset) { return online == preset.online; });
+	return found == provider_presets().end() ? nullptr : &*found;
 }
 
 setup::ProviderServices setup::parse_provider(const std::string& json)
@@ -396,13 +407,16 @@ setup::ProviderServices setup::parse_provider(const std::string& json)
 		throw std::runtime_error{ "The file names no services." };
 
 	for (const auto& [key, value] : services->members) {
-		// the key ends the switch's name: letters, digits and '-' (stage-net), so the command line stays one switch;
-		// "*" is the switch without a label
-		auto name = key == "*" || (!key.empty() && key.size() <= 32);
-		for (auto c : key == "*" ? std::string{} : key)
-			name = name && (std::isalnum(static_cast<unsigned char>(c)) || c == '-');
-		if (!name)
-			throw std::runtime_error{ "The service key \"" + key.substr(0, 40) + "\" is not \"*\" or a name of letters, digits and '-'." };
+		// the game refuses a label it does not know: a misspelt one would send its service to the fallback
+		if (key != "*" && std::ranges::find(service_labels(), key) == service_labels().end()) {
+			auto known = std::string{};
+			for (const auto& label : service_labels())
+				known += (known.empty() ? "" : ", ") + label;
+			auto shown = std::string{};
+			for (auto c : key.substr(0, 40))
+				shown += std::isprint(static_cast<unsigned char>(c)) ? c : '?';
+			throw std::runtime_error{ "The service \"" + shown + "\" is not one the game knows: \"*\" or one of " + known + "." };
+		}
 		if (value->kind != Value::Kind::string || !valid_service(key, value->text))
 			throw std::runtime_error{ key == "*"
 				? std::string{ "The service \"*\" has no usable value: it must be an IPv4 address or a domain name." }

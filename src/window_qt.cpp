@@ -137,8 +137,8 @@ public:
 };
 #endif
 
-// the online services of the launcher page: the game's own, OpenSpy, BF2Hub or another provider, what the provider
-// file holds, and Configure… for the two which take one. a provider file dropped on the row is chosen as well
+// the online services of the launcher page: the game's own, OpenSpy, BF2Hub or another provider, and for the other
+// provider what its file holds and Configure…. a provider file dropped on the row is chosen as the other provider's
 class OnlineRow : public QWidget {
 public:
 	std::function<void(const std::filesystem::path&)> dropped;
@@ -318,19 +318,20 @@ struct Window::Impl {
 	QSpinBox *positionX, *positionY;
 	QPushButton *next, *back, *microphone, *skip, *voice, *verify, *modsFolder;
 	QLabel *heading, *installStatus, *micStatus, *profileNote, *launcherNote, *optionHint;
-	// the online services: the row of the launcher page, the kept provider files of "bf2hub" and "other", where they
-	// came from, and the choice to go back to when the dialog is cancelled
+	// the online services: the row of the launcher page, the kept provider file of "other", where it came from, and
+	// the choice to go back to when the dialog is cancelled
 	OnlineRow* onlineRow;
 	std::map<std::string, ProviderServices> kept;
-	std::string bf2hubSource, otherSource, otherUrl;
+	std::string otherSource, otherUrl;
+	// Setup/ in the support root, where the game reads the provider file (LaunchOptions::provider_folder)
+	std::string providerFolder;
 	int onlineBefore = 0;
-	// the provider dialog, for BF2Hub or for another provider
+	// the provider dialog of the other provider
 	QDialog* providerDialog;
-	std::string providerMode;
 	QLabel *providerTitle, *providerIntro;
-	QRadioButton *automaticChoice, *hostedChoice, *urlChoice, *fileChoice;
-	QWidget *automaticRow, *urlRow;
-	QLineEdit *installerPath, *urlField, *filePath;
+	QRadioButton *urlChoice, *fileChoice;
+	QWidget* urlRow;
+	QLineEdit *urlField, *filePath;
 	QPushButton* providerOk;
 	QNetworkAccessManager* network = nullptr;
 	QProgressBar* meter;
@@ -456,17 +457,18 @@ struct Window::Impl {
 		password = new QLineEdit; password->setAccessibleName("Server password"); password->setEchoMode(QLineEdit::Password); password->setPlaceholderText("none");
 		password->setToolTip("The server's password, if it has one (+password)");
 		form->addWidget(new QLabel("Player name"), 1, 0); form->addWidget(player, 1, 1);
-		// the online services: the game's own, OpenSpy, or a provider file whose entries become +gamespyRedirect switches
+		// the online services: the game's own, a preset, or the other provider's file; the game reads the chosen one
+		// (+onlineProviderConfig)
 		onlineRow = new OnlineRow;
-		onlineRow->choice->setToolTip("Who provides the server list, logins and stats. OpenSpy needs nothing more; BF2Hub and Other take a provider file, which Configure… sets up. The command line below shows the switches");
+		onlineRow->choice->setToolTip("Who provides the server list, logins and stats. OpenSpy and BF2Hub need nothing more; Other takes a provider file, which Configure… sets up. The game reads the chosen provider's file (+onlineProviderConfig)");
 		onlineRow->choice->setItemData(0, "The game's own services (gamespy.com)", Qt::ToolTipRole);
-		onlineRow->choice->setItemData(1, "OpenSpy's services (+gamespyRedirect openspy.net); not verified by OpenBF2", Qt::ToolTipRole);
-		onlineRow->choice->setItemData(2, "BF2Hub's services, from its installer, from the file OpenBF2 hosts, or from a file; not verified by OpenBF2", Qt::ToolTipRole);
+		onlineRow->choice->setItemData(1, "OpenSpy's services, under bf2.org's names (openspy.p.bf2.org); not verified by OpenBF2", Qt::ToolTipRole);
+		onlineRow->choice->setItemData(2, "BF2Hub's services, under bf2.org's names (bf2hub.p.bf2.org); not verified by OpenBF2", Qt::ToolTipRole);
 		onlineRow->choice->setItemData(3, "Another provider's services, from a provider file on the web or on this computer", Qt::ToolTipRole);
 		onlineRow->configure->setToolTip("Where the provider file comes from, and getting it again");
 		QObject::connect(onlineRow->choice, &QComboBox::activated, &shell, [this] { chooseOnline(); });
-		QObject::connect(onlineRow->configure, &QPushButton::clicked, &shell, [this] { openProvider(currentOnline()); });
-		onlineRow->dropped = [this](const std::filesystem::path& file) { send(currentOnline() == "bf2hub" ? Kind::bf2hub_file : Kind::other_file, file); };
+		QObject::connect(onlineRow->configure, &QPushButton::clicked, &shell, [this] { openProvider(); });
+		onlineRow->dropped = [this](const std::filesystem::path& file) { send(Kind::other_file, file); };
 		buildProviderDialog();
 		advancedButton = new QPushButton("Advanced Options…"); advancedButton->setObjectName("advancedOptions");
 		advancedButton->setToolTip("Every further switch of the game: sound, instances, window position, demos, joining a server");
@@ -594,13 +596,13 @@ struct Window::Impl {
 		onlineRow->choice->setCurrentIndex(index < 0 ? 0 : index);
 		onlineBefore = onlineRow->choice->currentIndex();
 	}
-	// OpenSpy and the game's own take nothing more; BF2Hub and Other take their kept file, or the dialog asks for one.
+	// the game's own and the presets take nothing more; Other takes its kept file, or the dialog asks for one.
 	// the choice stays as it was until a file is accepted
 	void chooseOnline() {
 		auto online = currentOnline();
 		if (provider_online(online) && !kept.contains(online)) {
 			onlineRow->choice->setCurrentIndex(onlineBefore);
-			openProvider(online);
+			openProvider();
 			return;
 		}
 		onlineBefore = onlineRow->choice->currentIndex();
@@ -616,10 +618,7 @@ struct Window::Impl {
 			if (found == kept.end() || found->second.services.empty())
 				status = "Provider file missing";
 			else {
-				auto source = online == "bf2hub" ? bf2hubSource : otherSource;
-				status = source == "automatic" ? "From BF2Hub's installer" : source == "hosted" ? "Hosted by OpenBF2"
-					: source == "url" ? "From " + QUrl(text(otherUrl)).host() : "From a file";
-				if (online == "other") status = text(found->second.name) + " · " + status.left(1).toLower() + status.mid(1);
+				status = text(found->second.name) + " · " + (otherSource == "url" ? "from " + QUrl(text(otherUrl)).host() : QString("from a file"));
 				if (auto expiry = provider_expiry(found->second)) {
 					auto when = QDateTime::fromSecsSinceEpoch(expiry->time_since_epoch().count());
 					status += when <= QDateTime::currentDateTime() ? QString(" · out of date") : " · valid until " + QLocale().toString(when.date(), QLocale::ShortFormat);
@@ -647,12 +646,6 @@ struct Window::Impl {
 			QObject::connect(field, &QLineEdit::textChanged, providerDialog, [this] { updateProviderOk(); });
 			return row;
 		};
-		automaticChoice = new QRadioButton("Automatic: ask the BF2Hub client in its installer");
-		automaticChoice->setToolTip("Download the BF2Hub client installer from bf2hub.com first. Nothing of it is run or kept: its client is asked for BF2Hub's addresses");
-		automaticRow = browseRow(installerPath, "the BF2Hub installer you downloaded from bf2hub.com", "BF2Hub installer (*.exe);;All files (*)", "Choose the BF2Hub installer");
-		installerPath->setAccessibleName("BF2Hub installer");
-		hostedChoice = new QRadioButton(QString("Hosted by OpenBF2 (%1)").arg(QUrl(bf2hub_hosted_url).host()));
-		hostedChoice->setToolTip(QString("BF2Hub's provider file as OpenBF2 publishes it: %1. Downloaded again when it runs out").arg(bf2hub_hosted_url));
 		urlChoice = new QRadioButton("From the web");
 		urlChoice->setToolTip("A provider file a provider publishes, downloaded from this address; downloaded again when it runs out");
 		urlRow = new QWidget; { auto box = new QHBoxLayout(urlRow); box->setContentsMargins(24, 0, 0, 0);
@@ -661,40 +654,26 @@ struct Window::Impl {
 		fileChoice = new QRadioButton("A provider file on this computer");
 		auto fileRow = browseRow(filePath, "a provider file (.json)", "Provider file (*.json);;All files (*)", "Choose a provider file");
 		filePath->setAccessibleName("Provider file");
-		for (auto widget : std::initializer_list<QWidget*>{automaticChoice, automaticRow, hostedChoice, urlChoice, urlRow, fileChoice, fileRow}) layout->addWidget(widget);
-		for (auto radio : {automaticChoice, hostedChoice, urlChoice, fileChoice}) QObject::connect(radio, &QRadioButton::toggled, providerDialog, [this] { updateProviderOk(); });
+		for (auto widget : std::initializer_list<QWidget*>{urlChoice, urlRow, fileChoice, fileRow}) layout->addWidget(widget);
+		for (auto radio : {urlChoice, fileChoice}) QObject::connect(radio, &QRadioButton::toggled, providerDialog, [this] { updateProviderOk(); });
 		auto buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel); layout->addWidget(buttons);
 		providerOk = buttons->button(QDialogButtonBox::Ok); providerOk->setText("Get");
 		QObject::connect(buttons, &QDialogButtonBox::rejected, providerDialog, &QDialog::reject);
 		QObject::connect(buttons, &QDialogButtonBox::accepted, providerDialog, [this] {
 			providerDialog->accept();
-			if (automaticChoice->isChecked()) send(Kind::bf2hub_installer, installerPath->text().trimmed().toStdWString());
-			else if (hostedChoice->isChecked()) send(Kind::bf2hub_hosted);
-			else if (urlChoice->isChecked()) send(Kind::other_url, urlField->text().trimmed().toStdString());
-			else send(providerMode == "bf2hub" ? Kind::bf2hub_file : Kind::other_file, filePath->text().trimmed().toStdWString());
+			if (urlChoice->isChecked()) send(Kind::other_url, urlField->text().trimmed().toStdString());
+			else send(Kind::other_file, filePath->text().trimmed().toStdWString());
 		});
 	}
 	void updateProviderOk() {
-		providerOk->setEnabled((automaticChoice->isChecked() && !installerPath->text().trimmed().isEmpty()) || hostedChoice->isChecked()
-			|| (urlChoice->isChecked() && valid_provider_url(urlField->text().trimmed().toStdString())) || (fileChoice->isChecked() && !filePath->text().trimmed().isEmpty()));
+		providerOk->setEnabled((urlChoice->isChecked() && valid_provider_url(urlField->text().trimmed().toStdString())) || (fileChoice->isChecked() && !filePath->text().trimmed().isEmpty()));
 	}
-	// BF2Hub: automatic (Windows), hosted or a file; another provider: an address or a file
-	void openProvider(const std::string& online) {
-		providerMode = online;
-		auto bf2hub = online == "bf2hub";
-		providerTitle->setText(bf2hub ? "BF2Hub" : "Other Online Services");
-		providerIntro->setText(bf2hub ? "BF2Hub's services take a provider file with their addresses. OpenBF2 does not verify the service."
-			: "Another provider's services take its provider file. OpenBF2 does not verify the service.");
-#if defined(Q_OS_WIN)
-		const bool automatic = bf2hub;
-#else
-		const bool automatic = false;
-#endif
-		automaticChoice->setVisible(automatic); automaticRow->setVisible(automatic); hostedChoice->setVisible(bf2hub);
-		urlChoice->setVisible(!bf2hub); urlRow->setVisible(!bf2hub);
-		auto source = bf2hub ? bf2hubSource : otherSource;
+	// the other provider's file: from an address or from this computer
+	void openProvider() {
+		providerTitle->setText("Other Online Services");
+		providerIntro->setText("Another provider's services take its provider file. OpenBF2 does not verify the service.");
 		urlField->setText(text(otherUrl));
-		(source == "file" ? fileChoice : bf2hub ? (source == "automatic" && automatic ? automaticChoice : hostedChoice) : urlChoice)->setChecked(true);
+		(otherSource == "file" ? fileChoice : urlChoice)->setChecked(true);
 		updateProviderOk(); providerDialog->adjustSize();
 		if (!hidden) providerDialog->open();
 	}
@@ -883,7 +862,7 @@ void Window::ShowLauncher(const LaunchOptions& options, const std::vector<Mod>& 
 	i.width->setValue(options.width); i.height->setValue(options.height); i.player->setText(text(options.player));
 	i.always->setChecked(options.always_show); i.unlock->setChecked(!options.override.empty()); i.command->setText(text(options.override));
 	i.clientChoice->setCurrentIndex(options.client == "x86" ? 1 : 0);
-i.bf2hubSource = options.bf2hub_source; i.otherSource = options.other_source; i.otherUrl = options.other_url;
+	i.otherSource = options.other_source; i.otherUrl = options.other_url; i.providerFolder = options.provider_folder;
 	if (provider_online(options.online) && !options.provider.services.empty()) i.kept[options.online] = options.provider;
 	i.selectOnline(options.online); i.fillProvider();
 	i.tutorial->setChecked(options.tutorial_messages);
@@ -947,8 +926,8 @@ LaunchOptions Window::Impl::currentOptions() const {
 #endif
 	options.demo_config = i.demoConfig;
 	options.online = i.currentOnline();
-	options.bf2hub_source = i.bf2hubSource; options.other_source = i.otherSource; options.other_url = i.otherUrl;
-	if (options.online == "openspy") options.provider = parse_provider(provider_presets().front().json);
+	options.other_source = i.otherSource; options.other_url = i.otherUrl; options.provider_folder = i.providerFolder;
+	if (auto preset = provider_preset(options.online)) options.provider = parse_provider(preset->json);
 	else if (auto found = i.kept.find(options.online); found != i.kept.end()) options.provider = found->second;
 	options.tutorial_messages = i.tutorial->isChecked();
 	i.collectAdvanced(options);
@@ -962,7 +941,7 @@ void Window::SetProviders(const std::map<std::string, ProviderServices>& kept) {
 void Window::ShowProvider(const std::string& online, const std::string& source, const std::string& url, const ProviderServices& services) {
 	auto& i = *m_Impl;
 	i.kept[online] = services;
-	(online == "bf2hub" ? i.bf2hubSource : i.otherSource) = source;
+	i.otherSource = source;
 	if (online == "other") i.otherUrl = url;
 	i.selectOnline(online); i.fillProvider(); i.edited();
 }
@@ -978,8 +957,8 @@ void Window::SetDemos(const std::vector<std::filesystem::path>& demos) {
 	}
 	i.setDemo(value);
 }
-void Window::SnapshotProvider(const std::string& online, const std::filesystem::path& png) {
-	auto& i = *m_Impl; i.openProvider(online);
+void Window::SnapshotProvider(const std::filesystem::path& png) {
+	auto& i = *m_Impl; i.openProvider();
 	auto dialog = i.providerDialog; dialog->ensurePolished(); dialog->layout()->activate(); dialog->resize(dialog->sizeHint()); dialog->layout()->activate();
 	if (!dialog->grab().save(text(png.string()))) throw std::runtime_error("Could not save dialog snapshot");
 }
@@ -1002,10 +981,9 @@ void Window::SetMicrophone(MicrophoneStatus status) {
 	}
 }
 void Window::SetLevel(double peak) { if (Shown() == Page::voice) m_Impl->meter->setValue(int(std::clamp(peak * Voice().captureVolume, 0.0, 1.0) * 1000)); }
-void Window::Message(const std::string& title, const std::string& detail, const std::string& more) {
+void Window::Message(const std::string& title, const std::string& detail) {
 	if (m_Impl->hidden) return;
 	m_Impl->shell.show(); auto box = new QMessageBox(QMessageBox::Information, text(title), text(detail), QMessageBox::Ok, &m_Impl->shell);
-	if (!more.empty()) box->setDetailedText(text(more));
 	box->setTextFormat(Qt::PlainText); box->setAttribute(Qt::WA_DeleteOnClose); box->open();
 }
 void Window::Reveal(const std::filesystem::path& directory) { QDesktopServices::openUrl(QUrl::fromLocalFile(text(directory.string()))); }
@@ -1018,7 +996,7 @@ void Window::Click(Kind button) {
 }
 void Window::Choose(Kind kind, const std::filesystem::path& file) {
 	// a provider's file as the dialog or the drop would give it
-	if (kind == Kind::bf2hub_installer || kind == Kind::bf2hub_hosted || kind == Kind::bf2hub_file || kind == Kind::other_url || kind == Kind::other_file) { m_Impl->send(kind, file); return; }
+	if (kind == Kind::other_url || kind == Kind::other_file) { m_Impl->send(kind, file); return; }
 	(kind == Kind::disc_chosen ? m_Impl->disc : kind == Kind::patch141_chosen ? m_Impl->patch141 : m_Impl->patch150)->select(text(file.string())); }
 void Window::PasteKey(KeyEdition row, const std::string& value) { (row == KeyEdition::BF2 ? m_Impl->baseKey : m_Impl->sfKey)->set(text(value)); }
 void Window::Snapshot(const std::filesystem::path& png) { m_Impl->shell.ensurePolished(); m_Impl->shell.layout()->activate(); if (!m_Impl->shell.grab().save(text(png.string()))) throw std::runtime_error("Could not save window snapshot"); }

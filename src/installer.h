@@ -1,7 +1,6 @@
 #pragma once
 
 #include "edition.h"
-#include "hubtool.h"
 #include "patch.h"
 #include "progress.h"
 #include "task.h"
@@ -38,12 +37,10 @@ namespace setup {
 		std::filesystem::path m_Support;
 		// the directory with the content manifests (content-150.tsv, ...)
 		std::filesystem::path m_Manifests;
-		// openbf2-hubtool.exe beside the application (Windows); empty without it
-		std::filesystem::path m_Hubtool;
 		std::atomic<bool> m_Cancelled{ false };
 
 	public:
-		Installer(Worker& worker, std::filesystem::path support, std::filesystem::path manifests, std::filesystem::path hubtool = {});
+		Installer(Worker& worker, std::filesystem::path support, std::filesystem::path manifests);
 
 		task<DiscEdition> CheckDisc(std::filesystem::path disc);
 		// a check which was replaced by a newer choice is stopped through `cancelled`
@@ -58,11 +55,6 @@ namespace setup {
 		task<std::optional<Installation>> QuickCheck();
 		// the current generation, checked file by file against its manifest; the record is written afterwards
 		task<Installation> Verify();
-
-		// BF2Hub's addresses from the user's BF2Hub installer, by openbf2-hubtool (Windows): the tool and the installed
-		// BF2.exe, checked against the content manifest, are copied into a temporary folder of their own, the tool runs
-		// there for at most a minute, and the folder is removed afterwards. its result says whether it worked
-		task<HubtoolRun> ProbeBf2hub(std::filesystem::path installer);
 
 		// stops Install and Verify at their next file or patch record, they throw then
 		void Cancel();

@@ -24,11 +24,9 @@ namespace setup {
 	{
 		// activated: the user came back to the application from another one, where they may have changed files.
 		// options_edited: any change on the launcher page, the lock included
-		// the online services' providers: bf2hub_installer, BF2Hub's addresses from its installer (in `path`, by the
-		// hubtool, Windows); bf2hub_hosted, BF2Hub's file as OpenBF2 hosts it; bf2hub_file, a file of BF2Hub's (in
-		// `path`); other_url, another provider's file from that address (in `path`); other_file, another provider's
-		// file (in `path`)
-		enum class Kind { next, back, voice_setup, voice_skip, verify, options_edited, mods_folder, microphone, disc_chosen, patch141_chosen, patch150_chosen, keys_edited, activated, close, bf2hub_installer, bf2hub_hosted, bf2hub_file, other_url, other_file, demos_folder };
+		// the other online services provider: other_url, its file from that address (in `path`); other_file, its file
+		// (in `path`)
+		enum class Kind { next, back, voice_setup, voice_skip, verify, options_edited, mods_folder, microphone, disc_chosen, patch141_chosen, patch150_chosen, keys_edited, activated, close, other_url, other_file, demos_folder };
 
 		Kind kind;
 		// the file of the *_chosen kinds
@@ -103,14 +101,13 @@ namespace setup {
 		// the read-only command line at the bottom of the launcher page. ignored while it is unlocked:
 		// then the user is writing it
 		void SetCommandLine(const std::string& line);
-		// the kept provider files of "bf2hub" and "other": choosing one of them on the page takes its file
+		// the kept provider file of "other": choosing Other on the page takes it
 		void SetProviders(const std::map<std::string, ProviderServices>& kept);
-		// a provider's file was accepted: `online` ("bf2hub", "other") with it is now the online services, from
-		// `source` ("automatic", "hosted", "url", "file") and `url`. a file which was not accepted changes nothing
+		// a provider's file was accepted: `online` ("other") with it is now the online services, from `source`
+		// ("url", "file") and `url`. a file which was not accepted changes nothing
 		void ShowProvider(const std::string& online, const std::string& source, const std::string& url, const ProviderServices& services);
 		// the recorded demos the dialog offers, relative to the game folder (Demos/...), the newest first
 		void SetDemos(const std::vector<std::filesystem::path>& demos);
-		void RejectProvider();
 
 		// the sliders and the checkbox. the playback volume has no control and is the one ShowVoice received
 		assistant::VoiceSettings Voice() const;
@@ -123,8 +120,7 @@ namespace setup {
 		task<std::string> Download(std::string url);
 
 		// a sheet on top of the page, it does not wait for the user
-		// `more` is offered behind a details button, e.g. the end of a tool's error output
-		void Message(const std::string& title, const std::string& detail, const std::string& more = {});
+		void Message(const std::string& title, const std::string& detail);
 		// opens a directory in the file manager of the system
 		void Reveal(const std::filesystem::path& directory);
 
@@ -139,7 +135,7 @@ namespace setup {
 		void Snapshot(const std::filesystem::path& png);
 		// the Advanced Options dialog with the launcher's current options
 		void SnapshotAdvanced(const std::filesystem::path& png);
-		// the provider dialog of "bf2hub" or "other"
-		void SnapshotProvider(const std::string& online, const std::filesystem::path& png);
+		// the provider dialog of the other provider
+		void SnapshotProvider(const std::filesystem::path& png);
 	};
 }
