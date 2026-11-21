@@ -207,7 +207,10 @@ task<int> exercise(Window& window, std::filesystem::path root) {
 	auto hint = shell->findChild<QLabel*>("launcherHint");
 	auto voice = shell->findChild<QPushButton*>("voiceSetupButton");
 	auto verify = shell->findChild<QPushButton*>("verifyGameDataButton");
-	check(line && size && full && always && hint && voice && verify, "launcher controls missing");
+	// Voice Setup and Verify Game Data live in the Advanced dialog; the Advanced button is the launcher's footer
+	auto advanced = shell->findChild<QPushButton*>("advancedOptions");
+	check(line && size && full && always && hint && voice && verify && advanced, "launcher controls missing");
+	check(!advanced->isHidden() && voice->window() != shell && verify->window() != shell, "Voice Setup and Verify are not in the Advanced dialog");
 	check(line->isReadOnly() && !size->isHidden() && hint->isHidden(), "launcher control visibility differs from saved options");
 	lock->click(); check((co_await window.WaitForEvent()).kind == Kind::options_edited, "unlock did not report an edit");
 	check(!line->isReadOnly() && !full->isEnabled() && always->isEnabled(), "manual arguments did not disable generated options");
@@ -219,8 +222,8 @@ task<int> exercise(Window& window, std::filesystem::path root) {
 	full->click(); co_await window.WaitForEvent(); check(!size->isHidden(), "windowed mode did not restore window size");
 	always->click(); co_await window.WaitForEvent(); check(!hint->isHidden(), "launcher hint stayed hidden");
 	window.Click(Kind::verify); check((co_await window.WaitForEvent()).kind == Kind::verify, "verify button");
-	window.SetBusy("Playing…"); check(!voice->isEnabled() && !verify->isEnabled() && !lock->isEnabled(), "busy launcher left actions enabled");
-	window.ShowVoice({}, false); check(voice->isHidden() && verify->isHidden(), "launcher footer leaked into voice setup");
+	window.SetBusy("Playing…"); check(!voice->isEnabled() && !verify->isEnabled() && !advanced->isEnabled() && !lock->isEnabled(), "busy launcher left actions enabled");
+	window.ShowVoice({}, false); check(advanced->isHidden(), "launcher footer leaked into voice setup");
 	window.ShowLauncher(options, {{"bf2", "Battlefield 2"}}, true, ""); window.Click(Kind::next); check((co_await window.WaitForEvent()).kind == Kind::next, "Play did not reenable");
 
 	// Real SDL capture, with an explicit synthetic driver: no host microphone is touched.

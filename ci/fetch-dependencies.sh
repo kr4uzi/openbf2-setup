@@ -87,13 +87,13 @@ if [[ $windows ]]; then
   for name in zs.lib libzs.lib zlibstatic.lib; do [[ -f "$prefix/zlib/lib/$name" ]] && library="$prefix/zlib/lib/$name" && break; done
   [[ -n "$library" ]] || { echo "zlib: no static library in $prefix/zlib/lib" >&2; exit 1; }
 
-  qt="$prefix/Qt/$QT_VERSION/msvc2022_64"
+  qt="$prefix/Qt/$QT_WINDOWS_VERSION/msvc2022_64"
   if [[ ! -f "$qt/lib/cmake/Qt6/Qt6Config.cmake" ]]; then
     python=python
     python --version >/dev/null 2>&1 || python="py -3"
     $python -m venv "$downloads/aqt-venv"
     "$downloads/aqt-venv/Scripts/pip" install -q aqtinstall
-    (cd "$downloads" && "$downloads/aqt-venv/Scripts/aqt" install-qt windows desktop "$QT_VERSION" "$QT_WINDOWS_ARCH" --archives qtbase qttools --outputdir "$(native "$prefix/Qt")" >/dev/null)
+    (cd "$downloads" && "$downloads/aqt-venv/Scripts/aqt" install-qt windows desktop "$QT_WINDOWS_VERSION" "$QT_WINDOWS_ARCH" --archives qtbase qttools --outputdir "$(native "$prefix/Qt")" >/dev/null)
   fi
 
   # Microsoft's redist unpacks itself (a signed Microsoft program); only DXSETUP's five files are kept, each by hash
