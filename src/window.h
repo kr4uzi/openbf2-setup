@@ -133,7 +133,7 @@ namespace setup {
 		void Choose(Event::Kind well, const std::filesystem::path& file);
 		void PasteKey(KeyEdition row, const std::string& text);
 		void Snapshot(const std::filesystem::path& png);
-		// the Advanced Options dialog with the launcher's current options
+		// the Advanced dialog with the launcher's current options
 		void SnapshotAdvanced(const std::filesystem::path& png);
 		// the provider dialog of the other provider
 		void SnapshotProvider(const std::filesystem::path& png);

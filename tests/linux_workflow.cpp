@@ -28,7 +28,7 @@ namespace {
 		for (auto widget : parent->findChildren<T*>()) if (widget->accessibleName() == accessible) return widget;
 		throw std::runtime_error(std::string("no control ") + accessible);
 	}
-	// the Advanced Options dialog: Cancel puts back what was there, OK keeps the changes, Restore Defaults
+	// the Advanced dialog: Cancel puts back what was there, OK keeps the changes, Restore Defaults
 	// leaves the launcher page alone
 	void advancedDialog(Window& window) {
 		auto button = find<QPushButton>("advancedOptions"); auto dialog = find<QDialog>("advancedOptionsDialog");
@@ -55,6 +55,16 @@ namespace {
 		if (window.Options().server != "10.0.0.9") throw std::runtime_error("the server address in the dialog was not taken");
 		buttons->button(QDialogButtonBox::Cancel)->click();
 		if (!window.Options().server.empty() || window.Options().demo != "demos/one.con") throw std::runtime_error("Cancel kept the server, or lost the demo");
+		// the player name is in the dialog too, and so are the voice setup and the verification
+		button->click();
+		auto player = named<QLineEdit>(dialog, "Player name");
+		player->setText("Tester"); emit player->textEdited(player->text());
+		if (window.Options().player != "Tester") throw std::runtime_error("the player name in the dialog was not taken");
+		buttons->button(QDialogButtonBox::Cancel)->click();
+		if (!window.Options().player.empty()) throw std::runtime_error("Cancel kept the player name");
+		if (!dialog->findChild<QPushButton*>("voiceSetupButton") || !dialog->findChild<QPushButton*>("verifyGameDataButton"))
+			throw std::runtime_error("Voice Setup or Verify Game Data is not in the dialog");
+		if (button->text() != "Advanced") throw std::runtime_error("the button is not called Advanced");
 		auto tutorial = find<QCheckBox>("tutorialMessages");
 		if (!tutorial->isChecked()) throw std::runtime_error("the tutorial messages are not on by default");
 		tutorial->setChecked(false);

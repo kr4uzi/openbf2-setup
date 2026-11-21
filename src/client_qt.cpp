@@ -5,6 +5,7 @@
 #include "process_qt.h"
 #include "platform_qt.h"
 
+#include <QFile>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <boost/asio/experimental/channel.hpp>
@@ -111,14 +112,17 @@ task<int> setup::runClientProcess(assistant::Launch launch, std::filesystem::pat
 	using Channel = boost::asio::experimental::channel<void(boost::system::error_code, Exit)>;
 	Channel exit(co_await boost::asio::this_coro::executor, 1);
 #if defined(Q_OS_LINUX)
-	QObject::connect(&child, &QProcess::readyReadStandardOutput, &child, [&] { log.append(child.readAllStandardOutput()); });
+	// the start of the output stays at hand too: a refused provider file is said there (exit code 42)
+	QByteArray start;
+	auto keep = [&](const QByteArray& bytes) { log.append(bytes); if (start.size() < 64 * 1024) start.append(bytes.left(64 * 1024 - start.size())); };
+	QObject::connect(&child, &QProcess::readyReadStandardOutput, &child, [&] { keep(child.readAllStandardOutput()); });
 #endif
 	QObject::connect(&child, &QProcess::errorOccurred, &child, [&](QProcess::ProcessError error) {
 		if (error == QProcess::FailedToStart) exit.try_send(boost::system::error_code{}, Exit{0, "The native client could not start: " + child.errorString().toStdString()});
 	});
 	QObject::connect(&child, &QProcess::finished, &child, [&](int code, QProcess::ExitStatus status) {
 #if defined(Q_OS_LINUX)
-		log.append(child.readAllStandardOutput());
+		keep(child.readAllStandardOutput());
 #endif
 		exit.try_send(boost::system::error_code{}, Exit{status == QProcess::CrashExit ? 128 + code : code, {}});
 	});
@@ -139,5 +143,17 @@ task<int> setup::runClientProcess(assistant::Launch launch, std::filesystem::pat
 
 	auto result = co_await exit.async_receive(boost::asio::use_awaitable);
 	if (!result.error.empty()) throw std::runtime_error(result.error);
+	// exit code 42: the game refused its online services file and says why in one line of its output
+	if (result.status == 42) {
+#if defined(Q_OS_LINUX)
+		auto output = start.toStdString();
+#else
+		auto output = std::string{};
+		if (QFile file(QString::fromStdString((launch.directory / "OpenBF2Client.log").string())); file.open(QIODevice::ReadOnly))
+			output = file.read(64 * 1024).toStdString();
+#endif
+		if (auto refusal = provider_refusal(output); !refusal.empty())
+			throw std::runtime_error("The game did not accept the online services file:\n" + refusal);
+	}
 	co_return result.status;
 }

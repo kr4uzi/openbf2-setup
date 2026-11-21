@@ -17,7 +17,7 @@ bool setup::frontend::launcherRequested()
 
 QString setup::frontend::launcherHint()
 {
-	return "Tip: Hold Shift while opening OpenBF2 to get here";
+	return "Tip: Open Launcher by pressing Shift on startup";
 }
 
 QString setup::frontend::microphoneSettingsLabel()

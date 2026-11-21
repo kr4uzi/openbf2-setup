@@ -10,7 +10,7 @@ bool setup::frontend::launcherRequested()
 
 QString setup::frontend::launcherHint()
 {
-	return "Tip: Open with --launcher to return here";
+	return "Tip: Open Launcher by starting with --launcher";
 }
 
 QString setup::frontend::microphoneSettingsLabel()

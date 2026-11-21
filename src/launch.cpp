@@ -143,7 +143,7 @@ bool setup::has_advanced_options(const LaunchOptions& options)
 	auto defaults = LaunchOptions{};
 	return options.no_sound || options.multi || options.window_x != defaults.window_x
 		|| options.window_y != defaults.window_y || options.skip_dx_check || !options.punkbuster.empty()
-		|| !options.demo.empty() || !clean(options.server).empty();
+		|| !options.demo.empty() || !clean(options.server).empty() || !clean(options.player).empty();
 }
 
 std::string setup::command_line(const std::vector<std::string>& arguments)
@@ -237,6 +237,42 @@ bool setup::demo_recording(const std::string& demo)
 	auto name = clean(demo);
 	std::ranges::transform(name, name.begin(), [](unsigned char c) { return char(std::tolower(c)); });
 	return name.ends_with(".bf2demo");
+}
+
+std::vector<std::pair<std::string, std::string>> setup::launch_files(const LaunchOptions& options)
+{
+	auto files = std::vector<std::pair<std::string, std::string>>{};
+	if (!options.override.empty())
+		return files;
+
+	auto arguments = launch_arguments(options);
+	for (std::size_t i = 0; i + 1 < arguments.size(); ++i)
+		if (arguments[i] == "+onlineProviderConfig" || arguments[i] == "+demo")
+			files.emplace_back(arguments[i], arguments[i + 1]);
+	return files;
+}
+
+std::string setup::game_path_problem(const std::string& path)
+{
+	// the retail parser copies every option value into a buffer of 256 bytes and takes quotes as its delimiters
+	if (path.size() > 255)
+		return "it is longer than the game can read (255 bytes)";
+	if (path.find('"') != std::string::npos)
+		return "it contains a double quote, which the game cannot read";
+	return {};
+}
+
+std::string setup::provider_refusal(const std::string& output)
+{
+	auto found = std::string{};
+	auto stream = std::istringstream{ output };
+	for (std::string line; std::getline(stream, line);) {
+		if (!line.empty() && line.back() == '\r')
+			line.pop_back();
+		if (line.rfind("+onlineProviderConfig \"", 0) == 0)
+			found = line;
+	}
+	return found;
 }
 
 std::string setup::demo_config_text(const std::string& recording)

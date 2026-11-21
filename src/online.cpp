@@ -5,6 +5,12 @@
 #include <memory>
 #include <stdexcept>
 
+namespace {
+	// the game's checks are ASCII: the C library's classes follow the locale, which the application sets
+	bool ascii_digit(char c) { return c >= '0' && c <= '9'; }
+	bool ascii_alnum(char c) { return ascii_digit(c) || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
+}
+
 bool setup::valid_ipv4(const std::string& text)
 {
 	auto parts = 0;
@@ -12,7 +18,7 @@ bool setup::valid_ipv4(const std::string& text)
 	while (i < text.size()) {
 		auto value = 0;
 		auto digits = size_t{ 0 };
-		for (; i < text.size() && std::isdigit(static_cast<unsigned char>(text[i])); ++i, ++digits)
+		for (; i < text.size() && ascii_digit(text[i]); ++i, ++digits)
 			value = value * 10 + (text[i] - '0');
 		if (digits == 0 || digits > 3 || value > 255)
 			return false;
@@ -38,15 +44,14 @@ bool setup::valid_target(const std::string& target)
 	auto labelStart = true;
 	auto onlyDigits = true;
 	for (auto c : target) {
-		auto u = static_cast<unsigned char>(c);
 		if (c == '.') {
 			if (labelStart)
 				return false;
 			labelStart = true;
 		}
-		else if (std::isalnum(u) || c == '-') {
+		else if (ascii_alnum(c) || c == '-') {
 			labelStart = false;
-			if (!std::isdigit(u))
+			if (!ascii_digit(c))
 				onlyDigits = false;
 		}
 		else
@@ -239,13 +244,13 @@ namespace {
 				result->kind = Value::Kind::string;
 				result->text = string();
 			}
-			else if (c == '-' || std::isdigit(static_cast<unsigned char>(c))) {
+			else if (c == '-' || ascii_digit(c)) {
 				// -?(0|[1-9][0-9]*)(.[0-9]+)?([eE][+-]?[0-9]+)?
 				result->kind = Value::Kind::number;
 				auto start = m_At;
 				auto digits = [this] {
 					auto from = m_At;
-					while (m_At < m_Text.size() && std::isdigit(static_cast<unsigned char>(m_Text[m_At])))
+					while (m_At < m_Text.size() && ascii_digit(m_Text[m_At]))
 						++m_At;
 					return m_At - from;
 				};
@@ -325,7 +330,7 @@ std::optional<std::chrono::sys_seconds> setup::parse_utc(const std::string& text
 	if (text.size() != 20 || text[4] != '-' || text[7] != '-' || text[10] != 'T' || text[13] != ':' || text[16] != ':' || text[19] != 'Z')
 		return std::nullopt;
 	for (auto i : { 0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18 })
-		if (!std::isdigit(static_cast<unsigned char>(text[i])))
+		if (!ascii_digit(text[i]))
 			return std::nullopt;
 
 	auto number = [&](int at, int count) { return std::stoi(text.substr(at, count)); };
@@ -397,7 +402,7 @@ setup::ProviderServices setup::parse_provider(const std::string& json)
 	auto provider = member(*root, "provider");
 	auto named = provider && provider->kind == Value::Kind::string && !provider->text.empty() && provider->text.size() <= 64;
 	for (auto c : named ? provider->text : std::string{})
-		named = named && (std::isalnum(static_cast<unsigned char>(c)) || c == ' ' || c == '-' || c == '.');
+		named = named && (ascii_alnum(c) || c == ' ' || c == '-' || c == '.');
 	if (!named)
 		throw std::runtime_error{ "The file names no provider: \"provider\" must be a name of letters, digits, spaces, '-' and '.'." };
 	result.name = provider->text;
@@ -414,7 +419,7 @@ setup::ProviderServices setup::parse_provider(const std::string& json)
 				known += (known.empty() ? "" : ", ") + label;
 			auto shown = std::string{};
 			for (auto c : key.substr(0, 40))
-				shown += std::isprint(static_cast<unsigned char>(c)) ? c : '?';
+				shown += c >= ' ' && c <= '~' ? c : '?';
 			throw std::runtime_error{ "The service \"" + shown + "\" is not one the game knows: \"*\" or one of " + known + "." };
 		}
 		if (value->kind != Value::Kind::string || !valid_service(key, value->text))

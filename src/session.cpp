@@ -26,6 +26,25 @@ namespace setup::assistant {
 namespace {
 std::string outputName(bool sf) {return std::string("HKEY_LOCAL_MACHINE\\SOFTWARE\\Electronic Arts\\EA Games\\")+(sf?"Battlefield 2 Special Forces":"Battlefield 2")+"\\ergc";}
 void require(bool ok,const char* error){if(!ok)throw std::runtime_error(error);}
+#if defined(_WIN32)
+// The client reads its command line in the system's ANSI code page (this application runs with UTF-8): a path
+// with a character outside it reaches the game changed. A system which uses UTF-8 itself takes every path.
+bool systemAnsiTakes(const std::string& utf8) {
+    if(utf8.empty())return true;
+    wchar_t text[16]={};DWORD size=sizeof text;
+    auto page=UINT(0);
+    if(RegGetValueW(HKEY_LOCAL_MACHINE,L"SYSTEM\\CurrentControlSet\\Control\\Nls\\CodePage",L"ACP",RRF_RT_REG_SZ,nullptr,text,&size)==ERROR_SUCCESS)
+        page=UINT(_wtoi(text));
+    if(page==0||page==CP_UTF8)return true;
+    auto length=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,utf8.data(),int(utf8.size()),nullptr,0);
+    if(length<=0)return false;
+    std::wstring wide(size_t(length),L'\0');
+    MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,utf8.data(),int(utf8.size()),wide.data(),length);
+    BOOL replaced=FALSE;
+    auto converted=WideCharToMultiByte(page,WC_NO_BEST_FIT_CHARS,wide.data(),length,nullptr,0,nullptr,&replaced);
+    return converted>0&&!replaced;
+}
+#endif
 std::string trim(const std::string& s) {
     auto a=s.find_first_not_of(" \t\r\n"),b=s.find_last_not_of(" \t\r\n");
     return a==std::string::npos?"":s.substr(a,b-a+1);
@@ -258,6 +277,15 @@ Launch clientLaunch(const ClientLayout& layout,const fs::path& support,const Lau
         require(fs::is_directory(directory)&&(!is_link(fs::symlink_status(directory))||link_target(directory,unreadable)==mod_library(support)/mod),"The selected mod is not installed.");
     }
     {auto platform=nativePlatform();writeProviderPreset(options,*platform);}
+    // the files the game reads from its command line must pass its parser unchanged
+    for(const auto& [option,path]:launch_files(options)) {
+        auto what=option=="+demo"?std::string("The demo's file"):std::string("The online services file");
+        auto problem=game_path_problem(path);
+        require(problem.empty(),(what+" cannot be passed to the game: "+problem+". Path: "+path).c_str());
+#if defined(_WIN32)
+        require(systemAnsiTakes(path),(what+" cannot be passed to the game: its path has characters which this system's language for non-Unicode programs cannot show. Path: "+path).c_str());
+#endif
+    }
     // a recording is played through the .con which names it
     if(options.override.empty()&&demo_recording(options.demo)&&!options.demo_config.empty()) {
         auto platform=nativePlatform();

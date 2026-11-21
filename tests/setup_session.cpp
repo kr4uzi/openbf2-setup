@@ -174,6 +174,7 @@ int main(int argc,char** argv){
                     check(line.find("+joinServer 10.0.0.2 +port 16567 +password pw")!=std::string::npos&&line.find("+noSound 1 +multi 1 +wx 10 +wy 20")!=std::string::npos,"the advanced arguments");
                     check(setup::has_advanced_options(advanced)&&setup::parse_launch(setup::launch_text(advanced))==advanced,"advanced launch text round trip");
                     {setup::LaunchOptions joining;joining.server="10.0.0.2";check(setup::has_advanced_options(joining),"joining a server, in Advanced Options, did not count as advanced");}
+                    {setup::LaunchOptions named;named.player="Name";check(setup::has_advanced_options(named),"the player name, in Advanced, did not count as advanced");}
                     advanced.fullscreen=true;check(setup::command_line(setup::launch_arguments(advanced)).find("+wx")==std::string::npos,"a window position was passed in fullscreen");
                     // the further switches of the engine; a demo replaces joining a server
                     advanced.fullscreen=false;advanced.tutorial_messages=false;advanced.skip_dx_check=true;advanced.punkbuster="C:/pb two";
@@ -263,6 +264,16 @@ int main(int argc,char** argv){
             check(setup::parse_provider(setup::provider_preset("openspy")->json)==setup::ProviderServices{"OpenSpy",{{"*","openspy.p.bf2.org"}},std::nullopt},"the OpenSpy preset");
             check(setup::parse_provider(setup::provider_preset("bf2hub")->json)==setup::ProviderServices{"BF2Hub",{{"*","bf2hub.p.bf2.org"}},std::nullopt},"the BF2Hub preset");
             check(setup::provider_config_name("openspy")=="Provider-OpenSpy.json"&&setup::provider_config_name("bf2hub")=="Provider-BF2Hub.json"&&setup::provider_config_name("other")=="Provider-Other.json","the files the game reads");
+            // the game's parser: at most 255 bytes and no double quote; the files the launcher passes; the game's refusal
+            check(setup::game_path_problem(std::string(255,'a')).empty()&&!setup::game_path_problem(std::string(256,'a')).empty()&&!setup::game_path_problem("/a\"b").empty()&&setup::game_path_problem("/Users/A B/x.json").empty(),"the game's path limits");
+            {auto files=online;files.online="other";files.provider=parsed;files.demo="Demos/a.con";
+             check(setup::launch_files(files)==std::vector<std::pair<std::string,std::string>>{{"+demo","Demos/a.con"},{"+onlineProviderConfig",(fs::path{"/s/Setup"}/"Provider-Other.json").string()}}||setup::launch_files(files)==std::vector<std::pair<std::string,std::string>>{{"+onlineProviderConfig",(fs::path{"/s/Setup"}/"Provider-Other.json").string()},{"+demo","Demos/a.con"}},"the files the launcher passes");
+             files.override="+modPath mods/bf2 +onlineProviderConfig /x.json";check(setup::launch_files(files).empty(),"the files of a hand-written command line were checked");}
+            check(setup::provider_refusal("online services: retail names\r\n+onlineProviderConfig \"/p/Provider-Other.json\": unknown key \"bf2web\" in \"services\"\r\nbye\n")=="+onlineProviderConfig \"/p/Provider-Other.json\": unknown key \"bf2web\" in \"services\""
+                  &&setup::provider_refusal("+onlineProviderConfig: ignored outside the process command line\n").empty()&&setup::provider_refusal("").empty(),"the game's refusal of a provider file");
+            // the checks are ASCII, whatever the locale: a Latin-1 letter is neither a name nor a host
+            rejects([&]{setup::parse_provider("{\"schema\": 1, \"provider\": \"Caf\xC3\xA9\", \"services\": {\"*\": \"a.b\"}}");},"a provider name outside ASCII was accepted");
+            check(!setup::valid_target("caf\xE9.org")&&!setup::valid_target("caf\xC3\xA9.org"),"a host name outside ASCII was accepted");
             check(setup::valid_online("bf2hub")&&setup::valid_online("openspy")&&setup::valid_online("other")&&setup::valid_online("")&&!setup::valid_online("evil")&&setup::provider_online("other")&&!setup::provider_online("bf2hub"),"the online choices");
             // valid_to: until when the file holds; without it for ever. "generated" is only information
             {

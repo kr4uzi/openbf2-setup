@@ -305,6 +305,7 @@ struct Window::Impl {
 	QDialog* advanced;
 	QToolButton* unlock;
 	QPushButton* advancedButton;
+	QWidget* advancedSwitches;
 	QComboBox* clientChoice;
 	QCheckBox* tutorial;
 	QLineEdit* punkbuster;
@@ -366,10 +367,11 @@ struct Window::Impl {
 		back = new QPushButton("Back");
 		next = new QPushButton("Continue"); next->setDefault(true); next->setObjectName("nextButton");
 		navigation->addWidget(back);
-		voice = button(navigation, "Voice Setup…", Kind::voice_setup);
-		verify = button(navigation, "Verify Game Data…", Kind::verify);
+		// the launcher's further settings and tools: Advanced, where Voice Setup and Verify Game Data are too
+		advancedButton = new QPushButton("Advanced"); advancedButton->setObjectName("advancedOptions"); advancedButton->hide();
+		navigation->addWidget(advancedButton);
+		voice = new QPushButton("Voice Setup…"); verify = new QPushButton("Verify Game Data…");
 		voice->setObjectName("voiceSetupButton"); verify->setObjectName("verifyGameDataButton");
-		voice->hide(); verify->hide();
 		navigation->addStretch(); navigation->addWidget(next); outer->addLayout(navigation);
 		next->setMinimumWidth(100);
 		QObject::connect(back, &QPushButton::clicked, &shell, [this] { send(Kind::back); });
@@ -456,7 +458,6 @@ struct Window::Impl {
 		player->setToolTip("The name to play with (+playerName); empty uses the profile's name");
 		password = new QLineEdit; password->setAccessibleName("Server password"); password->setEchoMode(QLineEdit::Password); password->setPlaceholderText("none");
 		password->setToolTip("The server's password, if it has one (+password)");
-		form->addWidget(new QLabel("Player name"), 1, 0); form->addWidget(player, 1, 1);
 		// the online services: the game's own, a preset, or the other provider's file; the game reads the chosen one
 		// (+onlineProviderConfig)
 		onlineRow = new OnlineRow;
@@ -470,17 +471,15 @@ struct Window::Impl {
 		QObject::connect(onlineRow->configure, &QPushButton::clicked, &shell, [this] { openProvider(); });
 		onlineRow->dropped = [this](const std::filesystem::path& file) { send(Kind::other_file, file); };
 		buildProviderDialog();
-		advancedButton = new QPushButton("Advanced Options…"); advancedButton->setObjectName("advancedOptions");
-		advancedButton->setToolTip("Every further switch of the game: sound, instances, window position, demos, joining a server");
-		form->addWidget(new QLabel("Online services"), 2, 0); form->addWidget(onlineRow, 2, 1); form->addWidget(advancedButton, 2, 2, 1, 2);
+		form->addWidget(new QLabel("Online services"), 1, 0); form->addWidget(onlineRow, 1, 1);
 		auto smallStatus = onlineRow->status->font(); smallStatus.setPointSizeF(smallStatus.pointSizeF() - 1); onlineRow->status->setFont(smallStatus);
-		form->addWidget(onlineRow->status, 3, 1, 1, 3);
+		form->addWidget(onlineRow->status, 2, 1, 1, 3);
 		// Windows ships both clients: the 64-bit one, and the 32-bit one which PunkBuster needs
 		clientChoice = new QComboBox; clientChoice->setObjectName("clientChoice"); clientChoice->setAccessibleName("Client");
 		clientChoice->addItem("64-bit", QString("x64")); clientChoice->addItem("32-bit, for PunkBuster servers", QString("x86"));
 		clientChoice->setToolTip("The 64-bit client, or the 32-bit one for servers which require PunkBuster (PunkBuster exists only for 32 bits)");
 		auto clientLabel = new QLabel("Client");
-		form->addWidget(clientLabel, 4, 0); form->addWidget(clientChoice, 4, 1);
+		form->addWidget(clientLabel, 3, 0); form->addWidget(clientChoice, 3, 1);
 #if !defined(Q_OS_WIN)
 		clientLabel->hide(); clientChoice->hide();
 #endif
@@ -500,8 +499,8 @@ struct Window::Impl {
 		describe();
 		QWidget::setTabOrder(always, movies); QWidget::setTabOrder(movies, fullscreen); QWidget::setTabOrder(fullscreen, width);
 		QWidget::setTabOrder(width, height); QWidget::setTabOrder(height, mods); QWidget::setTabOrder(mods, modsFolder);
-		QWidget::setTabOrder(modsFolder, player); QWidget::setTabOrder(player, unlock); QWidget::setTabOrder(unlock, command);
-		QWidget::setTabOrder(command, voice); QWidget::setTabOrder(voice, verify); QWidget::setTabOrder(verify, next);
+		QWidget::setTabOrder(modsFolder, unlock); QWidget::setTabOrder(unlock, command);
+		QWidget::setTabOrder(command, advancedButton); QWidget::setTabOrder(advancedButton, next);
 		for (auto control : {movies, fullscreen, always}) QObject::connect(control, &QCheckBox::toggled, &shell, [this] { edited(); });
 		QObject::connect(unlock, &QToolButton::toggled, &shell, [this] { edited(); });
 		for (auto control : {width, height, port}) QObject::connect(control, &QSpinBox::valueChanged, &shell, [this] { edited(); });
@@ -526,19 +525,22 @@ struct Window::Impl {
 		});
 	}
 	bool shown_page_is_launcher() const { return shown == Page::launcher; }
-	// Advanced Options: every further switch of the engine which a player can use, in a dialog of its own. The
-	// controls change the options at once, so the command line behind the dialog follows them; Cancel puts back
-	// what was there when the dialog opened
+	// Advanced: every further switch of the engine which a player can use, and the voice setup and the verification,
+	// in a dialog of its own. The controls change the options at once, so the command line behind the dialog follows
+	// them; Cancel puts back what was there when the dialog opened
 	void buildAdvanced() {
-		advanced = new QDialog(&shell); advanced->setObjectName("advancedOptionsDialog"); advanced->setWindowTitle("Advanced Options");
+		advanced = new QDialog(&shell); advanced->setObjectName("advancedOptionsDialog"); advanced->setWindowTitle("Advanced");
 		advanced->setWindowModality(Qt::WindowModal);
 		auto layout = new QVBoxLayout(advanced); layout->setContentsMargins(24, 20, 24, 16); layout->setSpacing(12);
 		// a macOS sheet has no title bar
-		auto title = new QLabel("Advanced Options"); auto titleFont = title->font(); titleFont.setBold(true); titleFont.setPointSizeF(titleFont.pointSizeF() + 2);
+		auto title = new QLabel("Advanced"); auto titleFont = title->font(); titleFont.setBold(true); titleFont.setPointSizeF(titleFont.pointSizeF() + 2);
 		title->setFont(titleFont); layout->addWidget(title);
 		auto intro = new QLabel("The game gets these as command-line switches. The command line on the launcher page shows the result.");
 		intro->setWordWrap(true); intro->setForegroundRole(QPalette::PlaceholderText); layout->addWidget(intro);
-		auto grid = new QGridLayout; grid->setHorizontalSpacing(12); grid->setVerticalSpacing(8); grid->setColumnStretch(1, 1); grid->setColumnStretch(3, 1);
+		// the switches; while the command line is written by hand they are not used, the tools below still are
+		advancedSwitches = new QWidget;
+		auto grid = new QGridLayout(advancedSwitches); grid->setContentsMargins(0, 0, 0, 0); grid->setHorizontalSpacing(12); grid->setVerticalSpacing(8); grid->setColumnStretch(1, 1); grid->setColumnStretch(3, 1);
+		grid->addWidget(new QLabel("Player name"), 0, 0); grid->addWidget(player, 0, 1, 1, 3);
 		noSound = new QCheckBox("Start without sound"); multi = new QCheckBox("Allow several instances");
 		grid->addWidget(noSound, 1, 0, 1, 2); grid->addWidget(multi, 1, 2, 1, 2);
 		windowPosition = new QWidget; auto position = new QHBoxLayout(windowPosition); position->setContentsMargins(0, 0, 0, 0);
@@ -574,7 +576,12 @@ struct Window::Impl {
 #if !defined(Q_OS_WIN)
 		skipDxCheck->hide(); punkbusterLabel->hide(); punkbuster->hide();
 #endif
-		layout->addLayout(grid);
+		layout->addWidget(advancedSwitches);
+		// the tools: each keeps the dialog's changes and leaves it for its own page
+		auto tools = new QHBoxLayout; tools->setContentsMargins(0, 8, 0, 0);
+		tools->addWidget(voice); tools->addWidget(verify); tools->addStretch(); layout->addLayout(tools);
+		QObject::connect(voice, &QPushButton::clicked, &shell, [this] { advanced->accept(); send(Kind::voice_setup); });
+		QObject::connect(verify, &QPushButton::clicked, &shell, [this] { advanced->accept(); send(Kind::verify); });
 		auto buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel | QDialogButtonBox::RestoreDefaults);
 		layout->addWidget(buttons);
 		QObject::connect(buttons, &QDialogButtonBox::accepted, advanced, &QDialog::accept);
@@ -715,6 +722,7 @@ struct Window::Impl {
 		positionX->setValue(options.window_x); positionY->setValue(options.window_y);
 		setDemo(text(options.demo)); skipDxCheck->setChecked(options.skip_dx_check); punkbuster->setText(text(options.punkbuster));
 		server->setText(text(options.server)); port->setValue(options.port); password->setText(text(options.password));
+		player->setText(text(options.player));
 	}
 	void collectAdvanced(LaunchOptions& options) const {
 		options.no_sound = noSound->isChecked(); options.multi = multi->isChecked();
@@ -724,6 +732,7 @@ struct Window::Impl {
 		options.skip_dx_check = skipDxCheck->isChecked(); options.punkbuster = punkbuster->text().trimmed().toStdString();
 #endif
 		options.server = server->text().toStdString(); options.port = port->value(); options.password = password->text().toStdString();
+		options.player = player->text().toStdString();
 	}
 	// at least the preferred size, and never smaller than the contents need: fonts and display scaling
 	// differ between systems (Windows with 150 % scaling, a larger system font)
@@ -748,9 +757,6 @@ struct Window::Impl {
 		label(layout, name); auto slider = new QSlider(Qt::Horizontal); slider->setAccessibleName(name); slider->setRange(0, 1000); layout->addWidget(slider); return slider;
 	}
 	QSpinBox* spin(int low, int high) { auto spin = new QSpinBox; spin->setRange(low, high); return spin; }
-	QPushButton* button(QHBoxLayout* layout, const QString& title, Kind kind) {
-		auto button = new QPushButton(title); layout->addWidget(button); QObject::connect(button, &QPushButton::clicked, &shell, [this, kind] { send(kind); }); return button;
-	}
 	void send(Kind kind, std::filesystem::path file = {}) {
 		if (loading) return;
 		events.push_back({kind, std::move(file)}); wake.cancel_one();
@@ -763,21 +769,22 @@ struct Window::Impl {
 		optionHint->setVisible(!always->isChecked());
 		windowSize->setVisible(!fullscreen->isChecked());
 		const bool locked = !unlock->isChecked();
-		for (QWidget* control : std::initializer_list<QWidget*>{mods, movies, fullscreen, player, onlineRow, tutorial, clientChoice, advancedButton}) control->setEnabled(locked);
+		for (QWidget* control : std::initializer_list<QWidget*>{mods, movies, fullscreen, onlineRow, tutorial, clientChoice, advancedSwitches}) control->setEnabled(locked);
 
 		// a demo replaces joining a server
 		const bool playsDemo = !demoValue().isEmpty();
 		for (QWidget* control : std::initializer_list<QWidget*>{server, port, password}) control->setEnabled(locked && !playsDemo);
 		width->setEnabled(locked && !fullscreen->isChecked()); height->setEnabled(width->isEnabled());
 		windowPosition->setEnabled(!fullscreen->isChecked());
-		advancedButton->setText(has_advanced_options(currentOptions()) ? "Advanced Options (in use)…" : "Advanced Options…");
+		advancedButton->setToolTip(has_advanced_options(currentOptions()) ? "Further switches, some of them in use, the voice setup and the verification of the game data"
+			: "Further switches of the game (player name, sound, instances, window position, demos, joining a server), the voice setup and the verification of the game data");
 		send(Kind::options_edited);
 	}
 	void show(Page page, const QString& title, const QString& action, bool canBack) {
 		bool wasLauncher = shown == Page::launcher, launcher = page == Page::launcher;
 		shown = page; busy = false; pages->setEnabled(true); pages->setCurrentIndex(int(page));
 		pages->updateGeometry();
-		voice->setVisible(launcher); verify->setVisible(launcher); voice->setEnabled(true); verify->setEnabled(true);
+		advancedButton->setVisible(launcher); advancedButton->setEnabled(true); voice->setEnabled(true); verify->setEnabled(true);
 		outer->setContentsMargins(launcher ? 40 : 28, launcher ? 38 : 24, launcher ? 40 : 28, 24);
 		auto font = heading->font(); font.setPointSize(launcher ? 20 : 22); font.setBold(!launcher); heading->setFont(font);
 		shell.setMinimumSize(launcher ? QSize(660, 480) : QSize(660, 520));
@@ -859,7 +866,7 @@ void Window::ShowLauncher(const LaunchOptions& options, const std::vector<Mod>& 
 	i.demoConfig = options.demo_config;
 	i.mods->clear(); for (const auto& mod : mods) i.mods->addItem(text(mod.title), text(mod.directory));
 	i.mods->setCurrentIndex(i.mods->findData(text(options.mod))); i.movies->setChecked(options.skip_movies); i.fullscreen->setChecked(options.fullscreen);
-	i.width->setValue(options.width); i.height->setValue(options.height); i.player->setText(text(options.player));
+	i.width->setValue(options.width); i.height->setValue(options.height);
 	i.always->setChecked(options.always_show); i.unlock->setChecked(!options.override.empty()); i.command->setText(text(options.override));
 	i.clientChoice->setCurrentIndex(options.client == "x86" ? 1 : 0);
 	i.otherSource = options.other_source; i.otherUrl = options.other_url; i.providerFolder = options.provider_folder;
@@ -870,7 +877,7 @@ void Window::ShowLauncher(const LaunchOptions& options, const std::vector<Mod>& 
 	i.launcherNote->setText(text(note)); i.launcherNote->setVisible(!note.empty()); i.show(Page::launcher, "Battlefield 2", "Play", false); i.next->setEnabled(present);
 	i.edited(); i.loading = false;
 }
-void Window::SetBusy(const std::string& label) { m_Impl->busy = true; m_Impl->pages->setEnabled(false); m_Impl->voice->setEnabled(false); m_Impl->verify->setEnabled(false); m_Impl->next->setText(text(label)); m_Impl->next->setEnabled(false); m_Impl->back->setEnabled(false); }
+void Window::SetBusy(const std::string& label) { m_Impl->busy = true; m_Impl->pages->setEnabled(false); m_Impl->advancedButton->setEnabled(false); m_Impl->voice->setEnabled(false); m_Impl->verify->setEnabled(false); m_Impl->next->setText(text(label)); m_Impl->next->setEnabled(false); m_Impl->back->setEnabled(false); }
 void Window::EnableNext(bool enabled) { m_Impl->next->setEnabled(enabled && !m_Impl->busy); }
 void Window::SetPatch(PatchSlot slot, PatchStatus status, double fraction) {
 	auto well = slot == PatchSlot::Patch141 ? m_Impl->patch141 : m_Impl->patch150;
@@ -919,7 +926,7 @@ LaunchOptions Window::Options() const { return m_Impl->currentOptions(); }
 LaunchOptions Window::Impl::currentOptions() const {
 	auto& i = *this; LaunchOptions options;
 	options.mod = i.mods->currentData().toString().toStdString(); options.skip_movies = i.movies->isChecked(); options.fullscreen = i.fullscreen->isChecked();
-	options.width = i.width->value(); options.height = i.height->value(); options.player = i.player->text().toStdString();
+	options.width = i.width->value(); options.height = i.height->value();
 	options.always_show = i.always->isChecked(); if (i.unlock->isChecked()) options.override = i.command->text().toStdString();
 #if defined(Q_OS_WIN)
 	options.client = i.clientChoice->currentData().toString().toStdString();

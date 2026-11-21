@@ -28,7 +28,7 @@ are preserved; their original repository links are historical paths.
   options, their file and the command line they become, without any I/O.
 - `src/window_qt.cpp`, `src/client_qt.cpp`, `src/microphone_sdl.cpp`, `src/main_qt.cpp`: the one
   graphical front end for macOS and Linux, Qt Widgets in plain C++ (no Designer files, no QML):
-  window with five-field key rows, the launcher page with its online selector and Advanced Options dialog,
+  window with five-field key rows, the launcher page with its online selector and Advanced dialog,
   QProcess client launch, SDL3 level meter. `src/platform_mac.mm` and `src/platform_linux.cpp` hold
   the platform differences (Option key or `--launcher`, Qt's microphone permission on macOS, handing
   the foreground to the client); `cmake/frontend.cmake` builds the library both platforms use.

@@ -11,7 +11,7 @@ bool setup::frontend::launcherRequested()
 
 QString setup::frontend::launcherHint()
 {
-	return QString::fromUtf8("Tip: Hold ⌥ while opening OpenBF2 to get here");
+	return QString::fromUtf8("Tip: Open Launcher by pressing ⌥ on startup");
 }
 
 QString setup::frontend::microphoneSettingsLabel()

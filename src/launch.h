@@ -99,6 +99,15 @@ namespace setup {
 
 	// the arguments after the client executable
 	std::vector<std::string> launch_arguments(const LaunchOptions& options);
+	// the files the launcher names on a command line it built itself (+onlineProviderConfig, +demo), with the
+	// option. empty for an override, which the user wrote
+	std::vector<std::pair<std::string, std::string>> launch_files(const LaunchOptions& options);
+	// why the game's command-line parser could not read `path` as an option's value: it takes at most 255 bytes and
+	// no double quote. empty when it can
+	std::string game_path_problem(const std::string& path);
+	// the line of the game's output which says why it refused the provider file and ended its start-up with
+	// exit code 42 ("+onlineProviderConfig "<path>": <reason>"); empty without one
+	std::string provider_refusal(const std::string& output);
 	// the arguments as one line: what the options page shows, and what an override starts from. an argument
 	// with a space or a quote is double-quoted
 	std::string command_line(const std::vector<std::string>& arguments);
