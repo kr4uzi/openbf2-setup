@@ -4,6 +4,9 @@
 ; from the user's disc. The all-users mode follows later (kr4uzi/openbf2-setup issue #1).
 ;
 ;   ISCC /DAppVersion=0.5.0 /DSourceDir=<build>\app /DOutputDir=<dir> /DOutputBaseFilename=openbf2-windows-setup OpenBF2.iss
+;
+; With /DSign and the sign tool "openbf2" (ISCC "/Sopenbf2=$q<repo>\windows\sign.cmd$q $f"), the installer and the
+; uninstaller it writes are signed; the application folder is signed before (windows\build-release.ps1 -Sign).
 
 #ifndef AppVersion
   #error AppVersion is required
@@ -42,6 +45,10 @@ WizardStyle=modern
 Compression=lzma2/max
 SolidCompression=yes
 CloseApplications=yes
+#ifdef Sign
+SignTool=openbf2
+SignedUninstaller=yes
+#endif
 
 [Tasks]
 Name: desktopicon; Description: "Create a desktop shortcut"; Flags: unchecked

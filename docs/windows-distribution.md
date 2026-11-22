@@ -60,11 +60,12 @@ The release build, as OpenBF2's workflow runs it, in the developer environment w
 `ZLIB_INCLUDE_DIR`, `SETUP_DIRECTX_REDIST`, `SETUP_ISCC`):
 
 ```bat
-powershell -File windows\build-release.ps1 CLIENT_X64_DIR CLIENT_X86_DIR OUTPUT\openbf2-windows-setup.exe [BUILD_DIR]
+powershell -File windows\build-release.ps1 CLIENT_X64_DIR CLIENT_X86_DIR OUTPUT\openbf2-windows-setup.exe [BUILD_DIR] [-Sign]
 ```
 
 It configures with both client packages, builds, runs the tests (without the owner's media and key), checks the
-application folder, builds the installer and writes `openbf2-windows-setup.exe.sha256` beside it.
+application folder, builds the installer and writes `openbf2-windows-setup.exe.sha256` beside it. With `-Sign` it
+signs as described [below](#signing).
 
 ## The application folder
 
@@ -89,8 +90,34 @@ game folder.
 user into `%LOCALAPPDATA%\Programs\OpenBF2`, without administrator rights, adds a Start menu entry (a desktop
 shortcut on request) and then starts OpenBF2, which installs the game from the user's disc. The uninstaller removes
 the application folder; it asks (default no) whether to remove `%LOCALAPPDATA%\OpenBF2` (the installed game, its
-settings and the CD keys) and never touches `Documents\Battlefield 2`. The installer is not code-signed yet, so
-SmartScreen asks before it runs.
+settings and the CD keys) and never touches `Documents\Battlefield 2`.
+
+## Signing
+
+`build-release.ps1 -Sign` signs with `windows/sign.ps1` (Authenticode, SHA-256, RFC 3161 timestamp), in this order:
+
+1. every program and DLL (`.exe`, `.dll`, `.pyd`) of both client folders without a valid signature, in place,
+   before the build copies them into `x64\` and `x86\`;
+2. every program and DLL of the application folder without one (`OpenBF2.exe`, Qt, SDL3);
+3. the installer and the uninstaller Inno Setup writes into it: CMake's `SETUP_SIGN` passes `/DSign` and the sign
+   tool `openbf2` (`windows/sign.cmd`) to ISCC.
+
+Files that already carry a valid signature (Microsoft's Visual C++ runtime and DirectX setup) stay as they are.
+Afterwards every program and DLL of the application folder and the installer must carry a valid signature; the
+`.sha256` is written after signing.
+
+`sign.ps1` takes its certificate from the environment:
+
+| Variable | Meaning |
+| --- | --- |
+| `SETUP_SIGN_DLIB`, `SETUP_SIGN_METADATA` | Azure Artifact Signing: `Azure.CodeSigning.Dlib.dll` of Microsoft's `Microsoft.ArtifactSigning.Client` package (signtool's architecture) and its `metadata.json` (`Endpoint`, `CodeSigningAccountName`, `CertificateProfileName`); the Azure login comes from the environment. Timestamp `http://timestamp.acs.microsoft.com` |
+| `SETUP_SIGN_CERT_SHA1` | instead: a certificate in the user's store by thumbprint (a cloud certificate such as Certum SimplySign, a hardware token, or a local test). Timestamp `http://timestamp.digicert.com` |
+| `SETUP_SIGNTOOL` | `signtool.exe`; otherwise from `PATH`. Artifact Signing needs Windows SDK 10.0.22621 or later |
+| `SETUP_SIGN_TIMESTAMP` | another timestamp server; `none` signs without one (local tests only) |
+
+OpenBF2's release workflow signs with its Certum certificate by thumbprint, logged in through SimplySign Desktop,
+with Certum's timestamp server `http://time.certum.pl` (its `docs/ci-releases.md`).
+An unsigned installer works the same, but SmartScreen asks before it runs.
 
 ## The DirectX runtime of the 64-bit client
 
@@ -128,5 +155,4 @@ so OpenBF2 uses junctions (`src/links.cpp`).
 
 - the all-users mode (administrator rights, the CD keys and the install path in the registry for older
   tools, a shared game folder);
-- code signing of the installer and the executables (`signtool`, once a certificate exists);
 - a Windows job in this repository's CI (OpenBF2's workflow builds and tests the release).

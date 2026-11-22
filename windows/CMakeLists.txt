@@ -84,10 +84,17 @@ endif()
 
 # The installer, openbf2-windows-setup.exe: Inno Setup (OpenBF2.iss) packs the app folder as it is
 set(SETUP_ISCC "" CACHE FILEPATH "Inno Setup's ISCC.exe; with it, the installer target builds openbf2-windows-setup.exe")
+# SETUP_SIGN: Inno signs the installer and its uninstaller with sign.cmd (sign.ps1 and its environment)
+option(SETUP_SIGN "Sign the installer and the uninstaller (windows/sign.ps1)" OFF)
 if(SETUP_ISCC)
+  set(sign_options)
+  if(SETUP_SIGN)
+    file(TO_NATIVE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/sign.cmd" sign_command)
+    set(sign_options "/DSign" "/Sopenbf2=$q${sign_command}$q $f")
+  endif()
   add_custom_target(installer
     COMMAND "${SETUP_ISCC}" /Q "/DAppVersion=${PROJECT_VERSION}" "/DSourceDir=${app_dir}"
-      "/DOutputDir=${CMAKE_BINARY_DIR}/installer" "/DOutputBaseFilename=openbf2-windows-setup"
+      "/DOutputDir=${CMAKE_BINARY_DIR}/installer" "/DOutputBaseFilename=openbf2-windows-setup" ${sign_options}
       "${CMAKE_CURRENT_SOURCE_DIR}/OpenBF2.iss"
     VERBATIM)
   add_dependencies(installer OpenBF2)
