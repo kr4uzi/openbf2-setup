@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "provider": "BF2Hub",
+  "source": "what BF2Hub's client resolves (openbf2-hubtool), 2026-11-22; \"*\" is the availability check's address and covers every service not listed, eapusher is the stats web server's",
+  "services": {
+    "*": "5.252.33.100",
+    "gamestats": "116.203.14.166",
+    "BF2Web": "116.203.14.166",
+    "eapusher": "116.203.14.166"
+  }
+}

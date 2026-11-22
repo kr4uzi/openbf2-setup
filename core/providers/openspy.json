@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "provider": "OpenSpy",
+  "source": "OpenSpy's own *.openspy.net names, resolved 2026-11-22; \"*\" is the availability check's address and covers every service not listed, eapusher is the stats web server's",
+  "services": {
+    "*": "134.122.16.249",
+    "gpcm": "157.230.90.177",
+    "gpsp": "157.230.90.177",
+    "gamestats": "157.230.90.177",
+    "BF2Web": "167.99.14.87",
+    "natneg1": "167.99.14.87",
+    "natneg2": "157.230.90.177",
+    "eapusher": "167.99.14.87"
+  }
+}

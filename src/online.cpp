@@ -366,11 +366,9 @@ bool setup::valid_provider_url(const std::string& url)
 
 const std::vector<setup::ProviderPreset>& setup::provider_presets()
 {
-	// bf2.org serves the retail names of both under a domain of its own: battlefield2.available.gamespy.com is
-	// battlefield2.available.openspy.p.bf2.org, and so on
+	// core/providers/openspy.json and bf2hub.json, embedded by CMakeLists.txt: each service at a fixed address
 	static const std::vector<ProviderPreset> presets{
-		{ "openspy", R"({"schema": 1, "provider": "OpenSpy", "services": {"*": "openspy.p.bf2.org"}})" },
-		{ "bf2hub", R"({"schema": 1, "provider": "BF2Hub", "services": {"*": "bf2hub.p.bf2.org"}})" },
+#include "provider_presets.inc"
 	};
 	return presets;
 }

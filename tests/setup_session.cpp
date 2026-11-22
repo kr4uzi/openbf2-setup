@@ -260,10 +260,14 @@ int main(int argc,char** argv){
             online.online="other";online.provider={};check(setup::command_line(setup::launch_arguments(online)).find("+onlineProviderConfig")==std::string::npos,"a provider file without a kept one");
             online.provider=parsed;online.provider_folder.clear();check(setup::command_line(setup::launch_arguments(online)).find("+onlineProviderConfig")==std::string::npos,"a provider file without its folder");
             online.provider_folder="/s/Setup";online.online="evil";check(setup::command_line(setup::launch_arguments(online)).find("+onlineProviderConfig")==std::string::npos,"a provider file for an unknown choice");
-            // the presets: bf2.org's domains for OpenSpy and BF2Hub, each a file of its own
+            // the presets: OpenSpy and BF2Hub, each a file of its own
             check(setup::provider_presets().size()==2&&setup::provider_preset("openspy")&&setup::provider_preset("bf2hub")&&!setup::provider_preset("other")&&!setup::provider_preset(""),"the presets");
-            check(setup::parse_provider(setup::provider_preset("openspy")->json)==setup::ProviderServices{"OpenSpy",{{"*","openspy.p.bf2.org"}},std::nullopt},"the OpenSpy preset");
-            check(setup::parse_provider(setup::provider_preset("bf2hub")->json)==setup::ProviderServices{"BF2Hub",{{"*","bf2hub.p.bf2.org"}},std::nullopt},"the BF2Hub preset");
+            // embedded unchanged from core/providers, each a valid provider file whose fallback is an address
+            for(auto [online,name]:{std::pair<std::string,std::string>{"openspy","OpenSpy"},{"bf2hub","BF2Hub"}}){
+                check(setup::provider_preset(online)->json==read(fs::path(SETUP_SOURCE_DIR)/"core/providers"/(online+".json")),("the "+name+" preset is not core/providers/"+online+".json").c_str());
+                auto preset=setup::parse_provider(setup::provider_preset(online)->json);
+                check(preset.name==name&&!preset.services.empty()&&preset.services.front().first=="*"&&preset.services.front().second.find_first_not_of("0123456789.")==std::string::npos,("the "+name+" preset's fallback is not an address").c_str());
+            }
             check(setup::provider_config_name("openspy")=="Provider-OpenSpy.json"&&setup::provider_config_name("bf2hub")=="Provider-BF2Hub.json"&&setup::provider_config_name("other")=="Provider-Other.json","the files the game reads");
             // the game's parser: at most 255 bytes and no double quote; the files the launcher passes; the game's refusal
             {   // the 64-bit DirectX cab is found by its name and its SHA-256, never by the name alone
@@ -325,9 +329,9 @@ int main(int argc,char** argv){
             setup::LaunchOptions chosen=saved;chosen.online="other";session::saveLaunch(support,chosen,*platform);
             check(session::loadLaunch(support).provider.name=="Mine","the options were read without the other provider's services");
             chosen.online="openspy";session::saveLaunch(support,chosen,*platform);
-            check(session::loadLaunch(support).provider.services.front().second=="openspy.p.bf2.org","the options were read without OpenSpy's preset");
+            check(session::loadLaunch(support).provider==setup::parse_provider(setup::provider_preset("openspy")->json),"the options were read without OpenSpy's preset");
             chosen.online="bf2hub";session::saveLaunch(support,chosen,*platform);
-            check(session::loadLaunch(support).provider.services.front().second=="bf2hub.p.bf2.org","the options were read without BF2Hub's preset");
+            check(session::loadLaunch(support).provider==setup::parse_provider(setup::provider_preset("bf2hub")->json),"the options were read without BF2Hub's preset");
             // the preset's file is written where the game reads it, replacing whatever was there; not for another choice
             {auto options=session::loadLaunch(support);
              write(support/"Setup/Provider-BF2Hub.json","old");session::writeProviderPreset(options,*platform);
@@ -344,7 +348,7 @@ int main(int argc,char** argv){
              fs::remove(support/"Setup/Provider-OpenSpy.json");}
             // a hubtool file of a 0.5.0 test build in Provider-BF2Hub.json is not read: BF2Hub is the preset
             write(support/"Setup/Provider-BF2Hub.json",hub);
-            check(session::loadLaunch(support).provider.name=="BF2Hub"&&session::loadLaunch(support).provider.services.size()==1,"an old BF2Hub file was read instead of the preset");
+            check(session::loadLaunch(support).provider==setup::parse_provider(setup::provider_preset("bf2hub")->json),"an old BF2Hub file was read instead of the preset");
             fs::remove(support/"Setup/Provider-BF2Hub.json");
             chosen.online="other";session::saveLaunch(support,chosen,*platform);
             write(support/"Setup/Provider-Other.json","{}");check(!session::storedProvider(support,"other")&&session::loadLaunch(support).online=="other"&&session::loadLaunch(support).provider.services.empty(),"a broken kept file gave services");

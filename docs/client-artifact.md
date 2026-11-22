@@ -88,8 +88,11 @@ do. The setup app follows it as described here.
   the retail services (the default); otherwise `+onlineProviderConfig <file>`,
   the provider file the engine reads itself (client and dedicated server; the
   engine passes it on when it restarts for a mod). OpenSpy and BF2Hub are presets
-  the application carries: bf2.org's domains `openspy.p.bf2.org` and
-  `bf2hub.p.bf2.org`, written at every start to
+  the application carries, `core/providers/openspy.json` and `bf2hub.json`
+  embedded at build time: each service at a fixed address (OpenSpy's own
+  `*.openspy.net` names, BF2Hub's as its client resolves them; `*`, every other
+  name, is the availability check's address and `eapusher` the stats web
+  server's), written unchanged at every start to
   `<support root>/Setup/Provider-OpenSpy.json` and `Provider-BF2Hub.json`.
   "Other" takes the user's own provider file, kept as
   `<support root>/Setup/Provider-Other.json`. A provider file is JSON with

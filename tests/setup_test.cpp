@@ -472,7 +472,7 @@ int main()
 		machine.stored_launch.online = "bf2hub";
 	}, [] {
 		check(g_Machine.client_runs == 1 && g_Machine.pages.empty() && !called_any("download"), "a preset did not start straight into the game");
-		check(g_Machine.client_options.provider == parse_provider(R"({"schema": 1, "provider": "BF2Hub", "services": {"*": "bf2hub.p.bf2.org"}})"), "the BF2Hub preset is not bf2.org's domain");
+		check(g_Machine.client_options.provider == parse_provider(provider_preset("bf2hub")->json), "the BF2Hub preset was not passed");
 		check(command_line(launch_arguments(g_Machine.client_options)) == "+modPath mods/bf2 +restart 1 " + provider_argument("Provider-BF2Hub.json"), "the plain start did not pass the preset's file");
 	});
 
@@ -485,7 +485,7 @@ int main()
 		chosen.provider_folder = provider_folder;
 		machine.script = { { Kind::options_edited, {}, {}, {}, chosen }, click(Page::launcher), quit() };
 	}, [] {
-		check(g_Machine.stored_launch.online == "openspy" && g_Machine.client_options.provider.services == std::vector<std::pair<std::string, std::string>>{ { "*", "openspy.p.bf2.org" } }, "the OpenSpy choice was not saved, or is not bf2.org's domain");
+		check(g_Machine.stored_launch.online == "openspy" && g_Machine.client_options.provider == parse_provider(provider_preset("openspy")->json), "the OpenSpy choice was not saved, or not passed");
 		check(g_Machine.command_line == "+modPath mods/bf2 +restart 1 " + provider_argument("Provider-OpenSpy.json"), "the command line did not name OpenSpy's file");
 	});
 

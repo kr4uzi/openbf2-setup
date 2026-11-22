@@ -463,8 +463,8 @@ struct Window::Impl {
 		onlineRow = new OnlineRow;
 		onlineRow->choice->setToolTip("Who provides the server list, logins and stats. OpenSpy and BF2Hub need nothing more; Other takes a provider file, which Configure… sets up. The game reads the chosen provider's file (+onlineProviderConfig)");
 		onlineRow->choice->setItemData(0, "The game's own services (gamespy.com)", Qt::ToolTipRole);
-		onlineRow->choice->setItemData(1, "OpenSpy's services, under bf2.org's names (openspy.p.bf2.org); not verified by OpenBF2", Qt::ToolTipRole);
-		onlineRow->choice->setItemData(2, "BF2Hub's services, under bf2.org's names (bf2hub.p.bf2.org); not verified by OpenBF2", Qt::ToolTipRole);
+		onlineRow->choice->setItemData(1, "OpenSpy's services (fixed addresses); not verified by OpenBF2", Qt::ToolTipRole);
+		onlineRow->choice->setItemData(2, "BF2Hub's services (fixed addresses); not verified by OpenBF2", Qt::ToolTipRole);
 		onlineRow->choice->setItemData(3, "Another provider's services, from a provider file on the web or on this computer", Qt::ToolTipRole);
 		onlineRow->configure->setToolTip("Where the provider file comes from, and getting it again");
 		QObject::connect(onlineRow->choice, &QComboBox::activated, &shell, [this] { chooseOnline(); });
