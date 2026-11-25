@@ -15,6 +15,7 @@ namespace setup::frontend {
 	// the label of the microphone button when access was denied
 	QString microphoneSettingsLabel();
 	// hands the foreground to the started client. Called repeatedly after the launch until it returns
-	// true: the client is active, it is gone, or the user brought another application forward
+	// true: the client is active (on macOS: with its window on screen), it is gone, or the user brought
+	// another application forward
 	bool handOverActivation(long long processId);
 }

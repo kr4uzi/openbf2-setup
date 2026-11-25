@@ -33,7 +33,7 @@ target_compile_options(bf2_setup_frontend PRIVATE $<$<AND:$<COMPILE_LANGUAGE:CXX
 if(APPLE)
   set_source_files_properties("${CMAKE_SOURCE_DIR}/src/platform_mac.mm" PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
   set_target_properties(bf2_setup_frontend PROPERTIES OBJCXX_STANDARD 23)
-  target_link_libraries(bf2_setup_frontend PUBLIC "-framework AppKit")
+  target_link_libraries(bf2_setup_frontend PUBLIC "-framework AppKit" "-framework CoreGraphics")
 endif()
 set(frontend_application_sources
   "${CMAKE_SOURCE_DIR}/src/main_qt.cpp" "${CMAKE_SOURCE_DIR}/src/setup.cpp" "${CMAKE_SOURCE_DIR}/src/installer.cpp" "${CMAKE_SOURCE_DIR}/src/store.cpp")

@@ -177,10 +177,11 @@ task<int> setup::runClientProcess(assistant::Launch launch, std::filesystem::pat
 	child.start(QString::fromStdString(launch.executable.string()), arguments, QIODevice::ReadOnly);
 
 	// the game gets the foreground from the application which started it, so its first clicks count.
-	// five seconds at most; the client also asks for activation itself
+	// Until its window is up (macOS, platform_mac.mm), twenty seconds at most; the client also asks
+	// for activation itself
 	if (child.waitForStarted(5000)) {
 		auto timer = boost::asio::steady_timer{ co_await boost::asio::this_coro::executor };
-		for (int attempt = 0; attempt < 50 && child.state() == QProcess::Running; ++attempt) {
+		for (int attempt = 0; attempt < 200 && child.state() == QProcess::Running; ++attempt) {
 			if (frontend::handOverActivation(child.processId()))
 				break;
 
