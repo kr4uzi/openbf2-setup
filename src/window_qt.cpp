@@ -58,6 +58,36 @@ namespace {
 QString text(const std::string& value) { return QString::fromStdString(value); }
 using Kind = Event::Kind;
 
+// Secondary text: hints, introductions, a status. macOS takes the system's placeholder colour. Other systems take
+// a blend of the text and the window colour, since some themes (KDE's dark ones, as on the Steam Deck) give the
+// placeholder colour too little contrast for text; the blend follows when the theme changes.
+class SecondaryText : public QObject {
+public:
+	explicit SecondaryText(QWidget* widget) : QObject(widget) { widget->installEventFilter(this); apply(widget); }
+	bool eventFilter(QObject* object, QEvent* event) override {
+		if (event->type() == QEvent::ApplicationPaletteChange || event->type() == QEvent::ThemeChange) apply(static_cast<QWidget*>(object));
+		return false;
+	}
+private:
+	static void apply(QWidget* widget) {
+		const auto theme = QApplication::palette(widget);
+		auto palette = widget->palette();
+		for (auto group : {QPalette::Active, QPalette::Inactive}) {
+			const auto text = theme.color(group, QPalette::WindowText), window = theme.color(group, QPalette::Window);
+			const auto mix = [](float a, float b) { return a * 0.65f + b * 0.35f; };
+			palette.setColor(group, QPalette::WindowText, QColor::fromRgbF(mix(text.redF(), window.redF()), mix(text.greenF(), window.greenF()), mix(text.blueF(), window.blueF())));
+		}
+		widget->setPalette(palette);
+	}
+};
+void secondaryText(QWidget* widget) {
+#if defined(__APPLE__)
+	widget->setForegroundRole(QPalette::PlaceholderText);
+#else
+	new SecondaryText(widget);
+#endif
+}
+
 class Shell : public QWidget {
 public:
 	std::function<void()> closing;
@@ -152,7 +182,7 @@ public:
 		choice->addItem("Retail (default)", QString()); choice->addItem("OpenSpy", QString("openspy"));
 		choice->addItem("BF2Hub", QString("bf2hub")); choice->addItem("Other", QString("other"));
 		// the status goes on a line of its own below the row (see the launcher page)
-		status = new QLabel; status->setObjectName("onlineServicesStatus"); status->setTextFormat(Qt::PlainText); status->setForegroundRole(QPalette::PlaceholderText);
+		status = new QLabel; status->setObjectName("onlineServicesStatus"); status->setTextFormat(Qt::PlainText); secondaryText(status);
 		configure = new QPushButton("Configure…"); configure->setObjectName("onlineServicesConfigure");
 		layout->addWidget(choice, 1); layout->addWidget(configure);
 	}
@@ -421,7 +451,6 @@ struct Window::Impl {
 		label(welcome, "Game data, profiles and mods stay in your user data folder when you replace this application. A paused installation can be resumed.");
 		label(welcome, "Battlefield 2 is installed on this computer already, from Steam, a disc or in Wine? OpenBF2 can use it with its mods as it is:");
 		auto existingButton = new QPushButton("Use an Existing Installation…"); existingButton->setObjectName("existingInstallation");
-		existingButton->setToolTip("Use the game files and mods of an installed Battlefield 2 1.5 in place, without copying them");
 		auto existingRow = new QHBoxLayout; existingRow->addWidget(existingButton); existingRow->addStretch(); welcome->addLayout(existingRow);
 		QObject::connect(existingButton, &QPushButton::clicked, &shell, [this] { send(Kind::existing); });
 		welcome->addStretch();
@@ -478,47 +507,35 @@ struct Window::Impl {
 		auto preferences = new QGridLayout; preferences->setHorizontalSpacing(20); preferences->setVerticalSpacing(10);
 		preferences->setColumnStretch(0, 1); preferences->setColumnStretch(1, 1);
 		always = new QCheckBox("Open launcher on startup"); always->setObjectName("alwaysShowLauncher");
-		always->setToolTip("Show this page every time OpenBF2 opens. Otherwise the game starts directly");
 		preferences->addWidget(always, 0, 0);
 		optionHint = new QLabel(frontend::launcherHint()); optionHint->setObjectName("launcherHint");
 		auto smallFont = optionHint->font(); smallFont.setPointSizeF(smallFont.pointSizeF() - 1); optionHint->setFont(smallFont);
-		optionHint->setForegroundRole(QPalette::PlaceholderText); preferences->addWidget(optionHint, 0, 1);
-		movies = new QCheckBox("Skip the intro movies"); movies->setObjectName("skipMovies"); movies->setToolTip("Start without the intro movies (+restart 1)");
+		secondaryText(optionHint); preferences->addWidget(optionHint, 0, 1);
+		movies = new QCheckBox("Skip the intro movies"); movies->setObjectName("skipMovies");
 		tutorial = new QCheckBox("Show tutorial messages"); tutorial->setObjectName("tutorialMessages");
-		tutorial->setToolTip("The tutorial hints during play, as set in the game's options. Unchecked hides them for this start (+tutorialMessages 0)");
 		preferences->addWidget(tutorial, 2, 0); preferences->addWidget(movies, 1, 0);
 		fullscreen = new QCheckBox("Fullscreen"); fullscreen->setObjectName("fullscreen");
-		fullscreen->setToolTip("Fullscreen is the game's default. Windowed mode passes +fullscreen 0"); preferences->addWidget(fullscreen, 1, 1);
+		preferences->addWidget(fullscreen, 1, 1);
 		windowSize = new QWidget; windowSize->setObjectName("windowSize");
 		auto retained = windowSize->sizePolicy(); retained.setRetainSizeWhenHidden(true); windowSize->setSizePolicy(retained);
 		auto size = new QHBoxLayout(windowSize); size->setContentsMargins(0, 0, 0, 0);
 		width = spin(0, 16384); height = spin(0, 16384); width->setSpecialValueText("Default"); height->setSpecialValueText("Default");
 		width->setMinimumWidth(96); height->setMinimumWidth(96);
 		width->setAccessibleName("Window width"); height->setAccessibleName("Window height");
-		width->setToolTip("The window's width (+szx); Default keeps the game's video settings");
-		height->setToolTip("The window's height (+szy); Default keeps the game's video settings");
 		size->addWidget(new QLabel("Window size")); size->addWidget(width); size->addWidget(new QLabel("×")); size->addWidget(height); size->addStretch();
 		preferences->addWidget(windowSize, 2, 1); launcher->addLayout(preferences);
 		auto form = new QGridLayout; form->setHorizontalSpacing(12); form->setVerticalSpacing(10); form->setColumnStretch(1, 1);
 		mods = new QComboBox; mods->setAccessibleName("Mod"); mods->setObjectName("launcherMod");
-		modsFolder = new QPushButton("Open Mods Folder"); modsFolder->setToolTip("The folder for your own mods. Each mod in it is offered above");
+		modsFolder = new QPushButton("Open Mods Folder");
 		QObject::connect(modsFolder, &QPushButton::clicked, &shell, [this] { send(Kind::mods_folder); });
 		form->addWidget(new QLabel("Mod"), 0, 0); form->addWidget(mods, 0, 1); form->addWidget(modsFolder, 0, 2, 1, 2);
 		server = new QLineEdit; server->setAccessibleName("Server address"); server->setPlaceholderText("address");
-		port = spin(1, 65535); port->setAccessibleName("Server port"); port->setMaximumWidth(90); port->setToolTip("The server's port (+port), 16567 for most servers");
+		port = spin(1, 65535); port->setAccessibleName("Server port"); port->setMaximumWidth(90);
 		player = new QLineEdit; player->setAccessibleName("Player name"); player->setPlaceholderText("the game’s own");
-		player->setToolTip("The name to play with (+playerName); empty uses the profile's name");
 		password = new QLineEdit; password->setAccessibleName("Server password"); password->setEchoMode(QLineEdit::Password); password->setPlaceholderText("none");
-		password->setToolTip("The server's password, if it has one (+password)");
 		// the online services: the game's own, a preset, or the other provider's file; the game reads the chosen one
 		// (+onlineProviderConfig)
 		onlineRow = new OnlineRow;
-		onlineRow->choice->setToolTip("Who provides the server list, logins and stats. OpenSpy and BF2Hub need nothing more; Other takes a provider file, which Configure… sets up. The game reads the chosen provider's file (+onlineProviderConfig)");
-		onlineRow->choice->setItemData(0, "The game's own services (gamespy.com)", Qt::ToolTipRole);
-		onlineRow->choice->setItemData(1, "OpenSpy's services (fixed addresses); not verified by OpenBF2", Qt::ToolTipRole);
-		onlineRow->choice->setItemData(2, "BF2Hub's services (fixed addresses); not verified by OpenBF2", Qt::ToolTipRole);
-		onlineRow->choice->setItemData(3, "Another provider's services, from a provider file on the web or on this computer", Qt::ToolTipRole);
-		onlineRow->configure->setToolTip("Where the provider file comes from, and getting it again");
 		QObject::connect(onlineRow->choice, &QComboBox::activated, &shell, [this] { chooseOnline(); });
 		QObject::connect(onlineRow->configure, &QPushButton::clicked, &shell, [this] { openProvider(); });
 		onlineRow->dropped = [this](const std::filesystem::path& file) { send(Kind::other_file, file); };
@@ -529,7 +546,6 @@ struct Window::Impl {
 		// Windows ships both clients: the 64-bit one, and the 32-bit one which PunkBuster needs
 		clientChoice = new QComboBox; clientChoice->setObjectName("clientChoice"); clientChoice->setAccessibleName("Client");
 		clientChoice->addItem("64-bit", QString("x64")); clientChoice->addItem("32-bit, for PunkBuster servers", QString("x86"));
-		clientChoice->setToolTip("The 64-bit client, or the 32-bit one for servers which require PunkBuster (PunkBuster exists only for 32 bits)");
 		auto clientLabel = new QLabel("Client");
 		form->addWidget(clientLabel, 3, 0); form->addWidget(clientChoice, 3, 1);
 #if !defined(Q_OS_WIN)
@@ -538,7 +554,7 @@ struct Window::Impl {
 		launcher->addLayout(form);
 		buildAdvanced();
 		auto arguments = new QHBoxLayout;
-		auto argumentLabel = new QLabel("Arguments to bf2_client"); argumentLabel->setFont(smallFont); argumentLabel->setForegroundRole(QPalette::PlaceholderText);
+		auto argumentLabel = new QLabel("Arguments to bf2_client"); argumentLabel->setFont(smallFont); secondaryText(argumentLabel);
 		arguments->addWidget(argumentLabel); arguments->addStretch();
 		launcherNote = new QLabel; launcherNote->setTextFormat(Qt::PlainText); launcherNote->setWordWrap(true); launcherNote->setFont(smallFont);
 		launcherNote->setAlignment(Qt::AlignRight | Qt::AlignVCenter); arguments->addWidget(launcherNote, 1); launcher->addLayout(arguments);
@@ -548,7 +564,6 @@ struct Window::Impl {
 		command = new QLineEdit; command->setObjectName("commandLine"); command->setAccessibleName("Command line"); command->setReadOnly(true);
 		auto fixedFont = QFontDatabase::systemFont(QFontDatabase::FixedFont); fixedFont.setPointSizeF(smallFont.pointSizeF()); command->setFont(fixedFont);
 		commandRow->addWidget(command, 1); launcher->addLayout(commandRow); launcher->addStretch();
-		describe();
 		QWidget::setTabOrder(always, movies); QWidget::setTabOrder(movies, fullscreen); QWidget::setTabOrder(fullscreen, width);
 		QWidget::setTabOrder(width, height); QWidget::setTabOrder(height, mods); QWidget::setTabOrder(mods, modsFolder);
 		QWidget::setTabOrder(modsFolder, unlock); QWidget::setTabOrder(unlock, command);
@@ -588,7 +603,7 @@ struct Window::Impl {
 		auto title = new QLabel("Advanced"); auto titleFont = title->font(); titleFont.setBold(true); titleFont.setPointSizeF(titleFont.pointSizeF() + 2);
 		title->setFont(titleFont); layout->addWidget(title);
 		auto intro = new QLabel("The game gets these as command-line switches. The command line on the launcher page shows the result.");
-		intro->setWordWrap(true); intro->setForegroundRole(QPalette::PlaceholderText); layout->addWidget(intro);
+		intro->setWordWrap(true); secondaryText(intro); layout->addWidget(intro);
 		// the switches; while the command line is written by hand they are not used, the tools below still are
 		advancedSwitches = new QWidget;
 		auto grid = new QGridLayout(advancedSwitches); grid->setContentsMargins(0, 0, 0, 0); grid->setHorizontalSpacing(12); grid->setVerticalSpacing(8); grid->setColumnStretch(1, 1); grid->setColumnStretch(3, 1);
@@ -599,14 +614,11 @@ struct Window::Impl {
 		positionX = spin(-1, 32767); positionY = spin(-1, 32767); positionX->setSpecialValueText("System"); positionY->setSpecialValueText("System");
 		positionX->setMinimumWidth(96); positionY->setMinimumWidth(96);
 		positionX->setAccessibleName("Window left"); positionY->setAccessibleName("Window top");
-		positionX->setToolTip("Windowed mode only"); positionY->setToolTip("Windowed mode only");
 		position->addWidget(positionX); position->addWidget(new QLabel("×")); position->addWidget(positionY); position->addStretch();
 		grid->addWidget(new QLabel("Window position"), 4, 0); grid->addWidget(windowPosition, 4, 1, 1, 3);
 		demo = new QComboBox; demo->setEditable(true); demo->setInsertPolicy(QComboBox::NoInsert); demo->setAccessibleName("Demo file");
 		demo->lineEdit()->setPlaceholderText("none; replaces joining a server");
 		auto chooseDemo = new QPushButton("Choose…"), demosFolder = new QPushButton("Open Folder");
-		chooseDemo->setToolTip("Choose a recorded demo (.bf2demo) or its demo options (.con) anywhere");
-		demosFolder->setToolTip("The game's Demos folder, where it records and where demos are found");
 		QObject::connect(chooseDemo, &QPushButton::clicked, &shell, [this] {
 			auto file = QFileDialog::getOpenFileName(advanced, "Choose a demo", {}, "Demos (*.bf2demo *.con);;All files (*)");
 			if (!file.isEmpty()) { setDemo(QDir::toNativeSeparators(file)); edited(); }
@@ -692,7 +704,7 @@ struct Window::Impl {
 		auto layout = new QVBoxLayout(providerDialog); layout->setContentsMargins(24, 20, 24, 16); layout->setSpacing(10);
 		providerTitle = new QLabel; providerTitle->setObjectName("providerTitle"); auto titleFont = providerTitle->font(); titleFont.setBold(true); titleFont.setPointSizeF(titleFont.pointSizeF() + 2);
 		providerTitle->setFont(titleFont); layout->addWidget(providerTitle);
-		providerIntro = new QLabel; providerIntro->setWordWrap(true); providerIntro->setForegroundRole(QPalette::PlaceholderText); layout->addWidget(providerIntro);
+		providerIntro = new QLabel; providerIntro->setWordWrap(true); secondaryText(providerIntro); layout->addWidget(providerIntro);
 		auto browseRow = [this](QLineEdit*& field, const QString& placeholder, const QString& filter, const QString& title) {
 			auto row = new QWidget; auto box = new QHBoxLayout(row); box->setContentsMargins(24, 0, 0, 0);
 			field = new QLineEdit; field->setPlaceholderText(placeholder);
@@ -706,7 +718,6 @@ struct Window::Impl {
 			return row;
 		};
 		urlChoice = new QRadioButton("From the web");
-		urlChoice->setToolTip("A provider file a provider publishes, downloaded from this address; downloaded again when it runs out");
 		urlRow = new QWidget; { auto box = new QHBoxLayout(urlRow); box->setContentsMargins(24, 0, 0, 0);
 			urlField = new QLineEdit; urlField->setPlaceholderText("https://…"); urlField->setAccessibleName("Provider file address"); box->addWidget(urlField);
 			QObject::connect(urlField, &QLineEdit::textChanged, providerDialog, [this] { updateProviderOk(); }); }
@@ -735,25 +746,6 @@ struct Window::Impl {
 		(otherSource == "file" ? fileChoice : urlChoice)->setChecked(true);
 		updateProviderOk(); providerDialog->adjustSize();
 		if (!hidden) providerDialog->open();
-	}
-	// a tooltip on every setting, with the switch it gives the game
-	void describe() {
-		mods->setToolTip("The mod to start (+modPath mods/<mod>)");
-		server->setToolTip("Join this server at start (+joinServer); empty starts into the menu");
-		command->setToolTip("What the game is started with. Unlock to write it yourself");
-		voice->setToolTip("Microphone level and voice chat defaults for new profiles");
-		verify->setToolTip("Check every installed file against the official contents");
-		noSound->setToolTip("Start the game without sound (+noSound 1)");
-		multi->setToolTip("Allow several copies of the game at once (+multi 1)");
-		positionX->setToolTip("The window's left edge (+wx), windowed mode only; System lets the system place it");
-		positionY->setToolTip("The window's top edge (+wy), windowed mode only; System lets the system place it");
-		demo->setToolTip("Play a recorded demo (+demo): a recording (.bf2demo) of the game's Demos folder, the newest first, or one chosen or typed; also a .con with its demo options. It replaces joining a server");
-		skipDxCheck->setToolTip("Start without checking the DirectX version (+skipDXCheck 1). Use with caution");
-		punkbuster->setToolTip("PunkBuster's folder, for several instances of the 32-bit client (+pbPath); empty uses the game's pb folder");
-		specialForces->setToolTip("Install the Special Forces expansion from your disc as well; it needs its own CD key");
-		volume->setToolTip("How loud your microphone is sent");
-		threshold->setToolTip("How loud you must speak before voice chat sends");
-		boost->setToolTip("Amplify a quiet microphone");
 	}
 	// a found demo by its path, otherwise the path as typed or chosen
 	void setDemo(const QString& value) {
@@ -817,7 +809,6 @@ struct Window::Impl {
 		command->setReadOnly(!unlock->isChecked());
 		unlock->setIcon(commandLockIcon(unlock->isChecked(), unlock));
 		unlock->setAccessibleName(unlock->isChecked() ? "Lock the command line" : "Edit the command line");
-		unlock->setToolTip(unlock->isChecked() ? "Lock: back to the controls" : "Unlock: write the command line yourself");
 		optionHint->setVisible(!always->isChecked());
 		windowSize->setVisible(!fullscreen->isChecked());
 		const bool locked = !unlock->isChecked();
@@ -828,8 +819,6 @@ struct Window::Impl {
 		for (QWidget* control : std::initializer_list<QWidget*>{server, port, password}) control->setEnabled(locked && !playsDemo);
 		width->setEnabled(locked && !fullscreen->isChecked()); height->setEnabled(width->isEnabled());
 		windowPosition->setEnabled(!fullscreen->isChecked());
-		advancedButton->setToolTip(has_advanced_options(currentOptions()) ? "Further switches, some of them in use, the voice setup and the verification of the game data"
-			: "Further switches of the game (player name, sound, instances, window position, demos, joining a server), the voice setup and the verification of the game data");
 		send(Kind::options_edited);
 	}
 	void show(Page page, const QString& title, const QString& action, bool canBack) {
@@ -1015,7 +1004,7 @@ void Window::SetDemos(const std::vector<std::filesystem::path>& demos) {
 	i.demo->clear();
 	for (const auto& file : demos) {
 		auto path = text(file.generic_string());
-		i.demo->addItem(text(file.filename().string()), path); i.demo->setItemData(i.demo->count() - 1, path, Qt::ToolTipRole);
+		i.demo->addItem(text(file.filename().string()), path);
 	}
 	i.setDemo(value);
 }
