@@ -70,6 +70,31 @@ Type: dirifempty; Name: "{app}\x64"
 Type: dirifempty; Name: "{app}"
 
 [Code]
+// The game data holds directory junctions: to the user's own mods, and for an installation used in place into
+// that installation's folder (src/existing.h). They are removed first and never entered, so that DelTree below
+// cannot reach into a folder outside OpenBF2's own data.
+procedure RemoveLinks(const Dir: String);
+var
+  Find: TFindRec;
+  Path: String;
+begin
+  if FindFirst(AddBackslash(Dir) + '*', Find) then
+    try
+      repeat
+        Path := AddBackslash(Dir) + Find.Name;
+        if (Find.Name <> '.') and (Find.Name <> '..') then begin
+          // $400: FILE_ATTRIBUTE_REPARSE_POINT, a junction or a symbolic link
+          if (Find.Attributes and $400) <> 0 then begin
+            if (Find.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then RemoveDir(Path) else DeleteFile(Path);
+          end else if (Find.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+            RemoveLinks(Path);
+        end;
+      until not FindNext(Find);
+    finally
+      FindClose(Find);
+    end;
+end;
+
 // The installed game, its settings and the CD keys stay unless the user asks: they are in %LOCALAPPDATA%\OpenBF2,
 // apart from the application. Documents\Battlefield 2 (profiles) is never touched.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
@@ -79,7 +104,9 @@ begin
   if (CurUninstallStep = usPostUninstall) and not UninstallSilent then begin
     Data := ExpandConstant('{localappdata}\OpenBF2');
     if DirExists(Data) and (MsgBox('Also remove the installed game, its settings and the CD keys in' + #13#10 + Data + '?' + #13#10#13#10 +
-        'Your profiles in Documents\Battlefield 2 stay.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES) then
+        'Your profiles in Documents\Battlefield 2 stay.', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES) then begin
+      RemoveLinks(Data);
       DelTree(Data, True, True, True);
+    end;
   end;
 end;

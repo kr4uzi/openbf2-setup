@@ -45,7 +45,7 @@ namespace {
 		case Kind::next:
 			return !g_Machine.busy && g_Machine.next_enabled;
 		case Kind::back:
-			return !g_Machine.busy && (page == Page::disc || page == Page::patches || (page == Page::keys && g_Machine.back));
+			return !g_Machine.busy && (page == Page::disc || page == Page::existing || page == Page::patches || (page == Page::keys && g_Machine.back));
 		case Kind::voice_setup:
 		case Kind::verify:
 			return !g_Machine.busy && page == Page::launcher;
@@ -62,6 +62,10 @@ namespace {
 			return page == Page::voice;
 		case Kind::disc_chosen:
 			return !g_Machine.busy && page == Page::disc;
+		case Kind::existing:
+			return !g_Machine.busy && page == Page::welcome;
+		case Kind::folder_chosen:
+			return !g_Machine.busy && page == Page::existing;
 		case Kind::patch141_chosen:
 		case Kind::patch150_chosen:
 			return page == Page::patches;
@@ -146,11 +150,17 @@ void Window::ShowKeys(bool deluxe, bool back)
 	g_Machine.key_status.clear();
 }
 
-void Window::ShowInstall()
+void Window::ShowExisting()
+{
+	::show(Page::existing, true);
+}
+
+void Window::ShowInstall(bool linked)
 {
 	// the default button is Cancel
 	::show(Page::install, true);
 	g_Machine.status.clear();
+	g_Machine.linked_install = linked;
 }
 
 void Window::ShowVoice(const assistant::VoiceSettings&, bool)
@@ -335,6 +345,32 @@ task<Installation> Installer::Install(Media media, bool specialForces, std::func
 	auto edition = installedEdition(media.edition, specialForces);
 	g_Machine.installed = Installation{ "GameData/1.50-1", edition };
 	co_return *g_Machine.installed;
+}
+
+task<DiscEdition> Installer::CheckExisting(std::filesystem::path folder)
+{
+	::call("check-existing");
+	co_await ::yield();
+	auto known = g_Machine.existing_folders.find(folder.filename().string());
+	if (known == g_Machine.existing_folders.end())
+		throw std::runtime_error{ "This folder is not a Battlefield 2 installation: it has no mods/bf2/mod.desc." };
+
+	co_return known->second;
+}
+
+task<LinkResult> Installer::Link(std::filesystem::path folder, DiscEdition edition, std::function<void(const Progress&)> progress)
+{
+	m_Cancelled = false;
+	progress(Progress{ "verify" });
+	co_await ::yield();
+	if (m_Cancelled)
+		throw std::runtime_error{ "Cancelled" };
+
+	::call("link");
+
+	g_Machine.linked_folder = folder;
+	g_Machine.installed = Installation{ "GameData/1.50-2", edition, folder };
+	co_return LinkResult{ *g_Machine.installed, g_Machine.linked_scripts, 0 };
 }
 
 Installation Installer::Current() const

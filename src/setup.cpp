@@ -120,13 +120,27 @@ task<std::optional<Installation>> Setup::FindInstallation()
 
 task<Installation> Setup::InstallGame()
 {
-	enum class Step { welcome, disc, patches, keys };
+	enum class Step { welcome, disc, patches, keys, existing, existingKeys };
 	auto step = Step::welcome;
 	while (true) {
 		switch (step) {
 		case Step::welcome:
-			co_await Welcome();
-			step = Step::disc;
+			step = co_await Welcome() ? Step::disc : Step::existing;
+			break;
+		case Step::existing:
+			step = co_await ChooseExisting() ? Step::existingKeys : Step::welcome;
+			break;
+		case Step::existingKeys:
+			if (!co_await EnterKeys(hasSpecialForces(m_Existing.edition), true)) {
+				step = Step::existing;
+				break;
+			}
+
+			if (auto installation = co_await LinkExisting()) {
+				co_await VoiceSetup();
+				co_return *installation;
+			}
+
 			break;
 		case Step::disc:
 			step = co_await ChooseDisc() ? Step::patches : Step::welcome;
@@ -230,8 +244,16 @@ task<bool> Setup::VerifyGameData()
 		throw WindowClosed{};
 
 	// the assistant offers to install again. the generation which failed stays where it is
+	auto source = std::filesystem::path{};
+	try {
+		source = m_Installer.Current().source;
+	}
+	catch (const std::exception&) {
+	}
+
 	m_Window.ShowWelcome();
-	m_Window.Message("Game data could not be verified", failure + "\nInstall again from your disc to repair it.");
+	m_Window.Message("Game data could not be verified", failure + (source.empty() ? "\nInstall again from your disc to repair it."
+		: "\nRepair the installation in " + source.string() + " (on Steam: Properties, Installed Files, Verify integrity of game files), or install from your disc."));
 	co_return false;
 }
 
@@ -340,11 +362,94 @@ bool Setup::SaveOptions()
 	}
 }
 
-task<void> Setup::Welcome()
+task<bool> Setup::Welcome()
 {
 	m_Window.ShowWelcome();
-	while ((co_await NextEvent()).kind != Event::Kind::next) {
+	while (true) {
+		auto kind = (co_await NextEvent()).kind;
+		if (kind == Event::Kind::next || kind == Event::Kind::existing)
+			co_return kind == Event::Kind::next;
 	}
+}
+
+task<bool> Setup::ChooseExisting()
+{
+	m_Window.ShowExisting();
+	while (true) {
+		auto event = co_await NextEvent();
+		if (event.kind == Event::Kind::back)
+			co_return false;
+		else if (event.kind == Event::Kind::folder_chosen)
+			m_Existing.folder = event.path;
+
+		if (event.kind != Event::Kind::next)
+			continue;
+
+		if (m_Existing.folder.empty()) {
+			m_Window.Message("Choose your installation", "Choose the folder of your Battlefield 2 installation first.");
+			continue;
+		}
+
+		m_Window.SetBusy("Checking…");
+		auto failure = std::string{};
+		try {
+			m_Existing.edition = co_await m_Installer.CheckExisting(m_Existing.folder);
+			co_return true;
+		}
+		catch (const std::exception& e) {
+			failure = e.what();
+		}
+
+		m_Window.ShowExisting();
+		m_Window.Message("Choose your installation", failure);
+	}
+}
+
+task<std::optional<Installation>> Setup::LinkExisting()
+{
+	auto keys = m_Window.Keys();
+	auto edition = installedEdition(m_Existing.edition, keys.install_special_forces);
+	m_Window.ShowInstall(true);
+	auto title = std::string{ "This installation cannot be used" };
+	auto failure = std::string{};
+	try {
+		auto progress = [this](const Progress& progress) { m_Window.SetProgress(progress); };
+		auto linked = co_await ::guarded(m_Installer.Link(m_Existing.folder, edition, progress), CancelOnClose());
+
+		// from here on the installation is in use, whatever happens to the key
+		title = "Key could not be saved";
+		m_Store.SaveKeys(keys);
+		m_Window.ClearKeys();
+		if (!linked.scripts.empty()) {
+			auto names = std::string{};
+			for (size_t i = 0; i < linked.scripts.size() && i < 8; ++i)
+				names += "\n" + linked.scripts[i];
+			if (linked.scripts.size() > 8)
+				names += "\n… and " + std::to_string(linked.scripts.size() - 8) + " more";
+			m_Window.Message("Some game scripts differ from Battlefield 2 1.50",
+				"They only run in games you host yourself (single player, co-op, your own server), and OpenBF2 runs them as they are:" + names);
+		}
+
+		co_return linked.installation;
+	}
+	catch (const std::exception& e) {
+		failure = e.what();
+	}
+
+	// the window was closed meanwhile
+	if (m_Closing)
+		throw WindowClosed{};
+
+	if (failure == "Cancelled") {
+		title = "Check cancelled";
+		failure = "Your installation was not changed.";
+	}
+	else if (title == "This installation cannot be used")
+		failure += "\nOpenBF2 uses the game files as they are. Repair the installation (on Steam: Properties, Installed Files, Verify integrity of game files), or install from your disc.";
+
+	m_Window.ShowKeys(hasSpecialForces(m_Existing.edition), true);
+	m_Window.Message(title, failure);
+	co_return std::nullopt;
 }
 
 task<bool> Setup::ChooseDisc()

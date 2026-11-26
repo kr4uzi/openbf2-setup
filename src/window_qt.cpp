@@ -241,6 +241,44 @@ public:
 	}
 };
 
+// the folder of an existing installation: chosen in the dialog or dropped
+class FolderWell : public QGroupBox {
+	QLabel* path;
+public:
+	std::function<void(const std::filesystem::path&)> chosen;
+	explicit FolderWell(const QString& title) : QGroupBox(title) {
+		setAcceptDrops(true);
+		auto layout = new QVBoxLayout(this);
+		path = new QLabel("Choose the game's folder, or drop it here");
+		path->setWordWrap(true);
+		path->setTextFormat(Qt::PlainText);
+		layout->addWidget(path);
+		auto row = new QHBoxLayout;
+		auto button = new QPushButton("Choose Folder…");
+		row->addWidget(button); row->addStretch();
+		layout->addLayout(row);
+		connect(button, &QPushButton::clicked, this, [this] {
+			auto selected = QFileDialog::getExistingDirectory(this, "Choose the Battlefield 2 folder");
+			if (!selected.isEmpty()) select(selected);
+		});
+	}
+	void select(const QString& selected) {
+		if (!isEnabled()) return;
+		path->setText(selected);
+		chosen(std::filesystem::path{selected.toStdWString()});
+	}
+	void dragEnterEvent(QDragEnterEvent* event) override {
+		if (isEnabled() && event->mimeData()->urls().size() == 1 && event->mimeData()->urls().first().isLocalFile() && QFileInfo(event->mimeData()->urls().first().toLocalFile()).isDir())
+			event->acceptProposedAction();
+	}
+	void dropEvent(QDropEvent* event) override {
+		if (isEnabled() && event->mimeData()->urls().size() == 1 && event->mimeData()->urls().first().isLocalFile()) {
+			select(event->mimeData()->urls().first().toLocalFile());
+			event->acceptProposedAction();
+		}
+	}
+};
+
 class KeyField : public QLineEdit {
 public:
 	std::function<void(QString)> paste;
@@ -338,6 +376,7 @@ struct Window::Impl {
 	QProgressBar* meter;
 	std::array<QProgressBar*, 4> installProgress;
 	FileWell *disc, *patch141, *patch150;
+	FolderWell* folder;
 	KeyRow *baseKey, *sfKey;
 	QCheckBox *specialForces, *movies, *fullscreen, *always, *boost;
 	QComboBox* mods;
@@ -380,6 +419,11 @@ struct Window::Impl {
 		auto welcome = page();
 		label(welcome, "Install Battlefield 2 from your DVD or ISO and the official 1.41 and 1.5 patches. You will need your CD key.");
 		label(welcome, "Game data, profiles and mods stay in your user data folder when you replace this application. A paused installation can be resumed.");
+		label(welcome, "Battlefield 2 is installed on this computer already, from Steam, a disc or in Wine? OpenBF2 can use it with its mods as it is:");
+		auto existingButton = new QPushButton("Use an Existing Installation…"); existingButton->setObjectName("existingInstallation");
+		existingButton->setToolTip("Use the game files and mods of an installed Battlefield 2 1.5 in place, without copying them");
+		auto existingRow = new QHBoxLayout; existingRow->addWidget(existingButton); existingRow->addStretch(); welcome->addLayout(existingRow);
+		QObject::connect(existingButton, &QPushButton::clicked, &shell, [this] { send(Kind::existing); });
 		welcome->addStretch();
 		auto discs = page();
 		label(discs, "Choose a Battlefield 2, Deluxe or Complete Edition DVD folder or ISO image.");
@@ -423,6 +467,14 @@ struct Window::Impl {
 		QObject::connect(skip, &QPushButton::clicked, &shell, [this] { send(Kind::voice_skip); }); audio->addStretch();
 		auto launcher = page();
 		launcher->setContentsMargins(0, 12, 0, 0); launcher->setSpacing(12);
+		// pages are indexed by Page: the existing installation's comes after the launcher
+		auto existing = page();
+		label(existing, "Choose the folder of your Battlefield 2 1.5 installation, the one with mods and python in it. On Steam: right-click the game in your library, Manage, Browse local files.");
+		label(existing, "OpenBF2 checks the game files and then uses them and the folder's mods as they are, without copying or changing them. The game saves its settings in that folder, as Battlefield 2 does, so both share them.");
+		folder = new FolderWell("Battlefield 2 folder"); folder->setObjectName("existingWell"); existing->addWidget(folder);
+		folder->chosen = [this](const std::filesystem::path& path) { send(Kind::folder_chosen, path); };
+		label(existing, "You will need the game's CD key; Steam shows it with the game in your library.");
+		existing->addStretch();
 		auto preferences = new QGridLayout; preferences->setHorizontalSpacing(20); preferences->setVerticalSpacing(10);
 		preferences->setColumnStretch(0, 1); preferences->setColumnStretch(1, 1);
 		always = new QCheckBox("Open launcher on startup"); always->setObjectName("alwaysShowLauncher");
@@ -842,17 +894,20 @@ task<std::string> Window::Download(std::string url) {
 bool Window::LauncherRequested() const { return frontend::launcherRequested(); }
 void Window::ShowWelcome() { m_Impl->show(Page::welcome, "Welcome to OpenBF2", "Continue", false); }
 void Window::ShowDisc() { m_Impl->show(Page::disc, "Your Battlefield 2 disc", "Continue", true); }
+void Window::ShowExisting() { m_Impl->show(Page::existing, "Your Battlefield 2 installation", "Continue", true); }
 void Window::ShowPatches(bool included141) { m_Impl->show(Page::patches, "Official patches", "Continue", true); m_Impl->patch141->automatic(included141); }
 void Window::ShowKeys(bool deluxe, bool back) {
 	m_Impl->deluxe = deluxe; m_Impl->specialForces->setVisible(deluxe); m_Impl->sfKey->setVisible(deluxe);
 	m_Impl->show(Page::keys, "Your CD keys", back ? "Install" : "Save", back);
 }
-void Window::ShowInstall() {
+void Window::ShowInstall(bool linked) {
 	auto& i = *m_Impl;
 	i.cancelling = false;
-	i.installStatus->setText("Checking your media…");
+	i.installStatus->setText(linked ? "Checking your installation…" : "Checking your media…");
 	for (auto bar : i.installProgress) { bar->setRange(0, 1000); bar->setValue(0); bar->setFormat("Waiting"); }
-	i.show(Page::install, "Installing Battlefield 2", "Cancel", false);
+	// an existing installation has nothing to install, only its game files to check
+	for (size_t row = 0; row + 1 < i.installProgress.size(); ++row) i.installProgress[row]->parentWidget()->setVisible(!linked);
+	i.show(Page::install, linked ? "Checking Battlefield 2" : "Installing Battlefield 2", "Cancel", false);
 }
 void Window::ShowVoice(const assistant::VoiceSettings& settings, bool profiles) {
 	m_Impl->playback = settings.playbackVolume; m_Impl->volume->setValue(int(settings.captureVolume * 1000));
@@ -998,12 +1053,14 @@ void Window::StayHidden() { m_Impl->hidden = true; m_Impl->shell.hide(); }
 Page Window::Shown() const { return m_Impl->shown; }
 void Window::Click(Kind button) {
 	auto& i = *m_Impl;
-	auto target = button == Kind::next ? i.next : button == Kind::back ? i.back : button == Kind::voice_setup ? i.voice : button == Kind::verify ? i.verify : button == Kind::voice_skip ? i.skip : button == Kind::microphone ? i.microphone : nullptr;
+	auto target = button == Kind::next ? i.next : button == Kind::back ? i.back : button == Kind::voice_setup ? i.voice : button == Kind::verify ? i.verify : button == Kind::voice_skip ? i.skip : button == Kind::microphone ? i.microphone
+		: button == Kind::existing ? i.shell.findChild<QPushButton*>("existingInstallation") : nullptr;
 	if (target) target->click(); else if (button == Kind::close) i.shell.close();
 }
 void Window::Choose(Kind kind, const std::filesystem::path& file) {
 	// a provider's file as the dialog or the drop would give it
 	if (kind == Kind::other_url || kind == Kind::other_file) { m_Impl->send(kind, file); return; }
+	if (kind == Kind::folder_chosen) { m_Impl->folder->select(text(file.string())); return; }
 	(kind == Kind::disc_chosen ? m_Impl->disc : kind == Kind::patch141_chosen ? m_Impl->patch141 : m_Impl->patch150)->select(text(file.string())); }
 void Window::PasteKey(KeyEdition row, const std::string& value) { (row == KeyEdition::BF2 ? m_Impl->baseKey : m_Impl->sfKey)->set(text(value)); }
 void Window::Snapshot(const std::filesystem::path& png) { m_Impl->shell.ensurePolished(); m_Impl->shell.layout()->activate(); if (!m_Impl->shell.grab().save(text(png.string()))) throw std::runtime_error("Could not save window snapshot"); }

@@ -304,6 +304,62 @@ int main()
 		check(g_Machine.pages == std::vector{ Page::launcher, Page::launcher }, "pages are out of order");
 	});
 
+	run("an installation already on this computer is used in place", [](FakeMachine& machine) {
+		machine.script = { { Kind::existing }, { Kind::folder_chosen, "/games/Battlefield 2" }, click(Page::existing), { Kind::keys_edited, {}, { key } },
+			click(Page::keys), click(Page::voice), click(Page::launcher), quit() };
+	}, [] {
+		check(g_Machine.pages == std::vector{ Page::welcome, Page::welcome, Page::existing, Page::keys, Page::install, Page::voice, Page::launcher, Page::launcher }, "pages are out of order");
+		check(g_Machine.calls == std::vector<std::string>{ "check-existing", "link", "save-keys", "save-voice", "run-client" }, "calls are out of order");
+		check(g_Machine.linked_install && g_Machine.linked_folder == std::filesystem::path{ "/games/Battlefield 2" }, "the chosen folder was not linked");
+		check(g_Machine.installed->edition == DiscEdition::BF2 && !g_Machine.deluxe_keys, "a regular installation asked for Special Forces");
+		check(g_Machine.saved_keys->key == key && g_Machine.messages.empty(), "the key was not saved, or a message was shown");
+	});
+
+	for (bool specialForces : { true, false }) run("an existing installation with Special Forces", [=](FakeMachine& machine) {
+		machine.script = { { Kind::existing }, { Kind::folder_chosen, "/games/Battlefield 2 Complete Collection" }, click(Page::existing),
+			{ Kind::keys_edited, {}, { key, specialForces ? special_forces_key : "", specialForces } }, click(Page::keys), click(Page::voice), quit() };
+	}, [=] {
+		check(g_Machine.deluxe_keys, "the Special Forces key was not asked for");
+		check(g_Machine.installed->edition == (specialForces ? DiscEdition::Complete : DiscEdition::CompleteBase), "the edition does not follow the checkbox");
+	});
+
+	run("a folder which is not an installation is refused", [](FakeMachine& machine) {
+		machine.script = { { Kind::existing }, click(Page::existing), { Kind::folder_chosen, "/Users/me/Documents" }, click(Page::existing),
+			{ Kind::back, {}, {}, [](const FakeMachine& m) { return ::page(m) == Page::existing && !m.busy; } }, quit() };
+	}, [] {
+		check(said("Choose the folder of your Battlefield 2 installation first."), "an empty choice was not explained");
+		check(told("Choose your installation") && said("no mods/bf2/mod.desc"), "the refusal was not explained");
+		check(g_Machine.pages.back() == Page::welcome && !called("link") && !g_Machine.installed, "back did not return to the welcome page");
+	});
+
+	run("a damaged existing installation is not used", [](FakeMachine& machine) {
+		machine.failures["link"] = 1;
+		machine.script = { { Kind::existing }, { Kind::folder_chosen, "/games/Battlefield 2" }, click(Page::existing), { Kind::keys_edited, {}, { key } },
+			click(Page::keys), quit() };
+	}, [] {
+		check(told("This installation cannot be used") && said("Verify integrity of game files"), "the refusal does not say how to repair");
+		check(g_Machine.pages.back() == Page::keys && !g_Machine.installed && !g_Machine.saved_keys, "a refused installation was used");
+	});
+
+	run("changed scripts of an existing installation are reported", [](FakeMachine& machine) {
+		machine.linked_scripts = { "python/bf2/gamelogic.py", "python/bf2/stats/rank.py" };
+		machine.script = { { Kind::existing }, { Kind::folder_chosen, "/games/Battlefield 2" }, click(Page::existing), { Kind::keys_edited, {}, { key } },
+			click(Page::keys), click(Page::voice), quit() };
+	}, [] {
+		check(told("Some game scripts differ from Battlefield 2 1.50") && said("python/bf2/stats/rank.py") && said("games you host yourself"), "the scripts were not reported");
+		check(g_Machine.installed && g_Machine.pages.back() == Page::launcher, "changed scripts stopped the installation");
+	});
+
+	run("a linked installation which fails its verification points at its folder", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2, "/games/Battlefield 2" };
+		machine.keys_stored = true;
+		machine.quick_record = false;
+		machine.failures["verify"] = 1;
+		machine.script = { { Kind::verify }, quit() };
+	}, [] {
+		check(told("Game data could not be verified") && said("Repair the installation in /games/Battlefield 2"), "the folder to repair was not named");
+	});
+
 	run("the plain start goes straight into the game", [](FakeMachine& machine) {
 		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
 		machine.keys_stored = true;

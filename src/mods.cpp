@@ -1,5 +1,6 @@
 #include "links.h"
 #include "mods.h"
+#include "existing.h"
 
 #include <algorithm>
 #include <fstream>
@@ -200,12 +201,12 @@ void setup::link_mods(const std::filesystem::path& library, const std::filesyste
 	}
 }
 
-std::vector<Mod> setup::find_mods(const std::filesystem::path& game, DiscEdition edition, const std::filesystem::path& library)
+std::vector<Mod> setup::find_mods(const std::filesystem::path& game, DiscEdition edition, const std::filesystem::path& library, const std::filesystem::path& folder)
 {
 	auto mods = std::vector<Mod>{};
 	auto error = std::error_code{};
 	for (const auto& entry : std::filesystem::directory_iterator{ game / "mods", error }) {
-		if (!entry.is_directory() || (is_link(entry) && !::leads_into(entry.path(), library)))
+		if (!entry.is_directory() || (is_link(entry) && !::leads_into(entry.path(), library) && (folder.empty() || !leadsIntoFolder(entry.path(), folder))))
 			continue;
 
 		auto name = entry.path().filename().string();

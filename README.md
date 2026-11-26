@@ -33,6 +33,10 @@ second Special Forces key row; unchecked, only the base game is installed from t
 asked for or stored (see [disc editions](docs/disc-editions.md)). Both key rows use the independently
 reconstructed [retail local CD-key check](docs/cdkey-check.md); Install requires
 all required keys to validate. This does not establish online entitlement.
+Instead of the disc, the welcome page can use a Battlefield 2 1.5 installation which is on the
+computer already (Steam, a retail disc, Wine or Proton) in place, with its mods: the game data
+then links into that folder, its game files are checked, and nothing there is copied or changed
+(see [existing installation](docs/existing-installation.md)).
 Each patch selector verifies the pinned size/SHA-256 in the background with progress. Data, keys and profiles live under
 `~/Library/Application Support/OpenBF2`; the app bundle stays immutable.
 After installation a voice-chat step, modelled on retail's BF2VoiceSetup

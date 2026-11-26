@@ -29,6 +29,10 @@ void verifyManifest(const fs::path& game, const fs::path& manifest, const Contro
 // in a fraction of a second. Anything else, a missing or torn stamp included, means the full
 // verification runs again. The stamp is an integrity cache, not a protection against an
 // adversary who can write the game data anyway.
+// One row of a content manifest (core/content-*.tsv): the path as the manifest spells it (lower case),
+// its size and SHA-256. Throws on a malformed or empty manifest.
+struct ManifestEntry {std::string path,hash;uint64_t size=0;};
+std::vector<ManifestEntry> readContentManifest(const fs::path& manifest);
 std::string verificationStamp(const fs::path& game, const fs::path& manifest);
 bool stampMatches(const fs::path& game, const fs::path& manifest, const std::string& stamp);
 // A small text file, flushed with its directory.

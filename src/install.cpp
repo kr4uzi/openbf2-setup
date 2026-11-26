@@ -374,6 +374,11 @@ std::vector<Expected> readManifest(const fs::path& manifest) {
 // The modification time as the file system keeps it, in the ticks of file_time_type.
 int64_t modified(const fs::path& path) {return int64_t(fs::last_write_time(path).time_since_epoch().count());}
 }
+std::vector<ManifestEntry> readContentManifest(const fs::path& manifest) {
+    std::vector<ManifestEntry> entries;
+    for(const auto& e:readManifest(manifest))entries.push_back({e.path,e.hash,e.size});
+    return entries;
+}
 std::string verificationStamp(const fs::path& game,const fs::path& manifest) {
     std::string text;
     for(const auto& e:readManifest(manifest)) {

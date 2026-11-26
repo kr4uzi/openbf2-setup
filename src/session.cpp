@@ -1,3 +1,4 @@
+#include "existing.h"
 #include "links.h"
 #include "session.h"
 #include "key_check.h"
@@ -200,16 +201,32 @@ fs::path currentGeneration(const fs::path& support) {
             relative.find_first_not_of("0123456789",prefix.size())==std::string::npos,"Invalid generation receipt");
     auto root=support/relative;noLinks(root);require(fs::is_directory(root),"Missing game data generation");return root;
 }
-DiscEdition currentEdition(const fs::path& support) {
-    // v1 receipts predate edition support and are the verified base-game edition.
+namespace {
+// the receipt Setup/Current.txt names, with a newline in front of its first line; empty for a v1 one
+std::string currentReceipt(const fs::path& support) {
     noLinks(support/"Setup/Current.txt");
     auto current=read(support/"Setup/Current.txt");auto start=current.find('\n');
-    if(start==std::string::npos||start+1==current.size())return DiscEdition::BF2;
+    if(start==std::string::npos||start+1==current.size())return {};
     auto end=current.find('\n',start+1);auto receipt=current.substr(start+1,end-start-1);
     require(receipt.rfind("Receipt-",0)==0&&receipt.size()>12&&receipt.substr(receipt.size()-4)==".txt"&&receipt.substr(8,receipt.size()-12).find_first_not_of("0123456789")==std::string::npos,"Invalid edition receipt");
     auto path=support/"Setup"/receipt;noLinks(path);
-    auto metadata=read(path);
-    auto lines="\n"+metadata;
+    return "\n"+read(path);
+}
+}
+std::optional<fs::path> linkedSource(const fs::path& support) {
+    auto lines=currentReceipt(support);
+    auto start=lines.find("\nsource=");
+    if(lines.rfind("\nopenbf2-setup-linked-",0)!=0||start==std::string::npos)return std::nullopt;
+    start+=8;auto end=lines.find('\n',start);
+    auto text=lines.substr(start,end==std::string::npos?std::string::npos:end-start);
+    fs::path folder{std::u8string(text.begin(),text.end())};
+    require(folder.is_absolute(),"Invalid installation receipt");
+    return folder;
+}
+DiscEdition currentEdition(const fs::path& support) {
+    // v1 receipts predate edition support and are the verified base-game edition.
+    auto lines=currentReceipt(support);
+    if(lines.empty())return DiscEdition::BF2;
     if(lines.find("\nedition=deluxe\n")!=std::string::npos)return DiscEdition::Deluxe;
     if(lines.find("\nedition=deluxe-base\n")!=std::string::npos)return DiscEdition::DeluxeBase;
     if(lines.find("\nedition=complete\n")!=std::string::npos)return DiscEdition::Complete;
@@ -270,9 +287,11 @@ Launch clientLaunch(const ClientLayout& layout,const fs::path& support,const Lau
     auto mod=argument_mod(arguments);
     if(!mod.empty()||options.override.empty()) {
         require(!mod.empty()&&mod.find_first_of("/\\")==std::string::npos&&mod!="."&&mod!=".."&&safePath(mod)==mod,"The selected mod has an invalid name.");
-        // A mod of the user is a link into the mod library; any other link is refused.
-        auto directory=generation/"mods"/mod;std::error_code unreadable;
-        require(fs::is_directory(directory)&&(!is_link(fs::symlink_status(directory))||link_target(directory,unreadable)==mod_library(support)/mod),"The selected mod is not installed.");
+        // A mod of the user is a link into the mod library, or one of the installation which is used in place
+        // (existing.h); any other link is refused.
+        auto directory=generation/"mods"/mod;std::error_code unreadable;auto source=linkedSource(support);
+        require(fs::is_directory(directory)&&(!is_link(fs::symlink_status(directory))||link_target(directory,unreadable)==mod_library(support)/mod||
+            (source&&leadsIntoFolder(directory,*source))),"The selected mod is not installed.");
     }
     {auto platform=nativePlatform();writeProviderPreset(options,*platform);}
     // the files the game reads from its command line must pass its parser unchanged

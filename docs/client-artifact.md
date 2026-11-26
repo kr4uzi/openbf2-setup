@@ -182,7 +182,13 @@ do. The setup app follows it as described here.
 - Working directory: the verified game-data generation,
   `~/Library/Application Support/OpenBF2/GameData/1.50-<id>` (a complete 1.50
   tree: `mods/bf2/...`, `python/`, `pylib-2.3.4.zip`, DLL stand-ins, etc.). The
-  generation is created by the user and stays writable by the user.
+  generation is created by the user and stays writable by the user. For an
+  installation used in place ([existing-installation.md](existing-installation.md))
+  the generation holds links instead: `mods/<name>` for every mod of that
+  installation, `python`, `Admin` and `pylib-2.3.4.zip`, spelled as there, and
+  no binary. The client follows them like any directory; what it saves below
+  `mods/<mod>/settings/` lands in that installation, everything else it writes
+  stays in the generation.
 - Environment: the user's environment with `HOME` set to the home directory the
   setup app derived the support root from, so both sides look at the same files
   (a test home moves everything), and with `PYTHONPATH` and `PYTHONCASEOK`

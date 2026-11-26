@@ -4,7 +4,8 @@
 
 This document supersedes the prototype's proposed architecture. Current edition
 and selector additions are described in [disc-editions.md](disc-editions.md)
-and [patch-verification.md](patch-verification.md). The historical
+and [patch-verification.md](patch-verification.md); an installation which is
+on the computer already is used in place, see [existing-installation.md](existing-installation.md). The historical
 [prototype design](research/prototype-design.md) and [prototype results](research/prototype-report.md)
 are preserved; their original repository links are historical paths.
 

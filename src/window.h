@@ -16,7 +16,8 @@
 #include <boost/asio/io_context.hpp>
 
 namespace setup {
-	enum class Page { welcome, disc, patches, keys, install, voice, launcher };
+	// existing: the folder of an installation to use in place (existing.h)
+	enum class Page { welcome, disc, patches, keys, install, voice, launcher, existing };
 
 	// what the user did. `next` is the default button, its label depends on the page
 	// (Continue, Install, Cancel, Save, Play)
@@ -26,7 +27,9 @@ namespace setup {
 		// options_edited: any change on the launcher page, the lock included
 		// the other online services provider: other_url, its file from that address (in `path`); other_file, its file
 		// (in `path`)
-		enum class Kind { next, back, voice_setup, voice_skip, verify, options_edited, mods_folder, microphone, disc_chosen, patch141_chosen, patch150_chosen, keys_edited, activated, close, other_url, other_file, demos_folder };
+		// existing: the welcome page's choice of an existing installation instead of the disc; folder_chosen, the
+		// folder of that installation (in `path`)
+		enum class Kind { next, back, voice_setup, voice_skip, verify, options_edited, mods_folder, microphone, disc_chosen, patch141_chosen, patch150_chosen, keys_edited, activated, close, other_url, other_file, demos_folder, existing, folder_chosen };
 
 		Kind kind;
 		// the file of the *_chosen kinds
@@ -70,9 +73,12 @@ namespace setup {
 		// so going back and forth loses nothing
 		void ShowWelcome();
 		void ShowDisc();
+		// the folder of an existing installation, which OpenBF2 then uses in place
+		void ShowExisting();
 		void ShowPatches(bool included141 = false);
 		void ShowKeys(bool deluxe, bool back);
-		void ShowInstall();
+		// linked: the verification of an existing installation, the only step it has
+		void ShowInstall(bool linked = false);
 		void ShowVoice(const assistant::VoiceSettings& settings, bool profilesExist);
 		// the page of an installed game: the start-up options, Play, the voice setup and the verification.
 		// the controls start out as the options say, mods fills the list, Battlefield 2 first; Play needs
