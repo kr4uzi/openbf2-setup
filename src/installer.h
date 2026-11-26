@@ -11,6 +11,8 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <string>
+#include <vector>
 
 namespace setup {
 	// The selected media. Complete Edition supplies patch141 from inside the disc.
@@ -27,6 +29,17 @@ namespace setup {
 	{
 		std::filesystem::path game;
 		DiscEdition edition = DiscEdition::BF2;
+		// the folder of an existing installation which the generation uses in place (existing.h); empty for
+		// one installed from disc
+		std::filesystem::path source;
+	};
+
+	// What linking an existing installation tolerated (existing.h): changed or missing scripts, missing languages.
+	struct LinkResult
+	{
+		Installation installation;
+		std::vector<std::string> scripts;
+		size_t missingLocalization = 0;
 	};
 
 	// the long-running work of the setup core. every call runs on the worker and reports its progress
@@ -53,6 +66,13 @@ namespace setup {
 
 		// resumes a paused installation of the same media. the generation is published before this returns
 		task<Installation> Install(Media media, bool specialForces, std::function<void(const Progress&)> progress);
+		// an existing installation the user chose: Complete when it has Special Forces, BF2 otherwise. throws
+		// with the reason a folder is not one
+		task<DiscEdition> CheckExisting(std::filesystem::path folder);
+		// uses the installation in `folder` in place: a generation of links to its mods and scripts, verified and
+		// published before this returns. the folder is never written
+		task<LinkResult> Link(std::filesystem::path folder, DiscEdition edition, std::function<void(const Progress&)> progress);
+
 		// the current generation as Setup/Current.txt and the receipt name it, unchecked
 		Installation Current() const;
 		// the current generation against the record of its last full verification: sizes and times, in a

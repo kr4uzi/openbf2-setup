@@ -32,6 +32,12 @@ namespace setup {
 		Microphone& m_Microphone;
 
 		Media m_Media;
+		// an existing installation the user chose, and what it holds (existing.h)
+		struct Existing
+		{
+			std::filesystem::path folder;
+			DiscEdition edition = DiscEdition::BF2;
+		} m_Existing;
 		std::array<Patch, 2> m_Patches;
 		// the window was closed while an installation or a verification ran: once that has stopped, Launch ends
 		bool m_Closing = false;
@@ -61,8 +67,12 @@ namespace setup {
 		task<bool> VerifyGameData();
 
 		// the pages of the assistant. false: the user went back
-		task<void> Welcome();
+		// true: install from disc; false: use an existing installation
+		task<bool> Welcome();
 		task<bool> ChooseDisc();
+		task<bool> ChooseExisting();
+		// nothing if the folder did not pass or linking was cancelled: the key page is shown again
+		task<std::optional<Installation>> LinkExisting();
 		task<bool> ChoosePatches();
 		task<bool> EnterKeys(bool deluxe, bool back);
 		// for an installation whose keys are gone: asks until they are saved

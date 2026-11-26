@@ -1,4 +1,5 @@
 #include "store.h"
+#include "existing.h"
 #include <cctype>
 #include <algorithm>
 #include "links.h"
@@ -50,8 +51,11 @@ std::filesystem::path Store::ModLibrary()
 std::vector<Mod> Store::Mods(const Installation& installation)
 {
 	auto library = mod_library(m_Support);
+	// an installation used in place brings its own mods first; a mod of the library with the same name stays out
+	if (!installation.source.empty())
+		linkFolderMods(installation.game, installation.source);
 	link_mods(library, installation.game);
-	return find_mods(installation.game, installation.edition, library);
+	return find_mods(installation.game, installation.edition, library, installation.source);
 }
 
 std::vector<std::filesystem::path> Store::Demos(const Installation& installation)

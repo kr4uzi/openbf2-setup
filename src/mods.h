@@ -30,8 +30,9 @@ namespace setup {
 	// the mods of an installed game which can be started: every directory below mods/ with a mod.desc and
 	// at least one level. Battlefield 2 itself comes first. a regular installation carries a stub of
 	// Special Forces (the 1.50 patch puts some of its files there): it has no levels, and Special Forces is
-	// only offered by an edition which installed it anyway. a symlink counts if it leads into the library
-	std::vector<Mod> find_mods(const std::filesystem::path& game, DiscEdition edition, const std::filesystem::path& library = {});
+	// only offered by an edition which installed it anyway. a symlink counts if it leads into the library, or to
+	// the mod of the same name in `folder`, the installation a linked generation uses in place (existing.h)
+	std::vector<Mod> find_mods(const std::filesystem::path& game, DiscEdition edition, const std::filesystem::path& library = {}, const std::filesystem::path& folder = {});
 
 	// what a mod.desc has between <tag> and </tag>, e.g. its title
 	std::string mod_value(const std::string& description, const std::string& tag);

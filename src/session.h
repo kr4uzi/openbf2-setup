@@ -17,6 +17,9 @@ fs::path currentGeneration(const fs::path& support);
 bool storedKey(const fs::path& support, bool specialForces = false);
 // The installed edition, including base-only Deluxe and Complete installations.
 DiscEdition currentEdition(const fs::path& support);
+// The folder of an existing installation which the current generation uses in place (existing.h);
+// nothing for one installed from disc.
+std::optional<fs::path> linkedSource(const fs::path& support);
 // Voice chat defaults, the one file retail's BF2VoiceSetup writes
 // (Profiles/BattleCommoDefaultUserSettings.con). The client reads it only
 // when it creates its first profile; existing profiles keep their Audio.con.

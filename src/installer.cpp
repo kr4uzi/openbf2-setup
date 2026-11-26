@@ -1,5 +1,6 @@
 #include "installer.h"
 #include "directx.h"
+#include "existing.h"
 #include "install.h"
 #include "session.h"
 
@@ -19,24 +20,33 @@ namespace {
 		return support / "Setup" / ("Verified-" + game.filename().string() + ".tsv");
 	}
 
-	// a stamp which cannot be written costs the next start a full verification, nothing more
-	void recordVerification(const std::filesystem::path& support, const std::filesystem::path& game, const std::filesystem::path& manifest, Platform& platform)
+	// a stamp which cannot be written costs the next start a full verification, nothing more. a linked generation
+	// (existing.h) is stamped through its links
+	void recordVerification(const std::filesystem::path& support, const Installation& installation, const std::filesystem::path& manifest, Platform& platform)
 	{
 		try {
-			writeTextFile(::stamp(support, game), verificationStamp(game, manifest), platform);
+			auto text = installation.source.empty() ? verificationStamp(installation.game, manifest) : linkedStamp(installation.game, manifest);
+			writeTextFile(::stamp(support, installation.game), text, platform);
 		}
 		catch (const std::exception&) {
 		}
 	}
 
-	bool recentlyVerified(const std::filesystem::path& support, const std::filesystem::path& game, const std::filesystem::path& manifest)
+	bool recentlyVerified(const std::filesystem::path& support, const Installation& installation, const std::filesystem::path& manifest)
 	{
-		auto file = ::stamp(support, game);
+		auto file = ::stamp(support, installation.game);
 		if (std::filesystem::is_symlink(std::filesystem::symlink_status(file)) || !std::filesystem::is_regular_file(file))
 			return false;
 
 		auto bytes = View{ file }.all();
-		return stampMatches(game, manifest, std::string{ bytes.begin(), bytes.end() });
+		auto text = std::string{ bytes.begin(), bytes.end() };
+		return installation.source.empty() ? stampMatches(installation.game, manifest, text) : linkedStampMatches(installation.game, manifest, text);
+	}
+
+	Installation current(const std::filesystem::path& support)
+	{
+		auto source = assistant::linkedSource(support);
+		return { assistant::currentGeneration(support), assistant::currentEdition(support), source ? *source : std::filesystem::path{} };
 	}
 }
 
@@ -86,7 +96,7 @@ task<Installation> Installer::Install(Media media, bool specialForces, std::func
 		auto platform = nativePlatform();
 		auto installed = install(options, *platform);
 		// the installation verified every file before it published them: the first start need not again
-		::recordVerification(m_Support, installed, options.manifest, *platform);
+		::recordVerification(m_Support, Installation{ installed, edition }, options.manifest, *platform);
 #if defined(_WIN32)
 		// the game is installed whatever comes of this: without the runtime, starting the 64-bit client offers
 		// Microsoft's DirectX setup instead
@@ -102,9 +112,36 @@ task<Installation> Installer::Install(Media media, bool specialForces, std::func
 	co_return Installation{ game, edition };
 }
 
+task<DiscEdition> Installer::CheckExisting(std::filesystem::path folder)
+{
+	co_return co_await m_Worker.Run([&] {
+		return detectExisting(folder);
+	});
+}
+
+task<LinkResult> Installer::Link(std::filesystem::path folder, DiscEdition edition, std::function<void(const Progress&)> progress)
+{
+	auto executor = co_await boost::asio::this_coro::executor;
+	auto options = LinkOptions{ folder, m_Support, ::manifest(m_Manifests, edition), edition, {} };
+	m_Cancelled = false;
+	options.control.cancelled = &m_Cancelled;
+	options.control.progress = [&](const Progress& p) {
+		boost::asio::post(executor, [progress, p] { progress(p); });
+	};
+
+	co_return co_await m_Worker.Run([&] {
+		auto platform = nativePlatform();
+		auto report = LinkedReport{};
+		auto game = linkExisting(options, *platform, &report);
+		auto installation = Installation{ game, edition, std::filesystem::canonical(folder) };
+		::recordVerification(m_Support, installation, options.manifest, *platform);
+		return LinkResult{ installation, report.scripts, report.missingLocalization };
+	});
+}
+
 Installation Installer::Current() const
 {
-	return { assistant::currentGeneration(m_Support), assistant::currentEdition(m_Support) };
+	return ::current(m_Support);
 }
 
 task<std::optional<Installation>> Installer::QuickCheck()
@@ -113,8 +150,8 @@ task<std::optional<Installation>> Installer::QuickCheck()
 		try {
 			auto platform = nativePlatform();
 			auto lock = platform->lock(m_Support / "Setup/Install.lock");
-			auto installation = Installation{ assistant::currentGeneration(m_Support), assistant::currentEdition(m_Support) };
-			if (::recentlyVerified(m_Support, installation.game, ::manifest(m_Manifests, installation.edition)))
+			auto installation = ::current(m_Support);
+			if (::recentlyVerified(m_Support, installation, ::manifest(m_Manifests, installation.edition)))
 				return installation;
 		}
 		catch (const std::exception&) {
@@ -132,14 +169,20 @@ task<Installation> Installer::Verify()
 		// a receipt alone is not enough: the client is only started on game data which was checked
 		auto platform = nativePlatform();
 		auto lock = platform->lock(m_Support / "Setup/Install.lock");
-		auto installation = Installation{ assistant::currentGeneration(m_Support), assistant::currentEdition(m_Support) };
+		auto installation = ::current(m_Support);
 		auto manifest = ::manifest(m_Manifests, installation.edition);
 
 		auto control = Control{};
 		control.cancelled = &m_Cancelled;
-		// the client writes settings and logs beside the data
-		verifyManifest(installation.game, manifest, control, true);
-		::recordVerification(m_Support, installation.game, manifest, *platform);
+		if (installation.source.empty())
+			// the client writes settings and logs beside the data
+			verifyManifest(installation.game, manifest, control, true);
+		else {
+			// an installation used in place: its mods may have changed meanwhile
+			linkFolderMods(installation.game, installation.source);
+			verifyLinked(installation.game, manifest, control);
+		}
+		::recordVerification(m_Support, installation, manifest, *platform);
 		return installation;
 	});
 }

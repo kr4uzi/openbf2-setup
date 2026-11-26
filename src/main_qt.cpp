@@ -91,6 +91,8 @@ int smoke(Window& window, const std::filesystem::path& output) {
 	window.ShowPatches(true); window.SetPatch(PatchSlot::Patch141, PatchStatus::verified); window.EnableNext(false); window.Snapshot(output / "2-complete-patches.png");
 	window.ShowKeys(true, true); window.Snapshot(output / "3-keys.png");
 	window.ShowInstall(); window.SetProgress({"patch141", "mods/bf2", 50, 100, 1, 2}); window.Snapshot(output / "4-install.png");
+	window.ShowExisting(); window.Snapshot(output / "4-existing.png");
+	window.ShowInstall(true); window.SetProgress({"verify", "mods/bf2", 50, 100, 1, 2}); window.Snapshot(output / "4-existing-check.png");
 	window.ShowVoice({}, false); window.SetMicrophone(MicrophoneStatus::skipped); window.SetLevel(.35); window.Snapshot(output / "5-voice.png");
 	window.ShowLauncher({}, {{"bf2", "Battlefield 2"}}, false, "The game client is not part of this build.");
 	window.SetCommandLine(command_line(launch_arguments({}))); window.Snapshot(output / "6-launcher.png");

@@ -36,6 +36,9 @@ namespace setup {
 
 		// what the machine looks like
 		std::map<std::string, DiscEdition> discs{ { "bf2.iso", DiscEdition::BF2 }, { "deluxe.iso", DiscEdition::Deluxe }, { "complete.iso", DiscEdition::Complete } };
+		// folders of existing installations (by name) and what they hold, and the scripts which differ in them
+		std::map<std::string, DiscEdition> existing_folders{ { "Battlefield 2", DiscEdition::BF2 }, { "Battlefield 2 Complete Collection", DiscEdition::Complete } };
+		std::vector<std::string> linked_scripts;
 		std::string patch141 = "patch141.exe";
 		std::string patch150 = "patch150.exe";
 		std::set<std::string> valid_keys{ "AAAAAAAAAAAAAAAAAAAA" };
@@ -80,6 +83,7 @@ namespace setup {
 		std::vector<std::string> calls;
 		std::optional<Media> installed_media;
 		std::optional<bool> installed_special_forces;
+		std::optional<std::filesystem::path> linked_folder;
 		std::optional<KeyEntry> saved_keys;
 		std::optional<assistant::VoiceSettings> saved_voice;
 		int client_runs = 0;
@@ -98,6 +102,8 @@ namespace setup {
 		bool back = false;
 		bool deluxe_keys = false;
 		bool included141 = false;
+		// the install page showed the check of an existing installation
+		bool linked_install = false;
 		bool next_enabled = false;
 		// the launcher page: its list of mods, the options it started with, what the user edited and the
 		// command line at its bottom
