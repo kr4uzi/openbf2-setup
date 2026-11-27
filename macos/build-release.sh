@@ -11,6 +11,8 @@
 # directory. SETUP_SIGN_IDENTITY selects a codesign identity; unset means ad-hoc.
 # SETUP_BOOST_ROOT, SETUP_QT_ROOT (a universal Qt 6.5+, e.g. ~/Qt/6.8.3/macos) and
 # SETUP_SDL3_ROOT (a universal SDL3 3.2+) locate the toolchains when not installed.
+# SETUP_VERSION is the OpenBF2 release, such as 0.3.0-rc2 (the engine's tag without its v), which Finder shows for the
+# app; unset means 0.0.0-dev.
 # Opt-in owner/media tests stay off: their environment variables are cleared.
 set -euo pipefail
 if [[ $# != 2 && $# != 3 ]]; then
@@ -51,7 +53,8 @@ cmake -S "$repo" -B "$build" -DCMAKE_BUILD_TYPE=Release \
   -DSETUP_CLIENT_ARTIFACT="$client" -DSETUP_CLIENT_ALLOW_THIN=OFF \
   ${SETUP_BOOST_ROOT:+-DSETUP_BOOST_ROOT="$SETUP_BOOST_ROOT"} \
   ${SETUP_QT_ROOT:+-DSETUP_QT_ROOT="$SETUP_QT_ROOT"} \
-  ${SETUP_SDL3_ROOT:+-DSETUP_SDL3_ROOT="$SETUP_SDL3_ROOT"}
+  ${SETUP_SDL3_ROOT:+-DSETUP_SDL3_ROOT="$SETUP_SDL3_ROOT"} \
+  -DSETUP_VERSION="${SETUP_VERSION:-}"
 echo "== build"
 cmake --build "$build" -j"$jobs"
 app="$build/macos/OpenBF2.app"

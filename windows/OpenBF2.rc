@@ -1,12 +1,12 @@
-// The application icon and version resource of OpenBF2.exe: the file version is the setup's, the product version
-// the OpenBF2 release (windows/CMakeLists.txt). The manifest is added by CMake.
+// The application icon and version resource of OpenBF2.exe: the OpenBF2 release (windows/CMakeLists.txt), the file
+// version its numeric part. The manifest is added by CMake.
 #include <winver.h>
 
 1 ICON "OpenBF2.ico"
 
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION SETUP_VERSION_COMMAS
-PRODUCTVERSION SETUP_PRODUCT_COMMAS
+PRODUCTVERSION SETUP_VERSION_COMMAS
 FILEOS VOS_NT_WINDOWS32
 FILETYPE VFT_APP
 BEGIN
@@ -16,8 +16,8 @@ BEGIN
     BEGIN
       VALUE "FileDescription", "OpenBF2: install and play Battlefield 2"
       VALUE "ProductName", "OpenBF2"
-      VALUE "FileVersion", SETUP_VERSION_STRING
-      VALUE "ProductVersion", SETUP_PRODUCT_STRING
+      VALUE "FileVersion", SETUP_VERSION_NUMBER
+      VALUE "ProductVersion", SETUP_VERSION_STRING
       VALUE "OriginalFilename", "OpenBF2.exe"
     END
   END
