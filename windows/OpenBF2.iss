@@ -45,6 +45,11 @@ WizardStyle=modern
 Compression=lzma2/max
 SolidCompression=yes
 CloseApplications=yes
+; Windows' RedirectionGuard (on by default since Inno Setup 6.7) is inherited by OpenBF2 when the last page starts it,
+; as for every setup that runs without administrative rights. OpenBF2 would then refuse to follow the junctions in
+; its game data that it created itself, the links to the user's mods and into an installation used in place. This
+; per-user installation writes only where the user can write anyway, so the guard protects nothing here.
+RedirectionGuard=no
 #ifdef Sign
 SignTool=openbf2
 SignedUninstaller=yes
