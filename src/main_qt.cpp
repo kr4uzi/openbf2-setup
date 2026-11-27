@@ -151,7 +151,7 @@ int main(int argc, char** argv) {
 		auto manifests = folder / "setup";
 		auto layout = windowsClientLayout(folder / "x64");
 		auto x86 = windowsClientLayout(folder / "x86");
-		const char* usage = "Usage: OpenBF2 [--check-client | --smoke-test NEW_DIRECTORY | --test-home DIRECTORY]\n";
+		const char* usage = "Usage: OpenBF2 [--launcher | --check-client | --smoke-test NEW_DIRECTORY | --test-home DIRECTORY]\n";
 #else
 		QApplication::setDesktopFileName("org.openbf2.Setup");
 		auto root = std::filesystem::path{QCoreApplication::applicationDirPath().toStdString()}.parent_path();
@@ -192,7 +192,7 @@ int main(int argc, char** argv) {
 			local = home / "AppData/Local";
 			documents = home / "Documents";
 		}
-		else if (arguments.size() != 1) { std::cerr << usage; return 2; }
+		else if (arguments.size() != 1 && !(arguments.size() == 2 && arguments[1] == "--launcher")) { std::cerr << usage; return 2; }
 		auto support = local / "OpenBF2";
 		auto profiles = documents / "Battlefield 2";
 		std::filesystem::create_directories(support);

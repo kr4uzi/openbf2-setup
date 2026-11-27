@@ -3,11 +3,12 @@
 #include <QString>
 
 // The few things the Qt front end does differently per platform. Everything else in window_qt.cpp,
-// client_qt.cpp and microphone_sdl.cpp is shared. Implemented in platform_mac.mm (macOS) and
-// platform_linux.cpp (Linux).
+// client_qt.cpp and microphone_sdl.cpp is shared. Implemented in platform_mac.mm (macOS),
+// platform_windows.cpp (Windows) and platform_linux.cpp (Linux).
 namespace setup::frontend {
-	// the user asked for the launcher page instead of the direct start: the Option key held while the
-	// application opened (macOS), or --launcher on the command line (Linux, also the desktop action).
+	// the user asked for the launcher page instead of the direct start: the Option key (macOS) or Shift
+	// (Windows) held while the application opened, or --launcher on the command line (Linux, also the desktop
+	// action; Windows, from the installer's last page).
 	// The first call latches the answer; main calls it before anything else
 	bool launcherRequested();
 	// the hint next to "Open launcher on startup"
