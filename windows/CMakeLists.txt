@@ -6,8 +6,21 @@ add_executable(OpenBF2 WIN32 ${frontend_application_sources} OpenBF2.rc OpenBF2.
 target_link_libraries(OpenBF2 PRIVATE bf2_setup_frontend)
 target_compile_definitions(OpenBF2 PRIVATE SETUP_UI_TEST_ROOT="${SETUP_SCRATCH}")
 set_target_properties(OpenBF2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${app_dir}" RUNTIME_OUTPUT_DIRECTORY_RELEASE "${app_dir}")
+# The version Windows shows for OpenBF2 (Settings > Apps, the installer, the product version of OpenBF2.exe): the
+# OpenBF2 release whose clients the build embeds, such as 0.3.0-rc2 (the engine's tag without its v). Without one, the
+# setup's own version. The file version of OpenBF2.exe stays the setup's.
+set(SETUP_PRODUCT_VERSION "" CACHE STRING "OpenBF2 release shown by Windows, such as 0.3.0-rc2; empty for the setup's version")
+if(SETUP_PRODUCT_VERSION)
+  set(product_version "${SETUP_PRODUCT_VERSION}")
+else()
+  set(product_version "${PROJECT_VERSION}")
+endif()
+if(NOT product_version MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)(-[0-9A-Za-z.-]+)?$")
+  message(FATAL_ERROR "SETUP_PRODUCT_VERSION must look like 0.3.0 or 0.3.0-rc2: ${product_version}")
+endif()
+set(product_version_numeric "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}.${CMAKE_MATCH_3}")
 set_source_files_properties(OpenBF2.rc PROPERTIES COMPILE_DEFINITIONS
-  "SETUP_VERSION_COMMAS=${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH},0;SETUP_VERSION_STRING=\"${PROJECT_VERSION}\"")
+  "SETUP_VERSION_COMMAS=${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH},0;SETUP_VERSION_STRING=\"${PROJECT_VERSION}\";SETUP_PRODUCT_COMMAS=${CMAKE_MATCH_1},${CMAKE_MATCH_2},${CMAKE_MATCH_3},0;SETUP_PRODUCT_STRING=\"${product_version}\"")
 
 file(MAKE_DIRECTORY "${app_dir}/setup" "${app_dir}/licences")
 file(COPY "${CMAKE_SOURCE_DIR}/core/content-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-deluxe-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-deluxe-base-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-complete-150.tsv" DESTINATION "${app_dir}/setup")
@@ -93,7 +106,7 @@ if(SETUP_ISCC)
     set(sign_options "/DSign" "/Sopenbf2=$q${sign_command}$q $f")
   endif()
   add_custom_target(installer
-    COMMAND "${SETUP_ISCC}" /Q "/DAppVersion=${PROJECT_VERSION}" "/DSourceDir=${app_dir}"
+    COMMAND "${SETUP_ISCC}" /Q "/DAppVersion=${product_version}" "/DVersionInfo=${product_version_numeric}" "/DSourceDir=${app_dir}"
       "/DOutputDir=${CMAKE_BINARY_DIR}/installer" "/DOutputBaseFilename=openbf2-windows-setup" ${sign_options}
       "${CMAKE_CURRENT_SOURCE_DIR}/OpenBF2.iss"
     VERBATIM)

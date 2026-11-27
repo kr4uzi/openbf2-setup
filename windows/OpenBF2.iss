@@ -3,13 +3,19 @@
 ; and x86\) for the current user, without administrator rights, and then starts OpenBF2, which installs the game
 ; from the user's disc. The all-users mode follows later (kr4uzi/openbf2-setup issue #1).
 ;
-;   ISCC /DAppVersion=0.5.0 /DSourceDir=<build>\app /DOutputDir=<dir> /DOutputBaseFilename=openbf2-windows-setup OpenBF2.iss
+;   ISCC /DAppVersion=0.3.0-rc2 /DVersionInfo=0.3.0 /DSourceDir=<build>\app /DOutputDir=<dir> /DOutputBaseFilename=openbf2-windows-setup OpenBF2.iss
+;
+; AppVersion is the OpenBF2 release (Settings > Apps shows it); VersionInfo, its numeric part for the file version,
+; defaults to AppVersion.
 ;
 ; With /DSign and the sign tool "openbf2" (ISCC "/Sopenbf2=$q<repo>\windows\sign.cmd$q $f"), the installer and the
 ; uninstaller it writes are signed; the application folder is signed before (windows\build-release.ps1 -Sign).
 
 #ifndef AppVersion
   #error AppVersion is required
+#endif
+#ifndef VersionInfo
+  #define VersionInfo AppVersion
 #endif
 #ifndef SourceDir
   #error SourceDir (the staged application folder) is required
@@ -28,7 +34,8 @@ AppVersion={#AppVersion}
 AppVerName=OpenBF2 {#AppVersion}
 AppPublisher=OpenBF2
 AppPublisherURL=https://github.com/kr4uzi/openbf2-setup
-VersionInfoVersion={#AppVersion}
+VersionInfoVersion={#VersionInfo}
+VersionInfoProductTextVersion={#AppVersion}
 DefaultDirName={localappdata}\Programs\OpenBF2
 DisableProgramGroupPage=yes
 DisableDirPage=auto
