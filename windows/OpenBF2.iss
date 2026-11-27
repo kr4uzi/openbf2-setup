@@ -76,7 +76,8 @@ Name: "{userprograms}\OpenBF2"; Filename: "{app}\OpenBF2.exe"
 Name: "{userdesktop}\OpenBF2"; Filename: "{app}\OpenBF2.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\OpenBF2.exe"; Description: "Start OpenBF2"; Flags: nowait postinstall skipifsilent
+; with the launcher page, never straight into the game: after an update or a repair the user sees what changed
+Filename: "{app}\OpenBF2.exe"; Parameters: "--launcher"; Description: "Start OpenBF2"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 ; the 64-bit d3dx9_25.dll which OpenBF2 took from the game disc (src/directx.h)

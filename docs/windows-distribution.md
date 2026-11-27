@@ -9,7 +9,8 @@ is not done yet.
 Windows uses the same Qt 6 Widgets front end as macOS and Linux (`src/window_qt.cpp`, `client_qt.cpp`,
 `microphone_sdl.cpp`, `main_qt.cpp`). `src/platform_windows.cpp` holds the Windows differences:
 
-- holding **Shift** while OpenBF2 starts opens the launcher page instead of starting the game;
+- holding **Shift** while OpenBF2 starts, or starting it with `--launcher`, opens the launcher page instead of starting
+  the game. The installer's last page ("Start OpenBF2") passes `--launcher`;
 - the microphone settings button opens the Windows privacy settings (`ms-settings:privacy-microphone`);
   Windows asks no per-application permission for a desktop program;
 - before the game starts, OpenBF2 allows it to take the foreground (`AllowSetForegroundWindow`).

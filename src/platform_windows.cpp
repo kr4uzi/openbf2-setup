@@ -8,10 +8,14 @@
 #endif
 #include <windows.h>
 
+#include <QCoreApplication>
+#include <QStringList>
+
 bool setup::frontend::launcherRequested()
 {
-	// read once, when the application starts: the verification which follows may take a while
-	static const bool held = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+	// read once, when the application starts: the verification which follows may take a while. --launcher is
+	// what the installer's last page passes, so that a start from there shows the launcher
+	static const bool held = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0 || QCoreApplication::arguments().contains("--launcher");
 	return held;
 }
 
