@@ -1,5 +1,7 @@
 #!/bin/bash
 # Offline setup assembly. Engine CI supplies both artifacts; this never builds engine code.
+# SETUP_VERSION is the OpenBF2 release, such as 0.3.0-rc2 (the engine's tag without its v), recorded in
+# share/openbf2/release.json; unset means 0.0.0-dev.
 set -euo pipefail
 if [[ $# != 2 ]]; then
   echo 'Usage: SETUP_CLIENT_ARTIFACT=DIR SETUP_RUNTIME_ARTIFACT=DIR linux/build-release.sh OUTPUT.tar.gz NEW_BUILD_DIR' >&2
@@ -33,7 +35,8 @@ cmake -S "$repo" -B "$build/compile" -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DSETUP_BOOST_ROOT="${SETUP_BOOST_ROOT:?Set Boost 1.89.0 headers}" \
   -DSETUP_CLIENT_ARTIFACT="$client" -DSETUP_CLIENT_ALLOW_DEVELOPMENT=OFF \
   -DSETUP_ARTIFACT_BUILD_ROOTS_FILE="$roots_file" \
-  -DSETUP_SCRATCH="$build/scratch"
+  -DSETUP_SCRATCH="$build/scratch" \
+  -DSETUP_VERSION="${SETUP_VERSION:-}"
 rg -q '#define BOOST_LIB_VERSION "1_89"' "$SETUP_BOOST_ROOT/boost/version.hpp"
 cmake --build "$build/compile" -j"${SETUP_JOBS:-4}"
 env -u BF2_TEST_KEY -u BF2SF_TEST_KEY -u SETUP_TEST_ISO ctest --test-dir "$build/compile" --output-on-failure
@@ -41,7 +44,7 @@ cmake --install "$build/compile" --prefix "$build/app"
 revision=$(git -C "$repo" rev-parse HEAD)
 # Refuse falsely attributing a dirty source tree to a clean revision.
 [[ -z $(git -C "$repo" status --porcelain --untracked-files=normal) ]] || { echo 'Release requires a clean, committed setup checkout' >&2; exit 1; }
-python3 "$repo/linux/package.py" assemble --app "$build/app" --engine "$client" --runtime "$runtime" --output "$build/OpenBF2" --setup-revision "$revision" "${audit_paths[@]}"
+python3 "$repo/linux/package.py" assemble --app "$build/app" --engine "$client" --runtime "$runtime" --output "$build/OpenBF2" --setup-revision "$revision" --version "${SETUP_VERSION:-0.0.0-dev}" "${audit_paths[@]}"
 QT_QPA_PLATFORM=offscreen "$build/OpenBF2/bin/OpenBF2" --check-client
 QT_QPA_PLATFORM=offscreen "$build/OpenBF2/bin/OpenBF2" --smoke-test "$build/packaged-ui"
 python3 "$repo/linux/package.py" archive "$build/OpenBF2" "$output" "${audit_paths[@]}"

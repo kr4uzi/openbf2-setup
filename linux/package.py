@@ -244,6 +244,7 @@ def assemble(args, roots=()):
     engine_meta, runtime_meta = check_inputs(engine, runtime, roots)
     lock = toolchain_metadata(engine_meta)
     require(re.fullmatch(r"[0-9a-f]{40}", args.setup_revision), "Invalid setup revision")
+    require(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?", args.version), f"Invalid version: {args.version}")
     output.mkdir(parents=True)
     for source in (app, engine, runtime):
         copy_tree(source, output)
@@ -265,7 +266,7 @@ def assemble(args, roots=()):
     audit(output, roots=roots)
     metadata_dir = output / "share/openbf2"
     # Input provenance retains the source checksums; final checksums describe patched ELF bytes.
-    record = {"schema": 1, "setup_revision": args.setup_revision, "engine_revision": engine_meta["revision"],
+    record = {"schema": 1, "version": args.version, "setup_revision": args.setup_revision, "engine_revision": engine_meta["revision"],
               "architecture": "x86_64", "glibc": "2.35", "toolchain": lock, "sdk": engine_meta["sdk"],
               "engine_artifact_sha256": digest(engine / "share/openbf2/engine-artifact.json"),
               "runtime_artifact_sha256": digest(runtime / "share/openbf2/runtime-artifact.json"),
@@ -326,6 +327,7 @@ def main():
     build = commands.add_parser("assemble")
     for name in ("app", "engine", "runtime", "output", "setup-revision"):
         build.add_argument("--" + name, required=True)
+    build.add_argument("--version", default="0.0.0-dev", help="OpenBF2 release, such as 0.3.0-rc2 (the engine's tag without its v)")
     pack = commands.add_parser("archive"); pack.add_argument("root", type=Path); pack.add_argument("output", type=Path)
     for subparser in (check, release, runtime, inputs, build, pack):
         add_build_root_options(subparser)

@@ -164,7 +164,7 @@ class Packaging(unittest.TestCase):
                 shutil.copy2(self.root / name, target)
         write_metadata(engine)
         write_metadata(runtime, "runtime")
-        return SimpleNamespace(app=app, engine=engine, runtime=runtime, output=Path(self.temp.name) / "assembled", setup_revision="4" * 40)
+        return SimpleNamespace(app=app, engine=engine, runtime=runtime, output=Path(self.temp.name) / "assembled", setup_revision="4" * 40, version="0.3.0-rc2")
 
     def test_assembly_and_provenance(self):
         args = self.inputs()
@@ -177,6 +177,7 @@ class Packaging(unittest.TestCase):
         record = json.loads((args.output / "share/openbf2/release.json").read_text())
         self.assertEqual(record["engine_revision"], "1" * 40)
         self.assertEqual(record["setup_revision"], args.setup_revision)
+        self.assertEqual(record["version"], "0.3.0-rc2")
         self.assertEqual(record["sdk"], json.loads((args.engine / "share/openbf2/engine-artifact.json").read_text())["sdk"])
         self.assertTrue(all(package.digest(Path(path)) == checksum for path, checksum in before.items()))
 

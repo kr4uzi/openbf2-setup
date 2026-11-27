@@ -5,9 +5,9 @@
 #
 # CLIENT_X64_DIR and CLIENT_X86_DIR are the unpacked openbf2-windows-x64-client and openbf2-windows-x86-client
 # packages of the engine's build. OUTPUT.exe must not exist; OUTPUT.exe.sha256 is written beside it. BUILD_DIR
-# defaults to openbf2-setup-build beside OUTPUT.exe and may be reused between runs. VERSION is the OpenBF2 release of
-# the clients, such as 0.3.0-rc2 (the engine's tag without its v), which Windows shows for the installed app; without
-# it, the setup's own version.
+# defaults to openbf2-setup-build beside OUTPUT.exe and may be reused between runs. VERSION (or SETUP_VERSION in the
+# environment) is the OpenBF2 release, such as 0.3.0-rc2 (the engine's tag without its v), which Windows shows for the
+# installed app; without it, 0.0.0-dev.
 # SETUP_BOOST_ROOT, SETUP_QT_ROOT, SETUP_SDL3_ROOT, ZLIB_LIBRARY, ZLIB_INCLUDE_DIR, SETUP_DIRECTX_REDIST and
 # SETUP_ISCC locate the toolchain (ci/fetch-dependencies.sh prints them). The owner's media and key tests stay off.
 # -Sign signs, with windows\sign.ps1 and its environment, every program and DLL without a valid signature: first in
@@ -70,7 +70,7 @@ New-Item -ItemType Directory -Force $scratch | Out-Null
 
 Write-Host "== configure ($BuildDir)"
 $options = @('-S', $repo, '-B', $BuildDir, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', "-DSETUP_SCRATCH=$scratch",
-  "-DSETUP_CLIENT_X64=$($clients.X64)", "-DSETUP_CLIENT_X86=$($clients.X86)", "-DSETUP_SIGN=$(if ($Sign) { 'ON' } else { 'OFF' })", "-DSETUP_PRODUCT_VERSION=$Version")
+  "-DSETUP_CLIENT_X64=$($clients.X64)", "-DSETUP_CLIENT_X86=$($clients.X86)", "-DSETUP_SIGN=$(if ($Sign) { 'ON' } else { 'OFF' })", "-DSETUP_VERSION=$(if ($Version) { $Version } else { $env:SETUP_VERSION })")
 foreach ($variable in 'SETUP_BOOST_ROOT', 'SETUP_QT_ROOT', 'SETUP_SDL3_ROOT', 'ZLIB_LIBRARY', 'ZLIB_INCLUDE_DIR', 'SETUP_DIRECTX_REDIST', 'SETUP_ISCC') {
   $options += "-D$variable=$([Environment]::GetEnvironmentVariable($variable))"
 }

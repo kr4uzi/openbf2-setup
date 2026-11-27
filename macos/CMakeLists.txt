@@ -1,6 +1,8 @@
 # The application is the shared Qt front end (cmake/frontend.cmake); this file makes it a bundle.
 add_executable(OpenBF2 MACOSX_BUNDLE ${frontend_application_sources})
-set_target_properties(OpenBF2 PROPERTIES OUTPUT_NAME "OpenBF2" MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist")
+# the version Finder shows is the OpenBF2 release (the top-level CMakeLists.txt), the bundle version its numeric part
+set_target_properties(OpenBF2 PROPERTIES OUTPUT_NAME "OpenBF2" MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
+  MACOSX_BUNDLE_SHORT_VERSION_STRING "${setup_version}" MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}")
 target_compile_definitions(OpenBF2 PRIVATE SETUP_UI_TEST_ROOT="${SETUP_SCRATCH}")
 target_link_libraries(OpenBF2 PRIVATE bf2_setup_frontend)
 set(content_manifests "${CMAKE_SOURCE_DIR}/core/content-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-deluxe-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-deluxe-base-150.tsv" "${CMAKE_SOURCE_DIR}/core/content-complete-150.tsv")

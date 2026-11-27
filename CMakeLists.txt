@@ -2,7 +2,19 @@ cmake_minimum_required(VERSION 3.24)
 # has to be set before project(): afterwards the cache entry exists (empty) and the host version is used instead.
 # 13.3 is the first macOS whose libc++ has everything C++23 the sources use
 set(CMAKE_OSX_DEPLOYMENT_TARGET 13.3 CACHE STRING "Minimum macOS")
-project(OpenBF2Setup VERSION 0.5.0 LANGUAGES CXX)
+# The OpenBF2 release this build belongs to, as the engine tags it but without the v (0.3.0, 0.3.0-rc2). The setup has
+# no version of its own: every platform shows this one (Settings > Apps and the installer on Windows, Finder on macOS,
+# release.json on Linux). A build that is not of a release is 0.0.0-dev.
+set(SETUP_VERSION "" CACHE STRING "OpenBF2 release, such as 0.3.0-rc2 (the engine's tag without its v); empty for 0.0.0-dev")
+set(setup_version "${SETUP_VERSION}")
+if(NOT setup_version)
+  set(setup_version "0.0.0-dev")
+endif()
+if(NOT setup_version MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)(-[0-9A-Za-z.-]+)?$")
+  message(FATAL_ERROR "SETUP_VERSION must look like 0.3.0 or 0.3.0-rc2: ${setup_version}")
+endif()
+set(setup_version_number "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}.${CMAKE_MATCH_3}")
+project(OpenBF2Setup VERSION ${setup_version_number} LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
