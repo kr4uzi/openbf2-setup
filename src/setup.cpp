@@ -4,6 +4,7 @@
 #include "store.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <exception>
 #include <string>
 #include <boost/asio/co_spawn.hpp>
@@ -16,6 +17,17 @@
 using namespace setup;
 
 namespace {
+	// how the client ended, for the message after a failed game. A Windows exception code (an NTSTATUS,
+	// 0xC0000000 and above, such as 0xC0000005 for an access violation) is negative as an int and reads as hex
+	std::string clientEnd(int status)
+	{
+		if (status >= 0)
+			return "exited with status " + std::to_string(status);
+		char code[16];
+		std::snprintf(code, sizeof code, "0x%08X", static_cast<unsigned>(status));
+		return std::string{ "crashed (" } + code + ")";
+	}
+
 	// the user closed the window: every page gives up and Launch returns
 	struct WindowClosed {};
 
@@ -710,7 +722,7 @@ task<bool> Setup::Play(const Installation& installation, const LaunchOptions& op
 	try {
 		auto status = co_await ::guarded(m_Client.Run(installation, options), RefuseClose());
 		if (status != 0)
-			m_Window.Message("Battlefield 2 stopped", "The client exited with status " + std::to_string(status) + ".");
+			m_Window.Message("Battlefield 2 stopped", "The client " + ::clientEnd(status) + ".");
 
 		co_return status == 0;
 	}

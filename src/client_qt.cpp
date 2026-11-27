@@ -172,7 +172,14 @@ task<int> setup::runClientProcess(assistant::Launch launch, std::filesystem::pat
 #if defined(Q_OS_LINUX)
 		keep(child.readAllStandardOutput());
 #endif
+#if defined(Q_OS_WIN)
+		// a crash ends with its exception code (0xC0000005 for an access violation), which stays as it is;
+		// 128 plus the signal is the POSIX convention
+		static_cast<void>(status);
+		exit.try_send(boost::system::error_code{}, Exit{code, {}});
+#else
 		exit.try_send(boost::system::error_code{}, Exit{status == QProcess::CrashExit ? 128 + code : code, {}});
+#endif
 	});
 	child.start(QString::fromStdString(launch.executable.string()), arguments, QIODevice::ReadOnly);
 

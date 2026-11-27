@@ -461,6 +461,15 @@ int main()
 		check(told("Battlefield 2 stopped") && g_Machine.messages.back().ends_with("status 6."), "the exit status was not shown");
 	});
 
+	run("a crash on Windows shows its exception code", [](FakeMachine& machine) {
+		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
+		machine.keys_stored = true;
+		machine.client_status = static_cast<int>(0xC0000005u);
+		machine.script = { click(Page::launcher), quit() };
+	}, [] {
+		check(told("Battlefield 2 stopped") && g_Machine.messages.back().ends_with("The client crashed (0xC0000005)."), "the exception code was not shown as such");
+	});
+
 	run("the game does not start", [](FakeMachine& machine) {
 		machine.installed = Installation{ "GameData/1.50-7", DiscEdition::BF2 };
 		machine.keys_stored = true;
